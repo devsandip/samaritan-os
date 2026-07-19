@@ -78,7 +78,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export interface ListFilter {
-  status?: ActionItemStatus;
+  /** One, or several: the endpoint takes a repeated `status` param. */
+  status?: ActionItemStatus | ActionItemStatus[];
   capability_id?: string;
   priority?: Priority;
   type?: string;
@@ -89,7 +90,11 @@ export interface ListFilter {
 function query(filter: ListFilter): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(filter)) {
-    if (value !== undefined && value !== "") params.set(key, String(value));
+    if (value === undefined || value === "") continue;
+    // Appended one by one: `set` would stringify the array into a single
+    // comma-joined value, which is not a status the daemon recognises.
+    if (Array.isArray(value)) for (const each of value) params.append(key, String(each));
+    else params.set(key, String(value));
   }
   const qs = params.toString();
   return qs ? `?${qs}` : "";
@@ -100,22 +105,6 @@ export const api = {
 
   listActions: (filter: ListFilter = {}) =>
     request<{ items: ActionItem[] }>(`/api/actions${query(filter)}`).then((r) => r.items),
-
-  /**
-   * The list endpoint takes one status per call, so any view that spans several
-   * (Completed covers executed + rejected + failed + expired) fans out and
-   * re-sorts client-side.
-   */
-  listActionsByStatuses: async (statuses: ActionItemStatus[], filter: ListFilter = {}) => {
-    const batches = await Promise.all(
-      statuses.map((status) =>
-        request<{ items: ActionItem[] }>(`/api/actions${query({ ...filter, status })}`).then(
-          (r) => r.items,
-        ),
-      ),
-    );
-    return batches.flat();
-  },
 
   getAction: (id: string) => request<ActionItem>(`/api/actions/${id}`),
 

@@ -173,8 +173,15 @@ export function listActionItems(db: Db, filter: ListFilter = {}): ActionItem[] {
   const clauses: string[] = [];
   const params: SqlValue[] = [];
 
-  if (filter.status) {
-    const statuses = Array.isArray(filter.status) ? filter.status : [filter.status];
+  // Normalised before the length check because an empty array is truthy, and
+  // would otherwise build `status IN ()` and fail as a SQL syntax error rather
+  // than reading as "no status filter".
+  const statuses = filter.status
+    ? Array.isArray(filter.status)
+      ? filter.status
+      : [filter.status]
+    : [];
+  if (statuses.length) {
     clauses.push(`status IN (${statuses.map(() => "?").join(", ")})`);
     params.push(...statuses);
   }

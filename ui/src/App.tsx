@@ -35,12 +35,9 @@ export function App() {
   const [toast, setToast] = useState<ToastState | undefined>(undefined);
 
   const capabilities = useAsync(() => api.capabilities(), []);
-  const inbox = useAsync(() => api.listActionsByStatuses(INBOX_STATUSES, { limit: 200 }), []);
+  const inbox = useAsync(() => api.listActions({ status: INBOX_STATUSES, limit: 200 }), []);
   const deferred = useAsync(() => api.listActions({ status: "deferred", limit: 200 }), []);
-  const completed = useAsync(
-    () => api.listActionsByStatuses(COMPLETED_STATUSES, { limit: 200 }),
-    [],
-  );
+  const completed = useAsync(() => api.listActions({ status: COMPLETED_STATUSES, limit: 200 }), []);
 
   const catalogue = useMemo(
     () => new Catalogue(capabilities.data?.capabilities ?? []),

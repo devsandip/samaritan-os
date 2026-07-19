@@ -33,7 +33,17 @@ const IngestBody = z.object({
 });
 
 const ListQuery = z.object({
-  status: ActionItemStatus.optional(),
+  /**
+   * Repeat the param to ask for several: `?status=pending&status=in_review`.
+   * Fastify hands back a bare string for one and an array for many, so both
+   * shapes are accepted; `listActionItems` takes either.
+   *
+   * Views that span statuses (the Inbox covers four) used to fan out one request
+   * per status and merge client-side, which applied `limit` per status rather
+   * than to the result and returned them grouped by status rather than in the
+   * server's priority order.
+   */
+  status: z.union([ActionItemStatus, z.array(ActionItemStatus).min(1)]).optional(),
   capability_id: z.string().optional(),
   priority: Priority.optional(),
   type: z.string().optional(),
