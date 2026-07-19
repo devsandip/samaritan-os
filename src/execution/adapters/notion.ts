@@ -174,7 +174,7 @@ export function notionAdapters(db: Db): ExecutionAdapter[] {
       if (reversibility === "one-way" || reversibility === "two-way") {
         properties["Reversibility"] = { select: { name: reversibility } };
       }
-      properties["Decided on"] = date();
+      properties["Decided On"] = date();
       // AGENT_OS routing rule: a decision with no rationale stays pending rather
       // than being recorded as settled. Do not invent a rationale to close it.
       properties["Status"] = { select: { name: rationale ? "resolved" : "pending" } };
@@ -234,7 +234,8 @@ export function notionAdapters(db: Db): ExecutionAdapter[] {
       const properties: Record<string, unknown> = { Insight: title(heading) };
       if (body) properties["Detail"] = richText(body);
       if (tags.length) properties["Tags"] = { multi_select: tags.map((name) => ({ name })) };
-      properties["Captured on"] = date();
+      // "Captured On" is a created_time property. Notion computes it and rejects
+      // any attempt to write it, so it is deliberately absent here.
 
       if (project) {
         const projectId = await resolveProjectId(project);

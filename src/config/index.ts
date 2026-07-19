@@ -76,6 +76,11 @@ export const ConfigSchema = z.object({
        * these identify a specific private Notion workspace, so they are local
        * configuration rather than something baked into the repo. An unset id
        * fails loudly at execute() instead of writing to the wrong database.
+       *
+       * These are Notion *database* ids, which is what the REST API's
+       * `parent.database_id` takes. Notion also issues a separate *data source*
+       * id for the same table, which is what the Notion MCP tool wants. They are
+       * different values and are not interchangeable.
        */
       databases: z
         .object({

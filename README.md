@@ -126,7 +126,22 @@ defaults on first run.
 **Notion database ids are not in the repo.** They identify one specific private
 workspace, so they are local configuration. Set them before anything can file to
 Notion; an unset id fails with a clear message rather than writing somewhere
-unexpected. Find each id in the database's URL, `notion.so/<workspace>/<32-hex>`:
+unexpected.
+
+These are *database* ids, which is what the REST API's `parent.database_id`
+takes. Notion issues a separate *data source* id for the same table, which is
+what the Notion MCP tool wants. They are different values, they are not
+interchangeable, and using one where the other belongs returns a 404. The
+reliable way to get the right one is to ask the API rather than read it out of a
+doc:
+
+```bash
+curl -s -X POST https://api.notion.com/v1/search \
+  -H "Authorization: Bearer $TOKEN" -H 'Notion-Version: 2022-06-28' \
+  -H 'content-type: application/json' \
+  -d '{"filter":{"property":"object","value":"database"}}' \
+  | jq -r '.results[] | "\(.title[0].plain_text)\t\(.id)"'
+```
 
 ```yaml
 notion:
