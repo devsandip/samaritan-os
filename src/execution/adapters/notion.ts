@@ -61,6 +61,10 @@ function str(payload: Record<string, unknown>, key: string): string | undefined 
   return typeof value === "string" && value ? value : undefined;
 }
 
+function date(iso = new Date().toISOString().slice(0, 10)) {
+  return { date: { start: iso } };
+}
+
 interface CreatePageResult {
   id: string;
   url: string;
@@ -76,6 +80,46 @@ async function createPage(
     body: JSON.stringify({ parent: { database_id: databaseId }, properties }),
   })) as CreatePageResult;
   return page;
+}
+
+const projectIdCache = new Map<string, string | null>();
+
+/**
+ * Resolves a project name to its Projects page id, because `Project` on both
+ * Decisions and Insights is a relation, not text.
+ *
+ * Returns null when the project does not exist or the lookup fails, and callers
+ * then file with the relation blank. AGENT_OS.md's routing rules already treat a
+ * blank project as a valid state, so a missing link is a small loss; failing the
+ * whole write over it would be a large one.
+ */
+async function resolveProjectId(name: string): Promise<string | null> {
+  if (!name) return null;
+  const cached = projectIdCache.get(name);
+  if (cached !== undefined) return cached;
+
+  try {
+    const { databases } = loadConfig().notion;
+    const body = (await notionFetch(`/databases/${databases.projects}/query`, {
+      method: "POST",
+      body: JSON.stringify({
+        filter: { property: "Name", title: { equals: name } },
+        page_size: 1,
+      }),
+    })) as { results?: { id: string }[] };
+    const id = body.results?.[0]?.id ?? null;
+    projectIdCache.set(name, id);
+    if (!id) logger.info({ project: name }, "no Projects row matched; filing with project blank");
+    return id;
+  } catch (err) {
+    logger.warn({ project: name, err: (err as Error).message }, "project lookup failed");
+    return null;
+  }
+}
+
+/** Test seam so the relation lookup can be exercised without a live token. */
+export function __setProjectIdForTesting(name: string, id: string | null): void {
+  projectIdCache.set(name, id);
 }
 
 /**
@@ -107,16 +151,29 @@ export function notionAdapters(db: Db): ExecutionAdapter[] {
       const heading = str(p, "title");
       if (!heading) return { status: "failed", error: 'payload requires a "title"' };
 
-      const properties: Record<string, unknown> = { Name: title(heading) };
+      // Property names and select values come from AGENT_OS.md's "Notion DB
+      // schemas" section, which is the vault's own contract. The title property
+      // is "Decision", not "Name".
+      const properties: Record<string, unknown> = { Decision: title(heading) };
       const rationale = str(p, "rationale");
       const evidence = str(p, "evidence");
       const reversibility = str(p, "reversibility");
       const project = str(p, "project");
+
       if (rationale) properties["Rationale"] = richText(rationale);
       if (evidence) properties["Evidence"] = richText(evidence);
-      if (reversibility) properties["Reversibility"] = { select: { name: reversibility } };
-      if (project) properties["Project (text)"] = richText(project);
-      properties["Status"] = { select: { name: rationale ? "decided" : "pending" } };
+      if (reversibility === "one-way" || reversibility === "two-way") {
+        properties["Reversibility"] = { select: { name: reversibility } };
+      }
+      properties["Decided on"] = date();
+      // AGENT_OS routing rule: a decision with no rationale stays pending rather
+      // than being recorded as settled. Do not invent a rationale to close it.
+      properties["Status"] = { select: { name: rationale ? "resolved" : "pending" } };
+
+      if (project) {
+        const projectId = await resolveProjectId(project);
+        if (projectId) properties["Project"] = { relation: [{ id: projectId }] };
+      }
 
       try {
         const page = await createPage(databases.decisions, properties);
@@ -163,10 +220,17 @@ export function notionAdapters(db: Db): ExecutionAdapter[] {
       const tags = Array.isArray(p["tags"]) ? (p["tags"] as string[]) : [];
       const project = str(p, "project");
 
-      const properties: Record<string, unknown> = { Name: title(heading) };
+      // Per AGENT_OS.md the title property is "Insight", and Project is a
+      // relation rather than text.
+      const properties: Record<string, unknown> = { Insight: title(heading) };
       if (body) properties["Detail"] = richText(body);
       if (tags.length) properties["Tags"] = { multi_select: tags.map((name) => ({ name })) };
-      if (project) properties["Project (text)"] = richText(project);
+      properties["Captured on"] = date();
+
+      if (project) {
+        const projectId = await resolveProjectId(project);
+        if (projectId) properties["Project"] = { relation: [{ id: projectId }] };
+      }
 
       try {
         const page = await createPage(databases.insights, properties);
