@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Samaritan · Agentic OS</title>
+<style>
+  :root{
+    --bg:#eef0f4;--surface:#fff;--ink:#1a1d24;--muted:#616b7a;--line:#e3e6ec;--line2:#f0f1f5;
+    --core:#4f46e5;--core-soft:#eef0fe;
+    --work:#2563eb;--personal:#b45309;--coding:#0e7490;--job:#7c3aed;
+    --assist:#b45309;--assist-soft:#fdf1e0;--auto:#047857;--auto-soft:#e2f6ee;--guided:#4f46e5;--guided-soft:#eef0fe;
+    --urgent:#dc2626;--ok:#059669;--idle:#9aa3b2;--err:#dc2626;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-size:14px;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .app{display:grid;grid-template-columns:230px 1fr;min-height:100vh}
+
+  /* sidebar */
+  .side{background:#151a26;color:#c7cdd9;padding:16px 12px;display:flex;flex-direction:column}
+  .brand{display:flex;align-items:center;gap:9px;padding:6px 8px 16px}
+  .brand .lg{width:24px;height:24px;border-radius:7px;background:var(--core)}
+  .brand b{color:#fff;font-size:15px}
+  .nav{display:flex;flex-direction:column;gap:2px}
+  .nav a{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 11px;border-radius:9px;
+    color:#c7cdd9;text-decoration:none;font-size:13.5px;cursor:pointer}
+  .nav a:hover{background:#1f2637}
+  .nav a.active{background:var(--core);color:#fff}
+  .nav .n{font-size:11px;background:#2a3145;color:#c7cdd9;border-radius:999px;padding:1px 8px}
+  .nav a.active .n{background:rgba(255,255,255,.25);color:#fff}
+  .side .spacer{flex:1}
+  .recall{background:#1f2637;border:1px solid #2a3145;border-radius:9px;padding:9px 11px;color:#8b93a4;font-size:12.5px}
+  .side small{color:#6b7385;font-size:11px;padding:10px 8px 0;display:block}
+
+  /* main */
+  .main{padding:24px 30px 60px;overflow:auto}
+  .view{display:none}.view.active{display:block}
+  .h-greet{font-size:22px;font-weight:700;letter-spacing:-.01em;margin:0}
+  .h-sub{color:var(--muted);font-size:14px;margin:3px 0 20px}
+
+  /* stat tiles */
+  .tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px}
+  .tile{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:15px 16px}
+  .tile .k{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  .tile .v{font-size:28px;font-weight:750;margin-top:4px}
+  .tile .sub{font-size:12px;color:var(--muted);margin-top:2px}
+  .tile.alert{border-color:#f3c9c9;background:#fef6f6}.tile.alert .v{color:var(--urgent)}
+
+  .grid2{display:grid;grid-template-columns:1.25fr 1fr;gap:16px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:16px}
+  .card h2{margin:0 0 12px;font-size:14px;letter-spacing:.01em}
+  .card h2 .link{float:right;font-size:12px;color:var(--core);font-weight:600;cursor:pointer}
+
+  /* agent grid */
+  .agents{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .agent{border:1px solid var(--line);border-radius:11px;padding:11px 12px;background:#fbfbfd}
+  .agent .top{display:flex;align-items:center;gap:7px;margin-bottom:5px}
+  .agent .dot{width:8px;height:8px;border-radius:50%}
+  .dot.ok{background:var(--ok)}.dot.idle{background:var(--idle)}.dot.err{background:var(--err)}
+  .agent b{font-size:13px}
+  .agent .meta{font-size:11.5px;color:var(--muted);line-height:1.5}
+  .agent .pend{color:var(--core);font-weight:600}
+  .agent.err{background:#fef6f6;border-color:#f3c9c9}
+
+  /* needs-you preview + feed */
+  .qrow{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px dashed var(--line);cursor:pointer}
+  .qrow:last-child{border-bottom:0}
+  .qrow .prio{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+  .prio.u{background:var(--urgent)}.prio.n{background:var(--core)}
+  .qrow .t{flex:1;font-size:13.5px}.qrow .t small{color:var(--muted);display:block;font-size:11.5px}
+  .qrow .src{font-size:10.5px;font-weight:700;text-transform:uppercase;color:var(--muted);background:#f0f1f4;border-radius:5px;padding:1px 7px}
+  .feed{position:relative}
+  .frow{display:flex;gap:10px;padding:8px 0;font-size:13px;border-bottom:1px dashed var(--line)}
+  .frow:last-child{border-bottom:0}
+  .frow .tm{color:var(--muted);font-size:12px;min-width:52px}
+  .frow .who{color:var(--auto);font-weight:600;font-size:12px}
+
+  /* inbox */
+  .inbox{display:grid;grid-template-columns:300px 1fr;gap:0;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff}
+  .ilist{border-right:1px solid var(--line);background:#f7f8fb}
+  .item{display:block;width:100%;text-align:left;background:#fff;border:0;border-bottom:1px solid var(--line);padding:12px 14px;cursor:pointer;position:relative}
+  .item:hover{background:#fafbff}.item.active::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--core)}
+  .item .top{display:flex;justify-content:space-between;margin-bottom:3px}
+  .src2{font-size:10px;font-weight:700;text-transform:uppercase;padding:1px 6px;border-radius:5px}
+  .s-coding{color:var(--coding);background:#e0f5fb}.s-work{color:var(--work);background:#e5edff}
+  .item .tt{font-size:13px;font-weight:650;line-height:1.3}
+  .item .wy{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .badge{font-size:10.5px;font-weight:600;border-radius:5px;padding:1px 7px;background:#f0f1f4;color:var(--muted)}
+  .badge.assist{background:var(--assist-soft);color:var(--assist)}.badge.auto{background:var(--auto-soft);color:var(--auto)}
+  .badge.guided{background:var(--guided-soft);color:var(--guided)}.badge.urgent{background:#fde7e7;color:var(--urgent)}
+  .idetail{padding:20px 22px;overflow:auto}
+  .dpanel{display:none}.dpanel.active{display:block}
+  .dsrc{font-size:11.5px;color:var(--muted);margin-bottom:5px}
+  .dt{font-size:18px;font-weight:700;margin:0 0 8px}
+  .dmeta{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px}
+  .dwhy{background:#fbfbfe;border:1px solid var(--line);border-left:3px solid var(--core);border-radius:8px;padding:9px 12px;font-size:12.5px;margin-bottom:14px}
+  .sec h5{margin:12px 0 4px;font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  .sec ul{margin:0;padding-left:18px}.sec li{font-size:13px;padding:1px 0}.sec li small{color:var(--muted)}
+  .quote{background:#f7f8fb;border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:12.5px;margin-bottom:12px}
+  .quote .fr{font-size:11.5px;color:var(--muted);margin-bottom:5px}
+  .draft{width:100%;min-height:100px;border:1px solid var(--line);border-radius:8px;padding:10px;font:inherit;font-size:13px;background:#fffef8;resize:vertical}
+  .chk{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;padding:3px 0}
+  .rev{font-size:10px;font-weight:700;padding:0 5px;border-radius:4px;margin-left:5px}
+  .rev.r{background:#e2f6ee;color:var(--auto)}.rev.i{background:#fde7e7;color:var(--urgent)}
+  .mtg{border:1px solid var(--line);border-radius:9px;margin-bottom:10px;overflow:hidden}
+  .mtg .mh{background:#f7f8fb;padding:7px 12px;font-size:12.5px;font-weight:650;display:flex;justify-content:space-between}
+  .mtg .mh span{color:var(--muted);font-weight:500}.mtg .mb{padding:8px 12px}
+  .actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+  .btn{font-size:12.5px;font-weight:600;border-radius:8px;padding:8px 13px;border:1px solid var(--line);background:#fff;cursor:pointer;color:var(--ink)}
+  .btn.good{background:var(--auto);border-color:var(--auto);color:#fff}.btn.primary{background:var(--core);border-color:var(--core);color:#fff}
+  .note{font-size:11.5px;color:var(--muted);margin-top:9px}
+
+  /* deferred + completed rows */
+  .lrow{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:12px 15px;margin-bottom:9px}
+  .lrow .body{flex:1}.lrow .body b{font-size:13.5px}.lrow .body .m{font-size:12px;color:var(--muted);margin-top:2px}
+  .lrow .when{font-size:12px;color:var(--core);font-weight:600;white-space:nowrap}
+  .lrow .did{font-size:11.5px;font-weight:700;border-radius:6px;padding:2px 9px;white-space:nowrap}
+  .did.appr{background:var(--auto-soft);color:var(--auto)}.did.edit{background:var(--assist-soft);color:var(--assist)}
+  .did.rej{background:#f0f1f4;color:var(--muted)}.did.sent{background:var(--core-soft);color:var(--core)}
+  .daygrp{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:14px 0 8px;font-weight:700}
+  @media(max-width:900px){.app{grid-template-columns:1fr}.side{flex-direction:row;flex-wrap:wrap}
+    .tiles,.agents,.grid2{grid-template-columns:1fr 1fr}.inbox{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="side">
+    <div class="brand"><div class="lg"></div><b>Samaritan</b></div>
+    <nav class="nav">
+      <a class="active" onclick="nav('dash',this)">Dashboard</a>
+      <a onclick="nav('inbox',this)">Inbox <span class="n">4</span></a>
+      <a onclick="nav('deferred',this)">Deferred <span class="n">3</span></a>
+      <a onclick="nav('completed',this)">Completed</a>
+      <a onclick="nav('settings',this)">Settings</a>
+    </nav>
+    <div class="spacer"></div>
+    <div class="recall">🔎 Ask Samaritan… <br><span style="font-size:11px">"why did we pick Vendor A?"</span></div>
+    <small>8 agents · 8 integrations connected · local-first</small>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- ============ DASHBOARD ============ -->
+    <section class="view active" id="dash">
+      <h1 class="h-greet">Good evening, Sandip</h1>
+      <p class="h-sub">Sunday, July 19 · 8:14 PM — 4 things need you, 12 handled automatically today.</p>
+
+      <div class="tiles">
+        <div class="tile alert"><div class="k">Needs you</div><div class="v">4</div><div class="sub">1 urgent · due today</div></div>
+        <div class="tile"><div class="k">Auto-handled today</div><div class="v">12</div><div class="sub">no action needed</div></div>
+        <div class="tile"><div class="k">Deferred</div><div class="v">3</div><div class="sub">next resurfaces 9:00 AM</div></div>
+        <div class="tile"><div class="k">Agents</div><div class="v">8<span style="font-size:15px;color:var(--muted)"> / 9</span></div><div class="sub">1 needs reconnect</div></div>
+      </div>
+
+      <div class="card">
+        <h2>Plugged-in agents <span class="link" onclick="nav('inbox',document.querySelectorAll('.nav a')[1])">open inbox →</span></h2>
+        <div class="agents">
+          <div class="agent"><div class="top"><span class="dot ok"></span><b>meeting</b></div><div class="meta">ran 16:45 · <span class="pend">1 pending</span> · Fireflies</div></div>
+          <div class="agent"><div class="top"><span class="dot ok"></span><b>email-triage</b></div><div class="meta">ran 5m ago · <span class="pend">1 pending</span> · Gmail</div></div>
+          <div class="agent"><div class="top"><span class="dot ok"></span><b>wbr-synth</b></div><div class="meta">ran 20:00 · <span class="pend">1 pending</span> · journals</div></div>
+          <div class="agent"><div class="top"><span class="dot ok"></span><b>doc-review</b></div><div class="meta">ran 1h ago · <span class="pend">1 pending</span> · Slack</div></div>
+          <div class="agent"><div class="top"><span class="dot ok"></span><b>newsletter</b></div><div class="meta">ran 07:00 · 0 pending · 3 filed</div></div>
+          <div class="agent"><div class="top"><span class="dot ok"></span><b>calendar</b></div><div class="meta">ran 12:00 · 0 pending · 1 rescheduled</div></div>
+          <div class="agent"><div class="top"><span class="dot idle"></span><b>job-scan</b></div><div class="meta">ran 09:00 · idle · GCal + email</div></div>
+          <div class="agent"><div class="top"><span class="dot ok"></span><b>payments-watch</b></div><div class="meta">watching · 0 pending · iMessage/bills</div></div>
+          <div class="agent err"><div class="top"><span class="dot err"></span><b>whatsapp-triage</b></div><div class="meta">error · auth expired · <span style="color:var(--err);font-weight:600">reconnect</span></div></div>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div class="card">
+          <h2>Needs you now</h2>
+          <div class="qrow" onclick="nav('inbox',document.querySelectorAll('.nav a')[1]);showItem('email')">
+            <span class="prio u"></span><div class="t">Reply — "Q3 capacity numbers"<small>Priya asked you for a decision · unanswered 2 days</small></div><span class="src">Due Thu</span></div>
+          <div class="qrow" onclick="nav('inbox',document.querySelectorAll('.nav a')[1]);showItem('prd')">
+            <span class="prio u"></span><div class="t">Review PRD "Payments v2"<small>Arjun @mentioned you in #product</small></div><span class="src">Due tmrw</span></div>
+          <div class="qrow" onclick="nav('inbox',document.querySelectorAll('.nav a')[1]);showItem('mtg')">
+            <span class="prio n"></span><div class="t">3 meetings — 5 decisions, 7 tasks<small>approve before filing to Notion + TickTick</small></div><span class="src">Today</span></div>
+          <div class="qrow" onclick="nav('inbox',document.querySelectorAll('.nav a')[1]);showItem('wbr')">
+            <span class="prio n"></span><div class="t">Weekly Business Review — draft<small>synthesized from 3 project journals</small></div><span class="src">Coding</span></div>
+        </div>
+
+        <div class="card">
+          <h2>Handled automatically today</h2>
+          <div class="feed">
+            <div class="frow"><span class="tm">20:00</span><div>Synthesized WBR from 3 journals · <span class="who">wbr-synth</span></div></div>
+            <div class="frow"><span class="tm">19:30</span><div>Logged 4 hourly entries to Obsidian · <span class="who">log</span></div></div>
+            <div class="frow"><span class="tm">18:10</span><div>Filed 3 newsletter insights to Notion · <span class="who">newsletter</span></div></div>
+            <div class="frow"><span class="tm">16:00</span><div>Rescheduled a 1:1 per your calendar rules · <span class="who">calendar</span></div></div>
+            <div class="frow"><span class="tm">12:30</span><div>Captured 2 stray ideas to Inbox · <span class="who">capture</span></div></div>
+            <div class="frow"><span class="tm">11:05</span><div>Drafted 2 Slack replies (held for you) · <span class="who">doc-review</span></div></div>
+          </div>
+          <div class="note">Auto-handled = high-confidence, low-blast-radius, reversible. Everything else is escalated to your inbox.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ INBOX ============ -->
+    <section class="view" id="inbox">
+      <h1 class="h-greet">Inbox</h1>
+      <p class="h-sub">4 items need your decision. Each renders the surface its type needs.</p>
+      <div class="inbox">
+        <div class="ilist">
+          <button class="item active" onclick="showItem('wbr',this)"><div class="top"><span class="src2 s-coding">Coding</span><span class="wy">Sun 8:00 PM</span></div><div class="tt">Weekly Business Review — draft</div><div class="wy">from 3 project journals</div><div style="margin-top:6px"><span class="badge assist">Assisted</span></div></button>
+          <button class="item" onclick="showItem('email',this)"><div class="top"><span class="src2 s-work">Work</span><span class="wy">2d ago</span></div><div class="tt">Reply — "Q3 capacity numbers"</div><div class="wy">Priya · needs a decision</div><div style="margin-top:6px"><span class="badge assist">Assisted</span> <span class="badge urgent">Due Thu</span></div></button>
+          <button class="item" onclick="showItem('prd',this)"><div class="top"><span class="src2 s-work">Work</span><span class="wy">1h ago</span></div><div class="tt">Review PRD "Payments v2"</div><div class="wy">Arjun · #product</div><div style="margin-top:6px"><span class="badge guided">Guided</span> <span class="badge urgent">Due tmrw</span></div></button>
+          <button class="item" onclick="showItem('mtg',this)"><div class="top"><span class="src2 s-work">Work</span><span class="wy">Today</span></div><div class="tt">3 meetings — decisions + tasks</div><div class="wy">Fireflies · 5 decisions, 7 tasks</div><div style="margin-top:6px"><span class="badge auto">Automated</span></div></button>
+        </div>
+        <div class="idetail">
+          <div class="dpanel active" id="wbr">
+            <div class="dsrc">wbr-synth · scheduled Sun 20:00 · reads journals in ~/Developer/{samaritan, localyap, scrask}</div>
+            <h3 class="dt">Weekly Business Review — draft</h3>
+            <div class="dmeta"><span class="badge assist">Assisted → Obsidian</span><span class="badge">14 entries</span><span class="badge">conf 0.86</span></div>
+            <div class="dwhy"><b>Why now:</b> weekly cadence — synthesized 14 journal entries into a WBR. Review before it's saved to your vault.</div>
+            <div class="sec"><h5>Shipped</h5><ul><li>Samaritan — Action Center PRD + architecture</li><li>LocalYap — real-time RAG live; p90 −40%</li><li>Scrask — confidence gate v2 merged</li></ul></div>
+            <div class="sec"><h5>Blockers</h5><ul><li>Scrask — ClawHub publish blocked on review <small>(3d)</small></li></ul></div>
+            <div class="sec"><h5>Next week</h5><ul><li>Samaritan v0 — wrap/meeting review gate</li></ul></div>
+            <div class="actions"><button class="btn good">Approve &amp; save to Obsidian</button><button class="btn">Edit</button><button class="btn">Regenerate</button><button class="btn">Dismiss</button></div>
+            <div class="note">Assisted — writes to Areas/Weekly/. Posted nowhere else.</div>
+          </div>
+          <div class="dpanel" id="email">
+            <div class="dsrc">email-triage · event: email.received · reads/sends Gmail</div>
+            <h3 class="dt">Reply — "Q3 capacity numbers"</h3>
+            <div class="dmeta"><span class="badge assist">Assisted → Gmail</span><span class="badge urgent">Due Thu</span><span class="badge">from Priya</span></div>
+            <div class="dwhy"><b>Why now:</b> Priya asks you for a decision, unanswered 2 days, on your active project. Draft ready — nothing sends until you approve.</div>
+            <div class="quote"><div class="fr">Priya Menon · 2 days ago</div>Can you confirm the FC capacity assumptions for Q3? Finance needs sign-off by Thu — flexing labor up for peak, or holding flat?</div>
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--assist);font-weight:700;margin-bottom:5px">Drafted reply · editable</div>
+            <textarea class="draft">Hi Priya, for Q3 we're flexing labor up ~8% for peak weeks (W36–W39) and holding flat outside peak. Per-FC breakdown in the sheet by Wed. Best, Sandip</textarea>
+            <div class="actions"><button class="btn good">Approve &amp; send</button><button class="btn">Save as draft</button><button class="btn">Edit</button><button class="btn">Snooze 1 day</button><button class="btn">Decline</button></div>
+            <div class="note">Assisted — I draft &amp; stage in Gmail; <b>sending is your call</b> (irreversible, external).</div>
+          </div>
+          <div class="dpanel" id="prd">
+            <div class="dsrc">doc-review · event: slack.mention · reads Slack · posts to thread</div>
+            <h3 class="dt">Review requested — PRD "Payments v2"</h3>
+            <div class="dmeta"><span class="badge guided">Guided + Assisted</span><span class="badge urgent">Due tmrw</span><span class="badge">#product · Arjun</span></div>
+            <div class="dwhy"><b>Why now:</b> Arjun @mentioned you with a review request due tomorrow. I read the PRD and drafted comments in your voice.</div>
+            <div class="sec"><h5>Summary</h5><ul><li>Replaces legacy checkout, adds a $100k+ approval flow, targets Q3 GA.</li></ul></div>
+            <div class="sec"><h5>Your draft comments</h5><ul><li>Success metric undefined for the approval flow — target auto-approval rate?</li><li>No rollback plan for the legacy-checkout deprecation (flagged irreversible today).</li><li>For $100k+ txns, spell out the human-in-the-loop step.</li></ul></div>
+            <div class="actions"><button class="btn primary">Post to Slack thread</button><button class="btn">Edit comments</button><button class="btn">Open in Slack</button><button class="btn">Mark as done</button><button class="btn">Defer</button></div>
+            <div class="note">Guided (open it yourself) or Assisted (post approved comments on your say-so). Guided actions run outside Samaritan, so <b>"Mark as done"</b> closes the loop → moves it to Completed.</div>
+          </div>
+          <div class="dpanel" id="mtg">
+            <div class="dsrc">meeting · event: fireflies.transcript_ready · files Notion (decisions) + TickTick (tasks)</div>
+            <h3 class="dt">3 meetings today — review extractions</h3>
+            <div class="dmeta"><span class="badge auto">Automated → Notion + TickTick</span><span class="badge">5 decisions</span><span class="badge">7 tasks</span></div>
+            <div class="dwhy"><b>Why now:</b> these auto-file, but extraction can be wrong — approve/uncheck before anything hits Notion or TickTick.</div>
+            <div class="mtg"><div class="mh">Roadmap sync <span>10:00</span></div><div class="mb">
+              <label class="chk"><input type="checkbox" checked>Ship Payments v2 in Q3<span class="rev r">Reversible</span></label>
+              <label class="chk"><input type="checkbox" checked>Deprecate legacy checkout<span class="rev i">Irreversible</span></label>
+              <label class="chk"><input type="checkbox" checked>Task: finalize FC capacity assumptions <small style="color:var(--muted)">· you · Thu</small></label></div></div>
+            <div class="mtg"><div class="mh">Vendor call <span>16:00</span></div><div class="mb">
+              <label class="chk"><input type="checkbox" checked>Go with Vendor A, pending security review<span class="rev r">Reversible</span></label>
+              <label class="chk"><input type="checkbox" checked>Task: request SOC2 report <small style="color:var(--muted)">· you · Mon</small></label>
+              <label class="chk"><input type="checkbox">Task: loop in procurement <small style="color:var(--muted)">· Priya · Tue</small></label></div></div>
+            <div class="actions"><button class="btn good">Approve checked &amp; file</button><button class="btn">Ask: why this decision?</button><button class="btn">Reject all</button></div>
+            <div class="note">Automated — checked items file to Notion/TickTick; unchecked are dropped.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ DEFERRED ============ -->
+    <section class="view" id="deferred">
+      <h1 class="h-greet">Deferred</h1>
+      <p class="h-sub">Snoozed — these resurface in your inbox at the time shown.</p>
+      <div class="lrow"><div class="body"><b>Reply to recruiter — Acme Corp</b><div class="m">You deferred this · from LinkedIn · job-scan</div></div><span class="when">↩ Tomorrow 9:00 AM</span><button class="btn">Act now</button><button class="btn">Drop</button></div>
+      <div class="lrow"><div class="body"><b>Review vendor contract — Vendor A</b><div class="m">Waiting on SOC2 report · from email</div></div><span class="when">↩ Monday</span><button class="btn">Act now</button><button class="btn">Drop</button></div>
+      <div class="lrow"><div class="body"><b>Newsletter deep-dive — "AI agents landscape"</b><div class="m">Read-when-free · from newsletter</div></div><span class="when">↩ Saturday</span><button class="btn">Act now</button><button class="btn">Drop</button></div>
+    </section>
+
+    <!-- ============ COMPLETED ============ -->
+    <section class="view" id="completed">
+      <h1 class="h-greet">Completed</h1>
+      <p class="h-sub">Every decision you made — the audit trail. Ask "why did we…?" to trace any of these.</p>
+      <div class="daygrp">Today</div>
+      <div class="lrow"><span class="did appr">Approved</span><div class="body"><b>Roadmap sync — 2 decisions, 2 tasks</b><div class="m">1 edited before filing · → Notion + TickTick</div></div><span class="when">4:50 PM</span></div>
+      <div class="lrow"><span class="did appr">Approved</span><div class="body"><b>Newsletter insight — "RAG eval tools"</b><div class="m">→ Notion (insights)</div></div><span class="when">6:10 PM</span></div>
+      <div class="lrow"><span class="did rej">Dismissed</span><div class="body"><b>Newsletter digest — 5 items</b><div class="m">nothing filed</div></div><span class="when">7:02 PM</span></div>
+      <div class="daygrp">Yesterday</div>
+      <div class="lrow"><span class="did sent">Sent</span><div class="body"><b>Reply — design review feedback</b><div class="m">approved &amp; sent · → Gmail</div></div><span class="when">Thu 3:20 PM</span></div>
+      <div class="lrow"><span class="did edit">Edited</span><div class="body"><b>1:1 notes — HITL charter decision</b><div class="m">reworded before filing · → Notion</div></div><span class="when">Thu 2:15 PM</span></div>
+      <div class="lrow"><span class="did appr">Approved</span><div class="body"><b>Payment — AWS invoice $2,400</b><div class="m">you executed the transfer · logged</div></div><span class="when">Thu 11:00 AM</span></div>
+    </section>
+
+    <!-- ============ SETTINGS ============ -->
+    <section class="view" id="settings">
+      <h1 class="h-greet">Settings · Integrations &amp; Routing</h1>
+      <p class="h-sub">Connect apps once. Then set the default app for each action — and whether it runs guided, assisted, or automated.</p>
+
+      <div class="card">
+        <h2>Connections</h2>
+        <div class="agents">
+          <div class="agent"><div class="top"><span class="dot ok"></span><b>Gmail</b></div><div class="meta">sandip@work · connected</div></div>
+          <div class="agent"><div class="top"><span class="dot ok"></span><b>Gmail (personal)</b></div><div class="meta">sandip@gmail · connected</div></div>
+          <div class="agent"><div class="top"><span class="dot ok"></span><b>Google Calendar</b></div><div class="meta">work · connected</div></div>
+          <div class="agent"><div class="top"><span class="dot ok"></span><b>Slack</b></div><div class="meta">Acme workspace · connected</div></div>
+          <div class="agent"><div class="top"><span class="dot ok"></span><b>TickTick</b></div><div class="meta">connected</div></div>
+          <div class="agent"><div class="top"><span class="dot ok"></span><b>Notion</b></div><div class="meta">PM OS workspace · connected</div></div>
+          <div class="agent"><div class="top"><span class="dot ok"></span><b>Obsidian</b></div><div class="meta">local vault · connected</div></div>
+          <div class="agent"><div class="top"><span class="dot ok"></span><b>Fireflies</b></div><div class="meta">connected</div></div>
+          <div class="agent"><div class="top"><span class="dot ok"></span><b>iMessage</b></div><div class="meta">local · connected</div></div>
+          <div class="agent"><div class="top"><span class="dot ok"></span><b>Telegram</b></div><div class="meta">Claude Channels · connected</div></div>
+          <div class="agent err"><div class="top"><span class="dot err"></span><b>WhatsApp</b></div><div class="meta">auth expired · <span style="color:var(--err);font-weight:600">reconnect</span></div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Routing &amp; defaults</h2>
+        <p class="note" style="margin:0 0 12px">Capabilities declare an abstract action (e.g. <code>email.send</code>). The routing table resolves it to a concrete app, account, and default execution mode — change it once here and every agent follows.</p>
+        <div style="overflow:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead><tr style="text-align:left;color:var(--muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.04em">
+            <th style="padding:8px 10px;border-bottom:1px solid var(--line)">Action</th>
+            <th style="padding:8px 10px;border-bottom:1px solid var(--line)">Default app</th>
+            <th style="padding:8px 10px;border-bottom:1px solid var(--line)">Account / target</th>
+            <th style="padding:8px 10px;border-bottom:1px solid var(--line)">Default mode</th>
+          </tr></thead>
+          <tbody>
+            <tr><td style="padding:9px 10px;border-bottom:1px solid var(--line2)"><code>message.work.send</code></td><td style="padding:9px 10px;border-bottom:1px solid var(--line2)">Slack</td><td style="padding:9px 10px;border-bottom:1px solid var(--line2)">Acme workspace</td><td style="padding:9px 10px;border-bottom:1px solid var(--line2)"><span class="badge auto">Automated</span></td></tr>
+            <tr><td style="padding:9px 10px;border-bottom:1px solid var(--line2)"><code>message.personal.send</code></td><td style="padding:9px 10px;border-bottom:1px solid var(--line2)">iMessage</td><td style="padding:9px 10px;border-bottom:1px solid var(--line2)">local · Telegram fallback</td><td style="padding:9px 10px;border-bottom:1px solid var(--line2)"><span class="badge guided">Guided</span></td></tr>
+            <tr><td style="padding:9px 10px;border-bottom:1px solid var(--line2)"><code>email.send</code></td><td style="padding:9px 10px;border-bottom:1px solid var(--line2)">Gmail</td><td style="padding:9px 10px;border-bottom:1px solid var(--line2)">sandip@work</td><td style="padding:9px 10px;border-bottom:1px solid var(--line2)"><span class="badge assist">Assisted</span></td></tr>
+            <tr><td style="padding:9px 10px;border-bottom:1px solid var(--line2)"><code>email.personal.send</code></td><td style="padding:9px 10px;border-bottom:1px solid var(--line2)">Gmail</td><td style="padding:9px 10px;border-bottom:1px solid var(--line2)">sandip@gmail</td><td style="padding:9px 10px;border-bottom:1px solid var(--line2)"><span class="badge assist">Assisted</span></td></tr>
+            <tr><td style="padding:9px 10px;border-bottom:1px solid var(--line2)"><code>task.create</code></td><td style="padding:9px 10px;border-bottom:1px solid var(--line2)">TickTick</td><td style="padding:9px 10px;border-bottom:1px solid var(--line2)">Work list</td><td style="padding:9px 10px;border-bottom:1px solid var(--line2)"><span class="badge auto">Automated</span></td></tr>
+            <tr><td style="padding:9px 10px;border-bottom:1px solid var(--line2)"><code>event.schedule</code></td><td style="padding:9px 10px;border-bottom:1px solid var(--line2)">Google Calendar</td><td style="padding:9px 10px;border-bottom:1px solid var(--line2)">work</td><td style="padding:9px 10px;border-bottom:1px solid var(--line2)"><span class="badge assist">Assisted</span></td></tr>
+            <tr><td style="padding:9px 10px;border-bottom:1px solid var(--line2)"><code>note.file</code> / <code>insight.file</code></td><td style="padding:9px 10px;border-bottom:1px solid var(--line2)">Notion</td><td style="padding:9px 10px;border-bottom:1px solid var(--line2)">PM OS workspace</td><td style="padding:9px 10px;border-bottom:1px solid var(--line2)"><span class="badge auto">Automated</span></td></tr>
+            <tr><td style="padding:9px 10px;border-bottom:1px solid var(--line2)"><code>journal.capture</code></td><td style="padding:9px 10px;border-bottom:1px solid var(--line2)">Obsidian</td><td style="padding:9px 10px;border-bottom:1px solid var(--line2)">vault</td><td style="padding:9px 10px;border-bottom:1px solid var(--line2)"><span class="badge auto">Automated</span></td></tr>
+            <tr><td style="padding:9px 10px"><code>payment.make</code></td><td style="padding:9px 10px">— none —</td><td style="padding:9px 10px">manual only</td><td style="padding:9px 10px"><span class="badge guided">Guided</span></td></tr>
+          </tbody>
+        </table>
+        </div>
+        <div class="note" style="margin-top:12px">Money never moves automatically — <code>payment.make</code> is locked to Guided by policy, regardless of connected apps.</div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+  function nav(id, el){
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    document.querySelectorAll('.nav a').forEach(a=>a.classList.remove('active'));
+    if(el) el.classList.add('active');
+    document.querySelector('.main').scrollTop=0;
+  }
+  function showItem(id, el){
+    document.querySelectorAll('.dpanel').forEach(p=>p.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    document.querySelectorAll('#inbox .item').forEach(i=>i.classList.remove('active'));
+    if(el) el.classList.add('active');
+    else{ // activate matching list item when jumped from dashboard
+      var map={wbr:0,email:1,prd:2,mtg:3};
+      var items=document.querySelectorAll('#inbox .item'); if(items[map[id]]) items[map[id]].classList.add('active');
+    }
+  }
+</script>
+</body>
+</html>

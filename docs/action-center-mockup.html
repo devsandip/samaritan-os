@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Samaritan · Action Center — UI Mockup</title>
+<style>
+  :root{
+    --bg:#eef0f4; --surface:#ffffff; --ink:#1a1d24; --muted:#616b7a; --line:#e3e6ec; --line2:#eef0f4;
+    --core:#4f46e5; --core-soft:#eef0fe;
+    --work:#2563eb; --personal:#b45309; --coding:#0e7490; --job:#7c3aed;
+    --assist:#b45309; --assist-soft:#fdf1e0; --auto:#047857; --auto-soft:#e2f6ee; --guided:#4f46e5; --guided-soft:#eef0fe;
+    --urgent:#dc2626;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:14px}
+  /* top bar */
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;
+    background:var(--surface);border-bottom:1px solid var(--line);padding:10px 18px;position:sticky;top:0;z-index:5}
+  .brand{display:flex;align-items:center;gap:10px}
+  .brand b{font-size:15px}.brand .dotlogo{width:22px;height:22px;border-radius:7px;background:var(--core)}
+  .brand small{color:var(--muted)}
+  .integrations{display:flex;gap:6px;flex-wrap:wrap}
+  .intg{font-size:11px;font-weight:600;border:1px solid var(--line);border-radius:999px;padding:3px 9px;color:var(--muted);background:#fbfbfd}
+  .intg::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--auto);margin-right:6px;vertical-align:middle}
+  .qcount{font-size:12px;color:var(--muted)}
+  .qcount b{color:var(--core);font-size:15px}
+
+  /* shell */
+  .shell{display:grid;grid-template-columns:300px 1fr;min-height:calc(100vh - 45px)}
+  .list{border-right:1px solid var(--line);background:#f7f8fb;overflow:auto}
+  .lanes{display:flex;gap:6px;padding:12px 14px 8px;flex-wrap:wrap}
+  .lane{font-size:11.5px;border:1px solid var(--line);background:#fff;border-radius:999px;padding:3px 10px;color:var(--muted)}
+  .lane.active{background:var(--core);color:#fff;border-color:var(--core)}
+  .list-head{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:6px 16px}
+
+  .item{display:block;width:100%;text-align:left;background:#fff;border:0;border-bottom:1px solid var(--line);
+    padding:12px 16px;cursor:pointer;position:relative}
+  .item:hover{background:#fafbff}
+  .item.active{background:#fff}
+  .item.active::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--core)}
+  .item-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+  .src{font-size:10.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:1px 7px;border-radius:5px}
+  .src-coding{color:var(--coding);background:#e0f5fb}.src-work{color:var(--work);background:#e5edff}
+  .src-personal{color:var(--personal);background:#fdf1e0}.src-job{color:var(--job);background:#f0e9fe}
+  .time{font-size:11px;color:var(--muted)}
+  .item-title{font-size:13.5px;font-weight:650;line-height:1.3;margin-bottom:3px}
+  .item-why{font-size:12px;color:var(--muted);line-height:1.35}
+  .item-badges{display:flex;gap:5px;margin-top:7px;flex-wrap:wrap}
+  .badge{font-size:10.5px;font-weight:600;border-radius:5px;padding:1px 7px;background:#f0f1f4;color:var(--muted)}
+  .badge.assist{background:var(--assist-soft);color:var(--assist)}
+  .badge.auto{background:var(--auto-soft);color:var(--auto)}
+  .badge.guided{background:var(--guided-soft);color:var(--guided)}
+  .badge.urgent{background:#fde7e7;color:var(--urgent)}
+
+  /* detail */
+  .detail{overflow:auto;padding:24px 30px}
+  .panel{display:none;max-width:720px}
+  .panel.active{display:block}
+  .d-src{font-size:12px;color:var(--muted);margin-bottom:6px}
+  .d-title{font-size:21px;font-weight:700;letter-spacing:-.01em;margin:0 0 10px}
+  .d-meta{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .d-why{background:#fbfbfe;border:1px solid var(--line);border-left:3px solid var(--core);
+    border-radius:8px;padding:10px 13px;font-size:13px;color:var(--ink);margin-bottom:20px}
+  .d-why b{color:var(--core)}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:16px}
+  .card h4{margin:0 0 8px;font-size:13px;color:var(--core);letter-spacing:.02em}
+  .sec{margin-bottom:14px}
+  .sec h5{margin:0 0 5px;font-size:12.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  .sec ul{margin:0;padding-left:18px}.sec li{font-size:13.5px;padding:2px 0}
+  .sec li small{color:var(--muted)}
+  .quote{background:#f7f8fb;border:1px solid var(--line);border-radius:8px;padding:12px 14px;font-size:13px;color:#333;margin-bottom:14px}
+  .quote .from{font-size:12px;color:var(--muted);margin-bottom:6px}
+  .draft{width:100%;min-height:120px;border:1px solid var(--line);border-radius:8px;padding:12px;font:inherit;font-size:13.5px;color:var(--ink);resize:vertical;background:#fffef8}
+  .draftlabel{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--assist);font-weight:700;margin-bottom:6px}
+  .hold{font-size:12px;color:var(--muted);margin-top:6px}
+  .meeting{border:1px solid var(--line);border-radius:10px;margin-bottom:12px;overflow:hidden}
+  .meeting-h{background:#f7f8fb;padding:9px 14px;font-size:13px;font-weight:650;display:flex;justify-content:space-between}
+  .meeting-h span{color:var(--muted);font-weight:500}
+  .meeting-b{padding:10px 14px}
+  .chk{display:flex;gap:9px;align-items:flex-start;padding:5px 0;font-size:13px}
+  .chk input{margin-top:3px}
+  .rev{font-size:10.5px;font-weight:700;padding:0 6px;border-radius:4px;margin-left:6px}
+  .rev.r{background:#e2f6ee;color:var(--auto)}.rev.i{background:#fde7e7;color:var(--urgent)}
+  .due{color:var(--muted);font-size:12px}
+  .comment{font-size:13.5px;padding:6px 0;border-bottom:1px dashed var(--line)}
+  .comment:last-child{border-bottom:0}
+
+  /* actions */
+  .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:22px;padding-top:16px;border-top:1px solid var(--line)}
+  .btn{font-size:13px;font-weight:600;border-radius:8px;padding:9px 15px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+  .btn.primary{background:var(--core);border-color:var(--core);color:#fff}
+  .btn.good{background:var(--auto);border-color:var(--auto);color:#fff}
+  .btn:hover{filter:brightness(.97)}
+  .mode-note{font-size:12px;color:var(--muted);margin-top:10px}
+  @media(max-width:820px){.shell{grid-template-columns:1fr}.list{max-height:280px}}
+</style>
+</head>
+<body>
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="dotlogo"></div>
+      <div><b>Samaritan</b> &nbsp;<small>Action Center</small></div>
+    </div>
+    <div class="integrations">
+      <span class="intg">Gmail</span><span class="intg">TickTick</span><span class="intg">Google Calendar</span>
+      <span class="intg">Slack</span><span class="intg">iMessage</span><span class="intg">Notion</span>
+      <span class="intg">Obsidian</span><span class="intg">Fireflies</span>
+    </div>
+    <div class="qcount"><b>4</b> need you</div>
+  </div>
+
+  <div class="shell">
+    <!-- INBOX LIST -->
+    <div class="list">
+      <div class="lanes">
+        <span class="lane active">All · 4</span><span class="lane">Work · 2</span>
+        <span class="lane">Coding · 1</span><span class="lane">Job · 0</span>
+      </div>
+      <div class="list-head">Waiting for you</div>
+
+      <button class="item active" onclick="show('wbr',this)">
+        <div class="item-top"><span class="src src-coding">Coding</span><span class="time">Sun 8:00 PM</span></div>
+        <div class="item-title">Weekly Business Review — draft ready</div>
+        <div class="item-why">Synthesized from 3 project journals in ~/Developer</div>
+        <div class="item-badges"><span class="badge assist">Assisted</span><span class="badge">3 sources</span></div>
+      </button>
+
+      <button class="item" onclick="show('email',this)">
+        <div class="item-top"><span class="src src-work">Work</span><span class="time">2 days ago</span></div>
+        <div class="item-title">Reply needed — "Q3 capacity numbers"</div>
+        <div class="item-why">Priya asked you for a decision · unanswered 2 days</div>
+        <div class="item-badges"><span class="badge assist">Assisted</span><span class="badge urgent">Due Thu</span><span class="badge">Gmail</span></div>
+      </button>
+
+      <button class="item" onclick="show('prd',this)">
+        <div class="item-top"><span class="src src-work">Work</span><span class="time">1 hr ago</span></div>
+        <div class="item-title">Review requested — PRD "Payments v2"</div>
+        <div class="item-why">Arjun @mentioned you in #product · due tomorrow</div>
+        <div class="item-badges"><span class="badge guided">Guided</span><span class="badge">Slack</span></div>
+      </button>
+
+      <button class="item" onclick="show('mtg',this)">
+        <div class="item-top"><span class="src src-work">Work</span><span class="time">Today</span></div>
+        <div class="item-title">3 meetings — review 5 decisions, 7 tasks</div>
+        <div class="item-why">Transcripts ready · approve before filing to Notion + TickTick</div>
+        <div class="item-badges"><span class="badge auto">Automated</span><span class="badge">Fireflies</span></div>
+      </button>
+    </div>
+
+    <!-- DETAIL -->
+    <div class="detail">
+
+      <!-- 1. WBR -->
+      <div class="panel active" id="wbr">
+        <div class="d-src">wbr-synth · trigger: scheduled (Sun 20:00) · reads: journals in ~/Developer/{samaritan, localyap, scrask}</div>
+        <h1 class="d-title">Weekly Business Review — draft</h1>
+        <div class="d-meta"><span class="badge assist">Assisted → Obsidian</span><span class="badge">14 journal entries</span><span class="badge">confidence 0.86</span></div>
+        <div class="d-why"><b>Why you're seeing this:</b> Your weekly cadence. I synthesized 14 journal entries across 3 projects into a WBR. Review before it's saved to your vault.</div>
+
+        <div class="card">
+          <div class="sec"><h5>Shipped this week</h5><ul>
+            <li>Samaritan — Action Center PRD + architecture spec <small>(journal: 07-15 → 07-19)</small></li>
+            <li>LocalYap — real-time RAG over Google Reviews live; p90 latency −40%</li>
+            <li>Scrask — screenshot→task confidence gate v2 merged</li>
+          </ul></div>
+          <div class="sec"><h5>In progress</h5><ul>
+            <li>Samaritan — Action Center UI mockups</li>
+            <li>LocalYap — competitor sentiment scoring model</li>
+          </ul></div>
+          <div class="sec"><h5>Blockers</h5><ul>
+            <li>Scrask — ClawHub publish blocked on marketplace review <small>(3 days)</small></li>
+          </ul></div>
+          <div class="sec" style="margin-bottom:0"><h5>Next week</h5><ul>
+            <li>Samaritan v0 build — wrap/meeting review gate before Notion writes</li>
+          </ul></div>
+        </div>
+
+        <div class="actions">
+          <button class="btn good">Approve &amp; save to Obsidian</button>
+          <button class="btn">Edit draft</button>
+          <button class="btn">Regenerate</button>
+          <button class="btn">Dismiss</button>
+        </div>
+        <div class="mode-note">Assisted mode — on approve, the WBR is written to <b>Areas/Weekly/</b> in Obsidian. Nothing is posted anywhere else.</div>
+      </div>
+
+      <!-- 2. EMAIL -->
+      <div class="panel" id="email">
+        <div class="d-src">email-triage · trigger: event (email.received) · reads/sends: Gmail</div>
+        <h1 class="d-title">Reply needed — "Q3 capacity numbers"</h1>
+        <div class="d-meta"><span class="badge assist">Assisted → Gmail</span><span class="badge urgent">Finance sign-off due Thu</span><span class="badge">from Priya (Capacity Planning)</span></div>
+        <div class="d-why"><b>Why you're seeing this:</b> Priya asks you for a decision, it's been unanswered for 2 days, and she's on your active project. I drafted a reply — it will not send until you approve.</div>
+
+        <div class="quote">
+          <div class="from">Priya Menon · priya@company.com · to you · 2 days ago</div>
+          Hi Sandip — can you confirm the FC capacity assumptions for the Q3 plan? Finance needs sign-off by EOD Thursday. Specifically: are we flexing labor up for peak, or holding flat? — Priya
+        </div>
+
+        <div class="draftlabel">Drafted reply · editable</div>
+        <textarea class="draft">Hi Priya,
+
+For Q3 we're flexing labor up ~8% for the peak weeks (W36–W39) and holding flat outside peak. FC storage capacity stays as in the base plan.
+
+I'll drop the per-FC breakdown in the shared sheet by Wednesday so Finance has it before the Thursday sign-off.
+
+Best,
+Sandip</textarea>
+        <div class="hold">Held for you because it commits you to a number Finance will act on.</div>
+
+        <div class="actions">
+          <button class="btn good">Approve &amp; send</button>
+          <button class="btn">Save as Gmail draft</button>
+          <button class="btn">Edit</button>
+          <button class="btn">Snooze 1 day</button>
+          <button class="btn">Decline to answer</button>
+        </div>
+        <div class="mode-note">Assisted mode — I can draft and stage in Gmail, but <b>sending is your call</b> (irreversible, external).</div>
+      </div>
+
+      <!-- 3. PRD -->
+      <div class="panel" id="prd">
+        <div class="d-src">doc-review · trigger: event (slack.mention) · reads: Slack · posts: Slack thread</div>
+        <h1 class="d-title">Review requested — PRD "Payments v2"</h1>
+        <div class="d-meta"><span class="badge guided">Guided + Assisted</span><span class="badge urgent">Due tomorrow</span><span class="badge">#product · from Arjun</span></div>
+        <div class="d-why"><b>Why you're seeing this:</b> Arjun @mentioned you in #product with a review request due tomorrow. I read the PRD and drafted review comments in your voice.</div>
+
+        <div class="card">
+          <h4>Summary</h4>
+          <p style="margin:0 0 6px;font-size:13.5px">Payments v2 replaces the legacy checkout with a new orchestration layer, adds a $100k+ approval flow, and targets Q3 GA. 6 pages, 2 open questions.</p>
+        </div>
+        <div class="card">
+          <h4>Your likely review comments · draft</h4>
+          <div class="comment">1. Success metric is undefined for the new approval flow — what's the target auto-approval rate vs. escalation?</div>
+          <div class="comment">2. No rollback plan for the legacy-checkout deprecation — that decision was flagged irreversible in today's roadmap sync.</div>
+          <div class="comment">3. For $100k+ transactions, spell out the human-in-the-loop step (who approves, what context, resume behavior).</div>
+        </div>
+
+        <div class="actions">
+          <button class="btn primary">Post review to Slack thread</button>
+          <button class="btn">Edit comments</button>
+          <button class="btn">Open in Slack</button>
+          <button class="btn">Defer to tomorrow</button>
+        </div>
+        <div class="mode-note">Guided — I can open the thread for you; or Assisted — post the approved comments to the Slack thread on your say-so.</div>
+      </div>
+
+      <!-- 4. MEETINGS -->
+      <div class="panel" id="mtg">
+        <div class="d-src">meeting · trigger: event (fireflies.transcript_ready) · files: Notion (decisions) + TickTick (tasks)</div>
+        <h1 class="d-title">3 meetings today — review extractions</h1>
+        <div class="d-meta"><span class="badge auto">Automated → Notion + TickTick</span><span class="badge">5 decisions</span><span class="badge">7 action items</span></div>
+        <div class="d-why"><b>Why you're seeing this:</b> These get auto-filed, but extraction can be wrong — so I hold them for a quick approve/uncheck before anything hits Notion or TickTick. Uncheck anything you don't want filed.</div>
+
+        <div class="meeting">
+          <div class="meeting-h">Roadmap sync <span>10:00 · 45 min</span></div>
+          <div class="meeting-b">
+            <h5 style="margin:0 0 4px;font-size:11.5px;color:var(--muted)">DECISIONS → Notion</h5>
+            <label class="chk"><input type="checkbox" checked>Ship Payments v2 in Q3 <span class="rev r">Reversible</span></label>
+            <label class="chk"><input type="checkbox" checked>Deprecate legacy checkout <span class="rev i">Irreversible</span></label>
+            <h5 style="margin:8px 0 4px;font-size:11.5px;color:var(--muted)">ACTION ITEMS → TickTick</h5>
+            <label class="chk"><input type="checkbox" checked>Finalize FC capacity assumptions <span class="due">· you · due Thu</span></label>
+            <label class="chk"><input type="checkbox" checked>Add rollback plan to PRD <span class="due">· Arjun · due Wed</span></label>
+          </div>
+        </div>
+
+        <div class="meeting">
+          <div class="meeting-h">1:1 with manager <span>14:00 · 30 min</span></div>
+          <div class="meeting-b">
+            <h5 style="margin:0 0 4px;font-size:11.5px;color:var(--muted)">DECISIONS → Notion</h5>
+            <label class="chk"><input type="checkbox" checked>Take on the HITL charter <span class="rev r">Reversible</span></label>
+            <h5 style="margin:8px 0 4px;font-size:11.5px;color:var(--muted)">ACTION ITEMS → TickTick</h5>
+            <label class="chk"><input type="checkbox" checked>Draft HITL one-pager <span class="due">· you · due Fri</span></label>
+          </div>
+        </div>
+
+        <div class="meeting">
+          <div class="meeting-h">Vendor call <span>16:00 · 40 min</span></div>
+          <div class="meeting-b">
+            <h5 style="margin:0 0 4px;font-size:11.5px;color:var(--muted)">DECISIONS → Notion</h5>
+            <label class="chk"><input type="checkbox" checked>Go with Vendor A, pending security review <span class="rev r">Reversible</span></label>
+            <h5 style="margin:8px 0 4px;font-size:11.5px;color:var(--muted)">ACTION ITEMS → TickTick</h5>
+            <label class="chk"><input type="checkbox" checked>Request SOC2 report <span class="due">· you · due Mon</span></label>
+            <label class="chk"><input type="checkbox">Loop in procurement <span class="due">· Priya · due Tue</span></label>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn good">Approve checked &amp; file</button>
+          <button class="btn">Edit an item</button>
+          <button class="btn">Ask: why this decision?</button>
+          <button class="btn">Reject all</button>
+        </div>
+        <div class="mode-note">Automated mode — checked decisions become Notion rows, checked action items become TickTick tasks (with assignee + due). Unchecked items are dropped.</div>
+      </div>
+
+    </div>
+  </div>
+
+<script>
+  function show(id, el){
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    document.querySelectorAll('.item').forEach(i=>i.classList.remove('active'));
+    if(el) el.classList.add('active');
+    document.querySelector('.detail').scrollTop=0;
+  }
+</script>
+</body>
+</html>

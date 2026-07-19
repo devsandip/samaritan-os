@@ -1,0 +1,90 @@
+/**
+ * Shared enums and primitives (TECH-SPEC §4).
+ *
+ * Every contract in this folder is defined once as a zod schema and the
+ * TypeScript type is inferred from it with `z.infer<>`, so the runtime validator
+ * and the compile-time type can never drift apart. Nothing here declares a
+ * standalone `interface`.
+ */
+import { z } from "zod";
+
+export const RunMode = z.enum(["scheduled", "event", "manual", "continuous"]);
+export type RunMode = z.infer<typeof RunMode>;
+
+export const RenderLayout = z.enum(["card", "form", "document", "diff"]);
+export type RenderLayout = z.infer<typeof RenderLayout>;
+
+export const ExecutionMode = z.enum(["guided", "assisted", "automated"]);
+export type ExecutionMode = z.infer<typeof ExecutionMode>;
+
+export const ResponseOutcome = z.enum(["execute", "guided", "discard", "defer", "ask_more_info"]);
+export type ResponseOutcome = z.infer<typeof ResponseOutcome>;
+
+export const Priority = z.enum(["low", "normal", "high", "urgent"]);
+export type Priority = z.infer<typeof Priority>;
+
+export const ConnectionStatus = z.enum(["connected", "disconnected", "error", "not_configured"]);
+export type ConnectionStatus = z.infer<typeof ConnectionStatus>;
+
+export const ActionItemStatus = z.enum([
+  "pending",
+  "in_review",
+  "approved",
+  // Dispatched (guided, or assisted needing an external commit) but not closed
+  // out. Only POST /api/actions/:id/confirm moves it to executed. See §5.3.
+  "awaiting_confirmation",
+  "rejected",
+  "deferred",
+  "executed",
+  "failed",
+  "expired",
+]);
+export type ActionItemStatus = z.infer<typeof ActionItemStatus>;
+
+/**
+ * Statuses where nothing external has been committed yet, so a re-ingest may
+ * supersede the existing row in place (§5.1, branch 2).
+ */
+export const UNSETTLED_STATUSES = [
+  "pending",
+  "in_review",
+  "approved",
+  "awaiting_confirmation",
+] as const satisfies readonly ActionItemStatus[];
+
+/**
+ * Statuses where the logical event already ran its course, so a re-ingest must
+ * not mutate the row and instead inserts a fresh one (§5.1, branch 3).
+ */
+export const SETTLED_STATUSES = [
+  "executed",
+  "failed",
+  "rejected",
+  "expired",
+  "deferred",
+] as const satisfies readonly ActionItemStatus[];
+
+export function isSettled(status: ActionItemStatus): boolean {
+  return (SETTLED_STATUSES as readonly ActionItemStatus[]).includes(status);
+}
+
+/** An ISO 8601 timestamp. Validated by parseability rather than by regex shape. */
+export const IsoDateTime = z
+  .string()
+  .refine((s) => !Number.isNaN(Date.parse(s)), "must be an ISO 8601 datetime");
+
+/** Stable, kebab-case identifier. Used for capability ids and response ids. */
+export const KebabId = z
+  .string()
+  .min(1)
+  .regex(/^[a-z0-9]+(?:[-_][a-z0-9]+)*$/, "must be kebab_or-kebab case");
+
+/** Dotted execution-registry id, e.g. `notion.insight.create`. */
+export const ExecutionCapabilityId = z
+  .string()
+  .min(1)
+  .regex(/^[a-z0-9]+(?:[._-][a-z0-9]+)+$/, "must be a dotted id like notion.insight.create");
+
+export function nowIso(): string {
+  return new Date().toISOString();
+}
