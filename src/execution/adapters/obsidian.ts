@@ -87,8 +87,11 @@ export const obsidianNoteAppend: ExecutionAdapter = {
   },
 };
 
-/** Convenience for callers building a daily-note path. */
+/**
+ * Vault-relative path to a daily note. Relative to `paths.vault`, which points
+ * at the Samaritan folder itself, so this carries no vault-name prefix.
+ */
 export function dailyNotePath(date = new Date()): string {
   const iso = date.toISOString().slice(0, 10);
-  return join("Samaritan", "Areas", "Daily", `${iso}.md`);
+  return join("Areas", "Daily", `${iso}.md`);
 }

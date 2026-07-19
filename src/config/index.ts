@@ -34,7 +34,10 @@ export const ConfigSchema = z.object({
   paths: z
     .object({
       db: PathString.default("~/.samaritan/samaritan.db"),
-      vault: PathString.default("~/Documents/Obsidian"),
+      // The vault root is the Samaritan folder itself, not its parent. The
+      // skills' system contract has always said so, and pointing at the parent
+      // writes notes into a sibling of the vault where nothing will find them.
+      vault: PathString.default("~/Documents/Obsidian/Samaritan"),
       journals: PathString.default("~/Developer"),
       capabilities: PathString.optional(),
     })
@@ -103,7 +106,7 @@ server:
 
 paths:
   db: ~/.samaritan/samaritan.db
-  vault: ~/Documents/Obsidian
+  vault: ~/Documents/Obsidian/Samaritan
   journals: ~/Developer
 
 delivery:

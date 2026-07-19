@@ -17,6 +17,7 @@ import type {
   ExecutionRequest,
   ExecutionResult,
 } from "../../types/index.js";
+import { dailyNotePath } from "./obsidian.js";
 
 export const PM_OS_KINDS = ["decision", "insight", "task", "person", "note"] as const;
 export type PmOsKind = (typeof PM_OS_KINDS)[number];
@@ -47,9 +48,6 @@ function text(payload: Record<string, unknown>, key: string): string {
   return typeof value === "string" ? value : "";
 }
 
-function dailyNoteRelativePath(): string {
-  return `Areas/Daily/${new Date().toISOString().slice(0, 10)}.md`;
-}
 
 /**
  * Translates the generic PM-OS item into the payload its target adapter expects.
@@ -101,7 +99,7 @@ export function payloadFor(kind: PmOsKind, item: Record<string, unknown>): Recor
       };
     case "note":
       return {
-        path: dailyNoteRelativePath(),
+        path: dailyNotePath(),
         content: [`## ${p.title}`, p.detail].filter(Boolean).join("\n\n"),
       };
   }
