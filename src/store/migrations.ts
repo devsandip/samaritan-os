@@ -170,4 +170,26 @@ CREATE TABLE sync_cursors (
 );
 `,
   },
+  {
+    version: 2,
+    name: "delivery_queue",
+    sql: `
+-- Delivery holds notifications during quiet hours (§2.2) and flushes them after
+-- the window. This is a table rather than an in-memory queue because v0 has no
+-- daemon: the CLI process that queued a notification exits immediately, and an
+-- in-memory queue would drop everything sent overnight.
+CREATE TABLE delivery_queue (
+  id TEXT PRIMARY KEY,
+  action_item_id TEXT NOT NULL REFERENCES action_items(id),
+  channel TEXT NOT NULL,             -- telegram
+  body TEXT NOT NULL,
+  queued_at TEXT NOT NULL,
+  deliver_after TEXT,                -- null means "as soon as possible"
+  delivered_at TEXT,
+  last_error TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX idx_delivery_pending ON delivery_queue(delivered_at, deliver_after);
+`,
+  },
 ];

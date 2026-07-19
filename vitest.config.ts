@@ -13,6 +13,7 @@ export default defineConfig({
     env: {
       SAMARITAN_CONFIG: join(sandbox, "config.yaml"),
       SAMARITAN_TEST_HOME: sandbox,
+      SAMARITAN_LOG_LEVEL: "silent",
     },
   },
 });

@@ -9,6 +9,7 @@
 import { join } from "node:path";
 import { loadConfig, repoRoot, type Config } from "./config/index.js";
 import { ActionCenter } from "./action-center/index.js";
+import { createDelivery, type Delivery } from "./delivery/index.js";
 import { registerV0Adapters } from "./execution/adapters/index.js";
 import { Registry as ExecutionRegistry } from "./execution/registry.js";
 import { log } from "./logger.js";
@@ -25,6 +26,7 @@ export interface App {
   execution: ExecutionRegistry;
   capabilities: CapabilityRegistry;
   routing: RoutingResolver;
+  delivery: Delivery;
   actionCenter: ActionCenter;
   close(): void;
 }
@@ -58,7 +60,8 @@ export function createApp(options: CreateAppOptions = {}): App {
   const { loaded, problems } = capabilities.reload();
   logger.info({ capabilities: loaded.length, problems: problems.length }, "registry loaded");
 
-  const actionCenter = new ActionCenter({ db, capabilities, execution, routing });
+  const delivery = createDelivery(db);
+  const actionCenter = new ActionCenter({ db, capabilities, execution, routing, delivery });
 
   return {
     config,
@@ -66,6 +69,7 @@ export function createApp(options: CreateAppOptions = {}): App {
     execution,
     capabilities,
     routing,
+    delivery,
     actionCenter,
     close: () => db.close(),
   };

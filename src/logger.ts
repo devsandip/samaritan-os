@@ -9,7 +9,9 @@ const isProduction = process.env["NODE_ENV"] === "production";
  * relying on call sites to remember.
  */
 export const logger = pino({
-  level: loadConfig().logging.level,
+  // The env override exists so tests and one-off CLI runs can silence output
+  // without editing the user's config file.
+  level: process.env["SAMARITAN_LOG_LEVEL"] ?? loadConfig().logging.level,
   redact: {
     paths: [
       "*.token",
