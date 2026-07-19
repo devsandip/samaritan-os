@@ -118,8 +118,18 @@ export function spyAdapter(id: string): ExecutionAdapter & { calls: Record<strin
 export interface Harness {
   db: Db;
   actionCenter: ActionCenter;
+  capabilities: CapabilityRegistry;
   notionDecision: ReturnType<typeof spyAdapter>;
   notionInsight: ReturnType<typeof spyAdapter>;
+}
+
+export interface HarnessOptions
+  extends Partial<ConstructorParameters<typeof ActionCenter>[0]> {
+  /**
+   * Where manifests are loaded from. Defaults to the repo's real `capabilities/`.
+   * Point it at a copy to test what happens when one goes away mid-flight.
+   */
+  capabilitiesDir?: string;
 }
 
 /**
@@ -128,7 +138,7 @@ export interface Harness {
  * that invented its own would not notice a manifest drifting from what the code
  * expects.
  */
-export function harness(deps: Partial<ConstructorParameters<typeof ActionCenter>[0]> = {}): Harness {
+export function harness({ capabilitiesDir, ...deps }: HarnessOptions = {}): Harness {
   const db = openDatabase(":memory:");
   migrate(db);
 
@@ -149,7 +159,7 @@ export function harness(deps: Partial<ConstructorParameters<typeof ActionCenter>
 
   const capabilities = new CapabilityRegistry({
     db,
-    capabilitiesDir: join(repoRoot(), "capabilities"),
+    capabilitiesDir: capabilitiesDir ?? join(repoRoot(), "capabilities"),
     executionCatalogue: execution,
   });
   capabilities.reload();
@@ -157,6 +167,7 @@ export function harness(deps: Partial<ConstructorParameters<typeof ActionCenter>
   return {
     db,
     actionCenter: new ActionCenter({ db, capabilities, execution, routing, ...deps }),
+    capabilities,
     notionDecision,
     notionInsight,
   };

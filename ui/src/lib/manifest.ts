@@ -88,9 +88,9 @@ export function layoutFor(resolved: ResolvedType | undefined): RenderLayout | "r
 /**
  * Guesses an outcome for a response id whose manifest entry is gone.
  *
- * Only used to decide whether a button can succeed from the item's current
- * status. It never changes what is sent: the server resolves the real outcome
- * from its own copy of the manifest, and refuses the response if it cannot.
+ * Only used to label the button and to explain why it is disabled. It never
+ * changes what is sent: the server resolves the real outcome from its own copy
+ * of the manifest, and refuses the response if it cannot.
  */
 function inferOutcome(id: string): ResponseOutcome {
   if (/reject|discard|dismiss|decline|drop/i.test(id)) return "discard";
@@ -100,24 +100,61 @@ function inferOutcome(id: string): ResponseOutcome {
 }
 
 /**
+ * Mirrors `DISMISS_RESPONSE_ID` in `src/types/common.ts`. Namespaced so it cannot
+ * collide with a capability's own `dismiss`, which §4.6's worked example uses.
+ */
+export const DISMISS_RESPONSE_ID = "samaritan:dismiss";
+
+/** A response as the button row needs it: the spec plus whether it can be sent. */
+export interface ItemResponse extends ResponseSpec {
+  /**
+   * The daemon will accept this response. False means the manifest that declared
+   * the id is not loaded, so the outcome above is a guess and sending it would
+   * come back 409 — the button has to render, but it must not be pressable.
+   */
+  answerable: boolean;
+}
+
+/** §4.7's universal fallback. Accepted whatever the manifest says, or whether it exists. */
+const DISMISS: ItemResponse = {
+  id: DISMISS_RESPONSE_ID,
+  label: "Dismiss",
+  outcome: "discard",
+  answerable: true,
+};
+
+/**
  * The item's allowed response ids joined to their manifest labels, in the order
  * the manifest declares (§4.6: `responses[]` renders 1:1, preserving order).
  *
- * An id with no manifest entry still renders, labelled by its id. An item whose
- * capability was unloaded after ingest would otherwise lose its entire button
- * row and be stuck in the Inbox forever, which is the one outcome §4.7 exists
- * to prevent.
+ * An id with no manifest entry still renders, labelled by its id, so an item
+ * whose capability was unloaded does not lose its button row and go silent about
+ * what it used to offer. Those ids cannot be sent, which is what `Dismiss` is
+ * for: §4.7 requires every item to have a way out of the Inbox, and without one
+ * an orphaned item is stuck there permanently.
  */
-export function responsesFor(item: ActionItem, resolved: ResolvedType | undefined): ResponseSpec[] {
+export function responsesFor(item: ActionItem, resolved: ResolvedType | undefined): ItemResponse[] {
   const allowed = new Set(item.responses);
   const declared = resolved?.spec.responses ?? [];
 
-  const known = declared.filter((response) => allowed.has(response.id));
+  const known = declared
+    .filter((response) => allowed.has(response.id))
+    .map((response): ItemResponse => ({ ...response, answerable: true }));
+
   const missing = item.responses
     .filter((id) => !declared.some((response) => response.id === id))
-    .map((id): ResponseSpec => ({ id, label: titleCase(id), outcome: inferOutcome(id) }));
+    .map((id): ItemResponse => ({
+      id,
+      label: titleCase(id),
+      outcome: inferOutcome(id),
+      answerable: false,
+    }));
 
-  return [...known, ...missing];
+  // Appended only when nothing sendable already discards, so a capability that
+  // declares its own "Discard" does not render two buttons that do one thing.
+  const clearable = known.some((response) => response.outcome === "discard");
+
+  return [...known, ...missing, ...(clearable ? [] : [DISMISS])];
 }
 
 /**

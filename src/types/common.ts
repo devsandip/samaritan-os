@@ -89,6 +89,23 @@ export function nowIso(): string {
   return new Date().toISOString();
 }
 
+/**
+ * The one response every item accepts, whatever its manifest declares and
+ * whether or not that manifest is still loaded (UI-SPEC §4.7).
+ *
+ * Without it, an item whose capability was unloaded after ingest has no response
+ * the daemon can honour and is stuck in the Inbox forever, which breaks the
+ * "everything lands in one inbox" promise at the only point that matters,
+ * getting things back out of it.
+ *
+ * The colon is load-bearing. Response ids are `KebabId`, which has no colon, so
+ * this is not a well-formed response id and no manifest can declare it. That
+ * makes the reservation structural rather than a rule someone has to remember,
+ * and it leaves plain `dismiss` free for capabilities that want it: the §4.6
+ * newsletter example declares exactly that.
+ */
+export const DISMISS_RESPONSE_ID = "samaritan:dismiss";
+
 /** Duration shorthand: a count and a unit, e.g. "24h", "30m", "1d". */
 const DURATION = /^(\d+)\s*([smhd])$/;
 

@@ -20,6 +20,7 @@ import {
 } from "../store/action-items.js";
 import type { Db } from "../store/db.js";
 import {
+  DISMISS_RESPONSE_ID,
   DraftActionItem,
   isSettled,
   parseDuration,
@@ -347,10 +348,24 @@ export class ActionCenter {
     const { db } = this.deps;
     const item = this.#require(id);
 
+    // §4.7's universal fallback, answered before either manifest check below.
+    // Both of those ask what the capability declares, and the case this exists
+    // for is the one where it declares nothing any more. Discarding is the only
+    // outcome that is safe to honour without a manifest: it commits nothing, so
+    // there is no payload to get wrong and no side effect to guess at.
+    if (input.response_id === DISMISS_RESPONSE_ID) {
+      return transition(db, {
+        id,
+        to: "rejected",
+        actor: input.actor ?? "sandip",
+        reason: "dismissed",
+      });
+    }
+
     if (!item.responses.includes(input.response_id)) {
       throw new ActionCenterError(
         `"${input.response_id}" is not an allowed response for this item ` +
-          `(allowed: ${item.responses.join(", ")})`,
+          `(allowed: ${[...item.responses, DISMISS_RESPONSE_ID].join(", ")})`,
         "response_not_allowed",
         400,
       );
@@ -360,7 +375,9 @@ export class ActionCenter {
     const response = type?.spec.responses.find((r) => r.id === input.response_id);
     if (!response) {
       throw new ActionCenterError(
-        `response "${input.response_id}" is no longer declared by the manifest`,
+        `response "${input.response_id}" is no longer declared by the manifest; ` +
+          `restore capability "${item.capability_id}" to answer it, ` +
+          `or "${DISMISS_RESPONSE_ID}" to clear the item`,
         "response_unknown",
         409,
       );

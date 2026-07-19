@@ -3,13 +3,14 @@
  *
  * Both of §5.3's promises are now real. `defer_until` carries the resurface
  * moment, computed at defer time and pushed past quiet hours, so the row shows
- * when the item comes back rather than when it was snoozed. "Drop" resolves the
- * item's own discard response from the manifest and sends it, because
- * `deferred → rejected` is a legal transition now.
+ * when the item comes back rather than when it was snoozed. "Drop" sends the
+ * item's own discard response, because `deferred → rejected` is a legal
+ * transition now.
  *
- * Drop is disabled only when the emitting capability declares no discard
- * response at all. There is no universal dismiss id yet, so inventing one here
- * would just produce a 409 from the server.
+ * `responsesFor` falls back to the universal `dismiss` when the capability
+ * declares no discard of its own, so there is always something to send and Drop
+ * never renders dead. It still filters on `answerable`: an unloaded manifest can
+ * leave a *guessed* discard in the list that the daemon would refuse.
  */
 import { useState } from "react";
 import { api, type ApiError } from "../api/client";
@@ -73,7 +74,9 @@ export function DeferredView({
       ) : (
         sorted.map((item) => {
           const resolved = catalogue.resolveItem(item);
-          const discard = responsesFor(item, resolved).find((r) => r.outcome === "discard");
+          const discard = responsesFor(item, resolved).find(
+            (r) => r.answerable && r.outcome === "discard",
+          );
           const busy = dropping === item.id;
 
           return (
@@ -107,7 +110,7 @@ export function DeferredView({
                   title={
                     discard
                       ? undefined
-                      : `${item.capability_id} declares no discard response for this type, so there is nothing to send.`
+                      : "Nothing here can be sent for this item. This should not happen: dismiss is universal."
                   }
                 >
                   {busy ? "Dropping…" : "Drop"}

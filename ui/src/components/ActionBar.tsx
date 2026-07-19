@@ -17,7 +17,7 @@
  *     would be refused by the server anyway.
  */
 import type { ActionItem, ResponseSpec } from "../api/types";
-import type { ResolvedType } from "../lib/manifest";
+import type { ItemResponse, ResolvedType } from "../lib/manifest";
 import { MODE_LABEL } from "../lib/format";
 import { blockedReason, canRespond } from "../lib/transitions";
 import { Button, type ButtonVariant } from "./primitives";
@@ -32,10 +32,28 @@ function variantFor(response: ResponseSpec, item: ActionItem): ButtonVariant {
   return item.execution.mode === "automated" ? "good" : "primary";
 }
 
+/**
+ * Why this button cannot be pressed, or undefined if it can. Two different
+ * reasons, and the item's status is only one of them: a response whose manifest
+ * entry is gone would be refused from any status at all.
+ */
+function disabledReason(response: ItemResponse, item: ActionItem): string | undefined {
+  if (!response.answerable) {
+    return (
+      `${item.capability_id} no longer declares "${response.id}", so the daemon would refuse it. ` +
+      `Restore the capability under capabilities/ and reload, or use Dismiss to clear this item.`
+    );
+  }
+  if (!canRespond(item.status, response.outcome)) {
+    return blockedReason(item.status, response.outcome);
+  }
+  return undefined;
+}
+
 export interface ActionBarProps {
   item: ActionItem;
   resolved: ResolvedType | undefined;
-  responses: ResponseSpec[];
+  responses: ItemResponse[];
   editing: boolean;
   edited: boolean;
   pendingId: string | undefined;
@@ -85,29 +103,36 @@ export function ActionBar(props: ActionBarProps) {
   }
 
   if (props.fallback) {
-    // Every response still renders, because an item nobody can answer never
-    // leaves the Inbox. What is dropped is the styling that implies a
-    // consequence: with no manifest, the UI cannot say which button commits, so
-    // none of them gets the green or indigo that would claim it knows.
+    // Every response still renders, so the row does not go silent about what the
+    // item used to offer, but only Dismiss can actually be sent. What is also
+    // dropped is the styling that implies a consequence: with no manifest, the
+    // UI cannot say which button commits, so none gets the green or indigo that
+    // would claim it knows.
     return (
       <>
         <div className="actions">
-          {responses.map((response) => (
-            <Button
-              key={response.id}
-              pending={pendingId === response.id}
-              disabled={busy || !canRespond(item.status, response.outcome)}
-              onClick={() => props.onRespond(response)}
-            >
-              {response.label}
-            </Button>
-          ))}
+          {responses.map((response) => {
+            const blocked = disabledReason(response, item);
+            return (
+              <Button
+                key={response.id}
+                pending={pendingId === response.id}
+                disabled={busy || blocked !== undefined}
+                {...(blocked ? { title: blocked } : {})}
+                onClick={() => props.onRespond(response)}
+              >
+                {response.label}
+              </Button>
+            );
+          })}
         </div>
         <div className="mode-note">
           This type&apos;s manifest is not loaded, so these buttons are labelled by response id and
           the daemon will refuse them until the capability is back: restore it under{" "}
-          <code>capabilities/</code> and reload. What the OS still knows about this item: it executes{" "}
-          <b>{item.execution.capability}</b> in <b>{MODE_LABEL[item.execution.mode]}</b> mode against{" "}
+          <code>capabilities/</code> and reload. <b>Dismiss</b> is the exception: it is answered
+          without consulting a manifest, so it works now and discards the item without filing
+          anything. What the OS still knows: this executes <b>{item.execution.capability}</b> in{" "}
+          <b>{MODE_LABEL[item.execution.mode]}</b> mode against{" "}
           {item.context.execution_surface || "an unnamed surface"}.
           {item.context.outcome_preview ? ` ${item.context.outcome_preview}` : ""}
         </div>
@@ -115,12 +140,13 @@ export function ActionBar(props: ActionBarProps) {
     );
   }
 
-  // A deferred item with no `ask_more_info` response has nothing it can legally
-  // do, and a row of greyed buttons on its own reads as a broken UI. Saying so
-  // is the honest version, and it names the one thing that would unblock it.
+  // An item with nothing it can legally do renders a row of greyed buttons,
+  // which on its own reads as a broken UI. Saying so is the honest version.
+  // Rare now that Dismiss is always sendable: it takes a terminal status, where
+  // even discarding is refused.
   const allBlocked =
     responses.length > 0 &&
-    responses.every((response) => !canRespond(item.status, response.outcome));
+    responses.every((response) => disabledReason(response, item) !== undefined);
 
   return (
     <>
@@ -136,7 +162,7 @@ export function ActionBar(props: ActionBarProps) {
 
       <div className="actions">
         {responses.map((response) => {
-          const allowed = canRespond(item.status, response.outcome);
+          const blocked = disabledReason(response, item);
           const isEdit = isEditResponse(response);
 
           return (
@@ -144,8 +170,8 @@ export function ActionBar(props: ActionBarProps) {
               key={response.id}
               variant={variantFor(response, item)}
               pending={pendingId === response.id}
-              disabled={busy || !allowed}
-              title={allowed ? undefined : blockedReason(item.status, response.outcome)}
+              disabled={busy || blocked !== undefined}
+              title={blocked}
               onClick={() => {
                 if (isEdit && !editing) props.onStartEditing();
                 else props.onRespond(response);
