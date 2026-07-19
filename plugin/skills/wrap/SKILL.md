@@ -21,7 +21,7 @@ Do not call `notion-create-pages`, the TickTick MCP, or any other filing tool fr
 
 ## System contract
 
-- **Vault root:** `/Users/sandipdev/Documents/Obsidian/Samaritan/`
+- **Vault root:** `~/Documents/Obsidian/Samaritan/`
 - **Today's daily note:** `Areas/Daily/YYYY-MM-DD.md`
 - **Notion DBs:** Decisions `<decisions-db-id>`, Insights `<insights-db-id>`, People `<people-db-id>`, Projects `<projects-db-id>`
 - **TickTick MCP namespace:** `mcp__<ticktick-mcp-server-id>__*`

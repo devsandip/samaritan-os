@@ -19,7 +19,7 @@ Sandip's AI PM operating system — capture, file, wrap, recall, weekly across O
 
 ## Configuration assumed
 
-- Obsidian vault: `/Users/sandipdev/Documents/Obsidian/Samaritan/`
+- Obsidian vault: `~/Documents/Obsidian/Samaritan/`
 - Notion PM OS workspace with four databases (Projects, People, Decisions, Insights) — data source IDs are baked into the skill bodies
 - TickTick MCP connected
 - Optional: Fireflies MCP for meeting transcripts, Telegram via Claude Channels for mobile capture

@@ -10,7 +10,7 @@ Answer Sandip's question by querying Notion DBs and Obsidian files. Every claim 
 ## System contract
 
 - **Notion DBs:** Projects `<projects-db-id>`, Decisions `<decisions-db-id>`, People `<people-db-id>`, Insights `<insights-db-id>`
-- **Vault root:** `/Users/sandipdev/Documents/Obsidian/Samaritan/`
+- **Vault root:** `~/Documents/Obsidian/Samaritan/`
 - **TickTick MCP** (for task questions): `mcp__<ticktick-mcp-server-id>__*`
 - **Full system contract:** `AGENT_OS.md`.
 

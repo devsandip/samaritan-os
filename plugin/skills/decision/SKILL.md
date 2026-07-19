@@ -12,7 +12,7 @@ Write a Decision row to Notion with full context: what was decided, why, which p
 - **Notion Decisions DB:** data source id `<decisions-db-id>`
 - **Notion Projects DB:** data source id `<projects-db-id>`
 - **Notion People DB:** data source id `<people-db-id>`
-- **Vault root:** `/Users/sandipdev/Documents/Obsidian/Samaritan/`
+- **Vault root:** `~/Documents/Obsidian/Samaritan/`
 - **TickTick:** use the MCP namespace `mcp__<ticktick-mcp-server-id>__*`
 - **Full system contract:** `AGENT_OS.md` at vault root.
 

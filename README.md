@@ -19,11 +19,12 @@ nothing is filed until Sandip approves it.
 | 1-9 Contracts, store, registry, policy, routing, execution, ingest | Done |
 | 10 The anchor: wrap and meeting behind the review gate | Done |
 | 12 Telegram delivery with quiet-hours queueing | Done |
+| 11 Inbox web UI | Done |
 | 13-15 Audit endpoint, emit CLI, end-to-end smoke | Done |
-| 11 Inbox web UI | In progress |
 | 16+ Daemon, scheduler, event bus, Recall (v1) | Not started |
 
-Review currently happens over the API. The Inbox UI is the last v0 piece.
+v0 is functionally complete. Ask-Samaritan (RAG) is stubbed in the UI because
+`src/recall/` is not built yet.
 
 ## Quick start
 
@@ -33,8 +34,12 @@ DECISIONS.md) and pnpm.
 ```bash
 pnpm install
 pnpm migrate      # creates ~/.samaritan/samaritan.db and ~/.samaritan/config.yaml
-pnpm serve        # http://127.0.0.1:4173
+pnpm build:ui     # builds the Inbox SPA into ui/dist
+pnpm serve        # http://127.0.0.1:4173, serves the API and the SPA
 ```
+
+`pnpm -C ui dev` runs the UI on `localhost:5173` with `/api` proxied, if you
+want hot reload while working on the frontend.
 
 Emit some items and review them:
 
@@ -117,6 +122,26 @@ docs/             design suite
 
 `~/.samaritan/config.yaml` holds non-secret settings only, and is written with
 defaults on first run.
+
+**Notion database ids are not in the repo.** They identify one specific private
+workspace, so they are local configuration. Set them before anything can file to
+Notion; an unset id fails with a clear message rather than writing somewhere
+unexpected. Find each id in the database's URL, `notion.so/<workspace>/<32-hex>`:
+
+```yaml
+notion:
+  account: pm-os-workspace
+  databases:
+    decisions: "..."
+    insights: "..."
+    people: "..."
+    projects: "..."
+```
+
+The schema those adapters write to is documented in the vault's own
+`AGENT_OS.md`: Decisions uses `Decision` as its title property, Insights uses
+`Insight`, `Status` is pending/resolved, and `Project` is a relation rather than
+text.
 
 Secrets live in the macOS Keychain under service `samaritan`, never in config,
 never in the store, never in logs. Filing to Notion needs a token:

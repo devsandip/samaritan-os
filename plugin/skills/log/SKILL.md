@@ -9,7 +9,7 @@ Append a short entry to today's Obsidian daily note under `## Hourly Log`. Granu
 
 ## System contract
 
-- **Vault root:** `/Users/sandipdev/Documents/Obsidian/Samaritan/`
+- **Vault root:** `~/Documents/Obsidian/Samaritan/`
 - **Today's daily note:** `Areas/Daily/YYYY-MM-DD.md` (today's date in Sandip's local timezone)
 - **Full system contract:** `AGENT_OS.md` at vault root — read it if anything below is unclear.
 

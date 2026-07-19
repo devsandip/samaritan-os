@@ -19,7 +19,7 @@ Do not call `notion-create-pages` or the TickTick MCP from this skill. If the Ac
 
 ## System contract
 
-- **Vault root:** `/Users/sandipdev/Documents/Obsidian/Samaritan/`
+- **Vault root:** `~/Documents/Obsidian/Samaritan/`
 - **Meeting notes location:** `Areas/Meetings/YYYY-MM-DD - <topic>.md`
 - **Notion DBs:** Decisions `<decisions-db-id>`, Insights `<insights-db-id>`, People `<people-db-id>`, Projects `<projects-db-id>`
 - **Fireflies MCP** (if connected): pull transcript by date or meeting id.

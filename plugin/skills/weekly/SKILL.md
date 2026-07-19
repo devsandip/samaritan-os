@@ -13,7 +13,7 @@ Most PMs end the week with no clear answer to "what did I actually do?" — the 
 
 ## System contract
 
-- **Vault root:** `/Users/sandipdev/Documents/Obsidian/Samaritan/`
+- **Vault root:** `~/Documents/Obsidian/Samaritan/`
 - **Output:** `Areas/Weekly/YYYY-Www.md` (ISO week number)
 - **Inputs:**
   - `Areas/Daily/YYYY-MM-DD.md` for the past 7 days (or the requested range)

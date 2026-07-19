@@ -74,7 +74,16 @@ interface CreatePageResult {
 async function createPage(
   databaseId: string,
   properties: Record<string, unknown>,
+  which: string,
 ): Promise<CreatePageResult> {
+  // Database ids are per-install config, not repo constants. An unset id would
+  // otherwise reach Notion as an empty parent and come back as an opaque 400.
+  if (!databaseId) {
+    throw new Error(
+      `no Notion ${which} database configured. Set notion.databases.${which} ` +
+        `in ~/.samaritan/config.yaml to that database's id.`,
+    );
+  }
   const page = (await notionFetch("/pages", {
     method: "POST",
     body: JSON.stringify({ parent: { database_id: databaseId }, properties }),
@@ -176,7 +185,7 @@ export function notionAdapters(db: Db): ExecutionAdapter[] {
       }
 
       try {
-        const page = await createPage(databases.decisions, properties);
+        const page = await createPage(databases.decisions, properties, "decisions");
         db.prepare(
           `INSERT INTO notion_decisions
              (id, title, rationale, project, reversibility, notion_url, last_edited_time)
@@ -233,7 +242,7 @@ export function notionAdapters(db: Db): ExecutionAdapter[] {
       }
 
       try {
-        const page = await createPage(databases.insights, properties);
+        const page = await createPage(databases.insights, properties, "insights");
         db.prepare(
           `INSERT INTO notion_insights (id, title, body, tags, notion_url, last_edited_time)
            VALUES (?, ?, ?, ?, ?, ?)

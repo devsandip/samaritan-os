@@ -13,7 +13,7 @@ The hardest part of any second brain is the moment of capture. If Sandip has to 
 
 ## System contract
 
-- **Vault root:** `/Users/sandipdev/Documents/Obsidian/Samaritan/`
+- **Vault root:** `~/Documents/Obsidian/Samaritan/`
 - **Today's daily note:** `Areas/Daily/YYYY-MM-DD.md`
 - **Full system contract:** `AGENT_OS.md` at vault root.
 

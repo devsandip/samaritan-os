@@ -71,13 +71,18 @@ export const ConfigSchema = z.object({
     .object({
       /** Keychain lookup is service "samaritan", account "notion:<this>". */
       account: z.string().default("pm-os-workspace"),
-      /** Database ids the existing skills already write to. */
+      /**
+       * Database ids, set per-install in config.yaml. Deliberately empty here:
+       * these identify a specific private Notion workspace, so they are local
+       * configuration rather than something baked into the repo. An unset id
+       * fails loudly at execute() instead of writing to the wrong database.
+       */
       databases: z
         .object({
-          decisions: z.string().default("<decisions-db-id>"),
-          insights: z.string().default("<insights-db-id>"),
-          people: z.string().default("<people-db-id>"),
-          projects: z.string().default("<projects-db-id>"),
+          decisions: z.string().default(""),
+          insights: z.string().default(""),
+          people: z.string().default(""),
+          projects: z.string().default(""),
         })
         .prefault({}),
     })
@@ -119,6 +124,16 @@ logging:
 
 embeddings:
   provider: local
+
+# Notion database ids for your own workspace. Find one in the database's URL:
+# notion.so/<workspace>/<32-hex-id>?v=... Leave blank to disable that target.
+notion:
+  account: pm-os-workspace
+  databases:
+    decisions: ""
+    insights: ""
+    people: ""
+    projects: ""
 `;
 
 /** Absolute path to the repo root — the directory holding package.json. */
