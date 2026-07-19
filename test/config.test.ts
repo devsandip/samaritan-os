@@ -33,6 +33,27 @@ describe("loadConfig", () => {
     expect(cfg.paths.capabilities?.endsWith("/capabilities")).toBe(true);
   });
 
+  it("expands tilde paths that come from a schema default, not just from the file", () => {
+    // The generated config always writes a paths section, so the schema defaults
+    // only fire for a hand-edited file that drops it. zod v4's `.default()`
+    // returns its value without running the schema, so a tilde default stayed
+    // literal and the Action Store landed in a directory named "~" under the
+    // process cwd. Regression test for that.
+    const original = readFileSync(configPath(), "utf8");
+    try {
+      writeFileSync(configPath(), "server:\n  port: 4173\n", "utf8");
+      const cfg = loadConfig({ reload: true });
+
+      expect(cfg.paths.db).toBe(`${homedir()}/.samaritan/samaritan.db`);
+      expect(cfg.paths.vault.startsWith("~")).toBe(false);
+      expect(cfg.paths.journals.startsWith("~")).toBe(false);
+      expect(cfg.logging.dir.startsWith("~")).toBe(false);
+    } finally {
+      writeFileSync(configPath(), original, "utf8");
+      loadConfig({ reload: true });
+    }
+  });
+
   it("keeps user overrides from the file", () => {
     const original = readFileSync(configPath(), "utf8");
     try {

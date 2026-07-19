@@ -21,6 +21,17 @@ export function expandPath(input: string): string {
 
 const PathString = z.string().min(1).transform(expandPath);
 
+/**
+ * Defaults for path fields must use `prefault`, never `default`.
+ *
+ * zod v4's `.default()` short-circuits: it hands back the literal default
+ * without running the schema, so `expandPath` never sees it and a `~` stays a
+ * `~`. Anything that then opens the path creates a directory literally named
+ * "~" under the process's cwd. `.prefault()` feeds the value through the schema
+ * like real input, which is what a tilde path needs.
+ */
+const PathDefault = (path: string) => PathString.prefault(path);
+
 export const ConfigSchema = z.object({
   server: z
     .object({
@@ -33,12 +44,12 @@ export const ConfigSchema = z.object({
 
   paths: z
     .object({
-      db: PathString.default("~/.samaritan/samaritan.db"),
+      db: PathDefault("~/.samaritan/samaritan.db"),
       // The vault root is the Samaritan folder itself, not its parent. The
       // skills' system contract has always said so, and pointing at the parent
       // writes notes into a sibling of the vault where nothing will find them.
-      vault: PathString.default("~/Documents/Obsidian/Samaritan"),
-      journals: PathString.default("~/Developer"),
+      vault: PathDefault("~/Documents/Obsidian/Samaritan"),
+      journals: PathDefault("~/Developer"),
       capabilities: PathString.optional(),
     })
     .prefault({}),
@@ -63,7 +74,7 @@ export const ConfigSchema = z.object({
     .object({
       level: z.enum(["trace", "debug", "info", "warn", "error", "fatal"]).default("info"),
       /** §6: ~/Library/Logs/samaritan/*.log */
-      dir: PathString.default("~/Library/Logs/samaritan"),
+      dir: PathDefault("~/Library/Logs/samaritan"),
     })
     .prefault({}),
 
