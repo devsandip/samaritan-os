@@ -1,0 +1,8 @@
+# `ui` is its own pnpm root, deliberately.
+#
+# The repo root's pnpm-workspace.yaml lists no packages, so the SPA is not a
+# workspace member and its dependency tree stays out of the backend lockfile.
+# pnpm reads build-script approvals from this file rather than from package.json,
+# and vite will not install without esbuild's.
+allowBuilds:
+  esbuild: true

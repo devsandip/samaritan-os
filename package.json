@@ -9,6 +9,8 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "build:ui": "pnpm -C ui build",
+    "dev:ui": "pnpm -C ui dev",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "tsx watch src/cli/serve.ts",
     "start": "node dist/cli/serve.js",
