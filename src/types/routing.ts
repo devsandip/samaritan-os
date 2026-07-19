@@ -17,6 +17,14 @@ export const RoutingEntry = z.object({
   account: z.string().min(1),
   mode: ExecutionMode,
   fallback_provider: z.string().min(1).optional(),
+  /**
+   * Optional per-mode override of the Execution Registry target. When absent,
+   * the id comes from the emitting capability's manifest. This exists because
+   * one abstract action maps to different adapters depending on how much
+   * autonomy it has: email.send is gmail.draft.create when assisted and
+   * gmail.message.send when automated.
+   */
+  execution_capability: z.partialRecord(ExecutionMode, ExecutionCapabilityId).optional(),
   /** Cannot be promoted past this mode via the API. PUT returns 409 (§9). */
   locked: z.boolean().default(false),
 });

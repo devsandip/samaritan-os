@@ -1,0 +1,57 @@
+# Routing config (TECH-SPEC §4.3).
+#
+# Maps an abstract action type to a concrete provider, account and execution
+# mode. This is the only place that translation happens.
+#
+# `execution_capability` is optional. When absent, the Execution Registry id
+# comes from the emitting capability's own manifest. Set it here to override the
+# target per mode, which is how one abstract action ("send an email") maps to
+# different adapters depending on how much autonomy it has been granted.
+
+- action_type: message.work.send
+  provider: slack
+  account: acme-workspace
+  mode: automated
+
+- action_type: message.personal.send
+  provider: imessage
+  account: local
+  fallback_provider: telegram
+  mode: guided
+
+- action_type: email.send
+  provider: gmail
+  account: sandip@work
+  mode: assisted
+  execution_capability:
+    guided: guided.fallback
+    assisted: gmail.draft.create
+    automated: gmail.message.send
+
+- action_type: task.create
+  provider: ticktick
+  account: work-list
+  mode: automated
+
+- action_type: event.schedule
+  provider: google-calendar
+  account: work
+  mode: assisted
+
+- action_type: note.file
+  provider: notion
+  account: pm-os-workspace
+  mode: automated
+
+- action_type: journal.capture
+  provider: obsidian
+  account: vault
+  mode: automated
+
+# §9: money never moves automatically. This entry is locked, so
+# PUT /api/routing/payment.make returns 409 no matter who asks.
+- action_type: payment.make
+  provider: none
+  account: manual
+  mode: guided
+  locked: true

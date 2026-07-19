@@ -1,0 +1,79 @@
+# THE ANCHOR (TECH-SPEC §12 step 10).
+#
+# `wrap` used to extract structured items from a session and write them straight
+# to Notion and TickTick. It now emits them here instead, and every one of them
+# is reviewed before anything is filed. The success criterion for v0 is exactly
+# this: no wrap row reaches Notion without an explicit approve or edit-then-
+# approve.
+#
+# There is no TypeScript entrypoint yet. The extraction is LLM work and lives in
+# the Claude skill (plugin/skills/wrap/SKILL.md), which shells out to
+# `samaritan emit`. `entrypoint` is declared because the manifest contract
+# requires it and because v1's Run Layer will want it; nothing loads it in v0.
+
+id: wrap
+name: Session Wrap
+description: >-
+  Extracts decisions, insights, tasks and people from a working session and
+  files them once Sandip has reviewed each one.
+version: 0.1.0
+owner: sandip
+enabled: true
+entrypoint: index.ts
+
+trigger:
+  mode: manual
+  command: /wrap
+
+context:
+  requires: [projects.active, people.known]
+  memory: [recall]
+
+emits:
+  - type: wrap-item-review
+    render:
+      layout: card
+      primary: title
+      secondary: detail
+      badges: [kind, project]
+
+    # Every attribute is required. A predicate can only read variables that are
+    # actually on the item (§5.6), and a uniform shape means every card renders
+    # the same way. The skill sends "" for anything that does not apply to a
+    # given kind rather than omitting the key.
+    custom_attributes:
+      kind: string # decision | insight | task | person | note
+      title: string
+      detail: string
+      project: string
+      owner: string
+      due: string
+      evidence: string
+
+    responses:
+      - { id: approve, label: "File it", outcome: execute }
+      - { id: edit_approve, label: "Edit and file", outcome: execute }
+      - { id: reject, label: "Discard", outcome: discard }
+      - { id: defer, label: "Later", outcome: defer }
+
+    execution:
+      mode: automated
+      capability: pm-os.item.file
+
+    policy:
+      # The anchor. Unconditional escalation: a wrap item is an LLM extraction
+      # from a conversation, which is the highest-inference input in the system
+      # and the one Sandip most needs to see before it becomes a permanent row.
+      escalate_when: "true"
+
+    priority: normal
+    ttl: null
+
+requires_capabilities:
+  - pm-os.item.file
+
+delivery:
+  channels: [inbox, telegram]
+
+audit: true
+timeout_ms: 60000

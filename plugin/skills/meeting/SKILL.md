@@ -1,11 +1,21 @@
 ---
 name: meeting
-description: Process a meeting into a structured Obsidian note + extracted Notion rows + TickTick tasks. Use whenever Sandip types `/meeting [topic]`, has a Fireflies transcript available, finishes a call, or wants to file something that just happened in a meeting. Also use when a Fireflies post-meeting sweep fires automatically. Decisions and next steps from meetings are the highest-yield structured items in the system — don't let them sit in transcripts.
+description: Process a meeting into a structured Obsidian note plus extracted items sent to the Action Center for review. Use whenever Sandip types `/meeting [topic]`, has a Fireflies transcript available, finishes a call, or wants to file something that just happened in a meeting. Also use when a Fireflies post-meeting sweep fires automatically. Decisions and next steps from meetings are the highest-yield structured items in the system — don't let them sit in transcripts.
 ---
 
 # /meeting — Process a Meeting
 
-Create an Obsidian meeting note, extract structured items, file them to Notion + TickTick. Update People DB for attendees.
+Create an Obsidian meeting note, extract structured items, and send them to the Action Center. Sandip reviews each one in the Inbox and approves what gets filed.
+
+## The review gate
+
+**This skill no longer writes to Notion or TickTick.** It emits extracted items to the Action Center, which holds each one until Sandip approves it.
+
+Meeting extraction carries more inference risk than any other input: it is a summary of a transcript of a conversation, often one Sandip was only half-present for. Gating it is the point.
+
+The Obsidian meeting note is **not** gated. It is a local, reversible file, and writing it is what makes the extraction reviewable in the first place. Write it directly.
+
+Do not call `notion-create-pages` or the TickTick MCP from this skill. If the Action Center is unreachable, say so and stop.
 
 ## System contract
 
@@ -62,32 +72,70 @@ If you have access to a Fireflies transcript for the same date and topic, prefer
    - <question 1> ([INS-N](notion-url))
    ```
 
-3. **Extract structured items.** Iterate through the transcript / notes:
+3. **Extract structured items and emit them.** Iterate through the transcript / notes and build one `meeting-item-review` item per thing found:
 
-   **a. Decisions.** For each decision identified, call the `decision` skill's logic (or directly write Notion Decisions rows). Project = the meeting's project. Decided By = the speaker who made the call. Source = the meeting note path or Fireflies URL.
+   **a. Decisions** → `kind: "decision"`. `evidence` = the discussion that led to it. A decision that was discussed but not finalized still goes in, with `detail` saying it is pending.
 
-   **b. Next steps.** For each:
-   - Identify owner. If unclear from context, ask. Don't default to Sandip silently.
-   - If owner = Sandip: create a TickTick task via `mcp__<ticktick-mcp-server-id>__create_task` in the project's TickTick project (look up `TickTick Project ID` from the Projects row). Task title = the action, due date if mentioned.
-   - If owner = someone else: list in the meeting note's `## Next Steps` only. Do NOT create tasks in others' systems.
+   **b. Next steps** → `kind: "task"`. Identify the owner; if unclear, ask rather than defaulting to Sandip. Emit tasks owned by other people too, with `owner` set to their name: the Action Center will surface them for review, and Sandip decides whether to track them. Do not create tasks in other people's systems.
 
-   **c. Open questions.** For each, create a Notion Insights row with Tags=`[open-question]`, Project linked. Keep the title short and the Detail field as the full question with context.
+   **c. Open questions** → `kind: "insight"` with `detail` carrying the full question and context.
 
-4. **Update People DB.**
-   - For each attendee, look up by name in People DB.
-   - If exists: update `Last Interaction` to today.
-   - If new: create a row with Name, Role / Org (if known from the transcript), and link to the project.
+   **d. Attendees** → `kind: "person"`, one per attendee who is new or has new context worth recording. Skip attendees with nothing new.
 
-5. **Backfill the meeting note** with the row IDs/URLs you just created (so the Obsidian note links to the structured rows).
+   Then pipe them all to `samaritan emit` in one call:
 
-6. **Confirm in a short report:**
+   ```bash
+   cd ~/Developer/samaritan && cat <<'JSON' | pnpm -s emit
+   {
+     "capability_id": "meeting",
+     "items": [
+       {
+         "type": "meeting-item-review",
+         "context": {
+           "what_happened": "Acme weekly sync, 2026-05-30",
+           "source": { "kind": "meeting", "id": "fireflies-abc123", "link": "https://app.fireflies.ai/view/abc123" },
+           "provenance": ["fireflies.transcript_ready", "meeting.run"],
+           "why_flagged": "meeting extraction is always reviewed",
+           "trigger_reason": "action_type",
+           "confidence": 0.78,
+           "decision_needed": "File this decision to Notion?",
+           "decision_surface": "inbox",
+           "execution_surface": "notion",
+           "outcome_preview": "Creates a Decision row: \"Push GA to next Tuesday\""
+         },
+         "custom": {
+           "kind": "decision",
+           "title": "Push GA to next Tuesday",
+           "detail": "Staging env had perf issues under load",
+           "project": "Pricing rollout",
+           "owner": "",
+           "due": "",
+           "evidence": "Priya raised p99 latency at 3x baseline; Raj confirmed",
+           "meeting_topic": "Acme weekly sync",
+           "meeting_date": "2026-05-30",
+           "meeting_note_path": "Areas/Meetings/2026-05-30 - Acme weekly sync.md"
+         },
+         "dedupe_key": "meeting:fireflies-abc123:0"
+       }
+     ]
+   }
+   JSON
    ```
-   Filed: Acme weekly sync (2026-05-30)
+
+   Rules:
+   - **Every `custom` field is required.** Send `""` for anything that does not apply. Omitting a key is rejected.
+   - **`dedupe_key`** is `meeting:<transcript-or-meeting-id>:<index>`. Stable across re-runs of the same meeting, so re-processing updates rather than duplicates.
+   - **`confidence`** should be genuinely lower for a transcript Sandip was not present for. Say why in `why_flagged`.
+   - Set `meeting_note_path` on every item so the reviewer can jump back to the note.
+
+4. **Leave the meeting note's links as placeholders.** Nothing has a Notion URL yet, because nothing is filed yet. Write `## Decisions` and `## Open Questions` as plain bullets and note at the top of the file: `Structured items are awaiting review in the Action Center.` They can be backfilled after approval; do not fabricate row IDs.
+
+5. **Confirm in a short report:**
+   ```
+   Processed: Acme weekly sync (2026-05-30) — 8 items awaiting review
    - Meeting note → Areas/Meetings/2026-05-30 - Acme weekly sync.md
-   - 2 decisions → DEC-12, DEC-13
-   - 3 tasks → TickTick (1 mine, 2 theirs)
-   - 1 open question → INS-44
-   - 2 People updated (Priya, Raj), 1 new (Tomás)
+   - 2 decisions, 3 next steps, 1 open question, 2 people
+   - Review and approve: http://127.0.0.1:4173
    ```
 
 ## Examples
@@ -109,8 +157,9 @@ No transcript — work from Sandip's pasted notes. Same flow: create note, extra
 
 ## Edge cases
 
-- **No project clear from the topic:** ask once. Don't file rows against a wrong project.
-- **Transcript references decisions that were _almost_ made but not finalized:** file as pending Decisions with Status=pending, Evidence=the discussion summary.
+- **Action Center unreachable:** `samaritan emit` exits 1. Report it and stop. Do NOT fall back to writing to Notion directly. The meeting note is already written, so nothing is lost; tell Sandip to run `pnpm serve` and offer to re-emit.
+- **No project clear from the topic:** ask once. Don't emit items against a wrong project.
+- **Transcript references decisions that were _almost_ made but not finalized:** emit them with `evidence` = the discussion summary and `detail` noting they are pending. Lower the `confidence`.
 - **Big meeting (>10 attendees):** still update People for each, but consider tagging the meeting note `large-meeting` so the weekly review can deprioritize it for People updates if noisy.
 - **Recurring meeting (e.g., daily standup):** keep filing decisions and tasks, but the meeting note can be terser — sometimes a 3-bullet `## Discussion` is enough.
 - **Sandip wasn't in the meeting** (got the transcript secondhand): still file decisions and insights, but skip the TickTick task creation (he can decide what to action) and note in the report that he wasn't an attendee.

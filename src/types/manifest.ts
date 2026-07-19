@@ -85,6 +85,16 @@ export const ActionItemTypeSpec = z
     execution: z.object({
       mode: ExecutionMode,
       capability: ExecutionCapabilityId,
+      /**
+       * The abstract action type this execution represents, e.g. "note.file".
+       * When set, the Routing resolver decides the concrete provider/account/
+       * mode and may override `capability` per §5.4. When absent, the declared
+       * capability and mode are used directly, which is what most v0 types do.
+       */
+      action_type: z
+        .string()
+        .regex(/^[a-z0-9]+(?:\.[a-z0-9_]+)+$/, "must be a dotted action type like note.file")
+        .optional(),
     }),
     policy: PolicySpec.optional(),
     priority: Priority.default("normal"),

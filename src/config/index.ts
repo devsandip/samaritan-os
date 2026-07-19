@@ -64,6 +64,22 @@ export const ConfigSchema = z.object({
     })
     .prefault({}),
 
+  notion: z
+    .object({
+      /** Keychain lookup is service "samaritan", account "notion:<this>". */
+      account: z.string().default("pm-os-workspace"),
+      /** Database ids the existing skills already write to. */
+      databases: z
+        .object({
+          decisions: z.string().default("<decisions-db-id>"),
+          insights: z.string().default("<insights-db-id>"),
+          people: z.string().default("<people-db-id>"),
+          projects: z.string().default("<projects-db-id>"),
+        })
+        .prefault({}),
+    })
+    .prefault({}),
+
   embeddings: z
     .object({
       /**

@@ -1,0 +1,75 @@
+# THE ANCHOR (TECH-SPEC §12 step 10), second half.
+#
+# Same contract as `wrap`: `meeting` extracts decisions, next steps, open
+# questions and attendees from a transcript or pasted notes, and every extracted
+# item is reviewed before it is filed. Meeting extractions carry the same
+# inference risk as wrap plus a second-hand source, so they escalate
+# unconditionally too.
+#
+# The Obsidian meeting note itself is not gated: it is a reversible local file
+# and writing it is what makes the extraction reviewable in the first place. The
+# skill writes it directly and emits only the structured rows.
+
+id: meeting
+name: Meeting Processing
+description: >-
+  Extracts decisions, next steps, open questions and attendees from a meeting
+  and files them once Sandip has reviewed each one.
+version: 0.1.0
+owner: sandip
+enabled: true
+entrypoint: index.ts
+
+trigger:
+  mode: manual
+  command: /meeting
+
+context:
+  requires: [projects.active, people.known]
+  inputs: [fireflies.transcript]
+  memory: [recall]
+
+emits:
+  - type: meeting-item-review
+    render:
+      layout: card
+      primary: title
+      secondary: detail
+      badges: [kind, project, meeting_topic]
+
+    custom_attributes:
+      kind: string # decision | insight | task | person | note
+      title: string
+      detail: string
+      project: string
+      owner: string
+      due: string
+      evidence: string
+      meeting_topic: string
+      meeting_date: string
+      meeting_note_path: string
+
+    responses:
+      - { id: approve, label: "File it", outcome: execute }
+      - { id: edit_approve, label: "Edit and file", outcome: execute }
+      - { id: reject, label: "Discard", outcome: discard }
+      - { id: defer, label: "Later", outcome: defer }
+
+    execution:
+      mode: automated
+      capability: pm-os.item.file
+
+    policy:
+      escalate_when: "true"
+
+    priority: normal
+    ttl: null
+
+requires_capabilities:
+  - pm-os.item.file
+
+delivery:
+  channels: [inbox, telegram]
+
+audit: true
+timeout_ms: 120000
