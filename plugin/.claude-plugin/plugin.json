@@ -1,0 +1,10 @@
+{
+  "name": "samaritan",
+  "version": "0.1.0",
+  "description": "Samaritan — Sandip's AI PM operating system — capture, file, wrap, recall, weekly across Obsidian + Notion + TickTick.",
+  "author": {
+    "name": "Sandip Dev",
+    "email": "devsandip@users.noreply.github.com"
+  },
+  "keywords": ["pm", "second-brain", "obsidian", "notion", "ticktick", "capture", "agent-os"]
+}
