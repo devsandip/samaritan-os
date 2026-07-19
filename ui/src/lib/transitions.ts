@@ -16,7 +16,7 @@ const LEGAL: Record<ActionItemStatus, readonly ActionItemStatus[]> = {
   in_review: ["approved", "rejected", "deferred", "pending", "expired"],
   approved: ["executed", "awaiting_confirmation", "failed", "pending"],
   awaiting_confirmation: ["executed", "pending", "failed"],
-  deferred: ["pending", "in_review", "expired"],
+  deferred: ["pending", "in_review", "approved", "rejected", "expired"],
   failed: ["approved", "awaiting_confirmation", "pending", "rejected"],
   rejected: [],
   executed: [],
@@ -42,9 +42,8 @@ export function canRespond(status: ActionItemStatus, outcome: ResponseOutcome): 
 
 /** Plain-language reason a button is disabled. Shown as its title attribute. */
 export function blockedReason(status: ActionItemStatus, outcome: ResponseOutcome): string {
-  const target = TARGET[outcome];
-  if (status === "deferred") {
-    return `This item is deferred. It has to come back to the inbox before it can go to "${target}".`;
+  if (status === "deferred" && outcome === "defer") {
+    return "This item is already deferred. It comes back to the inbox on its own.";
   }
   if (LEGAL[status].length === 0) {
     return `This item is ${status.replace(/_/g, " ")}. Nothing further can be done to it.`;

@@ -16,6 +16,7 @@ import {
   RenderLayout,
   ResponseOutcome,
   RunMode,
+  isDuration,
 } from "./common.js";
 
 export const TriggerSpec = z
@@ -60,11 +61,29 @@ export const RenderSpec = z.object({
 });
 export type RenderSpec = z.infer<typeof RenderSpec>;
 
-export const ResponseSpec = z.object({
-  id: KebabId,
-  label: z.string().min(1),
-  outcome: ResponseOutcome,
-});
+export const ResponseSpec = z
+  .object({
+    id: KebabId,
+    label: z.string().min(1),
+    outcome: ResponseOutcome,
+    /**
+     * How long this response snoozes the item, e.g. "1d". The label alone is not
+     * machine-readable ("Snooze 1 day" is prose), so the resurface time comes
+     * from here; the Action Center falls back to its default when unset.
+     */
+    defer_for: z.string().refine(isDuration, 'must be a duration like "1d"').optional(),
+  })
+  .superRefine((spec, ctx) => {
+    // A defer_for on a non-defer response would silently never fire, which reads
+    // at a glance like a snooze that is configured and simply broken.
+    if (spec.defer_for !== undefined && spec.outcome !== "defer") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["defer_for"],
+        message: `defer_for is only meaningful on outcome "defer", not "${spec.outcome}"`,
+      });
+    }
+  });
 export type ResponseSpec = z.infer<typeof ResponseSpec>;
 
 export const PolicySpec = z.object({

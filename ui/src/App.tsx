@@ -124,6 +124,7 @@ export function App() {
             error={deferred.error}
             reload={deferred.reload}
             catalogue={catalogue}
+            onToast={showToast}
           />
         ) : null}
 

@@ -1,23 +1,24 @@
 /**
  * Deferred (UI-SPEC §5.3) — snoozed items.
  *
- * Two things §5.3 describes that v0 cannot honestly show, both surfaced in the
- * UI rather than faked:
+ * Both of §5.3's promises are now real. `defer_until` carries the resurface
+ * moment, computed at defer time and pushed past quiet hours, so the row shows
+ * when the item comes back rather than when it was snoozed. "Drop" resolves the
+ * item's own discard response from the manifest and sends it, because
+ * `deferred → rejected` is a legal transition now.
  *
- *  - There is no resurface time. Nothing in the schema stores a defer window and
- *    nothing sweeps `deferred` back to `pending`, so the row shows when it was
- *    deferred and says the return trip is manual.
- *  - "Drop" has no API path. `deferred → rejected` is not a legal transition
- *    (`src/store/action-items.ts`), so the button is disabled with the reason
- *    rather than left to fail with a 409.
+ * Drop is disabled only when the emitting capability declares no discard
+ * response at all. There is no universal dismiss id yet, so inventing one here
+ * would just produce a 409 from the server.
  */
+import { useState } from "react";
+import { api, type ApiError } from "../api/client";
 import type { ActionItem } from "../api/types";
-import type { ApiError } from "../api/client";
 import { Button } from "../components/primitives";
 import { EmptyState, ErrorBanner, SkeletonRows } from "../components/states";
 import type { Catalogue } from "../lib/manifest";
-import { itemTitle } from "../lib/manifest";
-import { relativeTime } from "../lib/format";
+import { itemTitle, responsesFor } from "../lib/manifest";
+import { relativeTime, resurfaceLabel } from "../lib/format";
 import { navigate } from "../lib/router";
 
 export function DeferredView({
@@ -26,60 +27,95 @@ export function DeferredView({
   error,
   reload,
   catalogue,
+  onToast,
 }: {
   items: ActionItem[] | undefined;
   loading: boolean;
   error: ApiError | undefined;
   reload: () => void;
   catalogue: Catalogue;
+  onToast: (message: string, variant: "ok" | "err") => void;
 }) {
-  const sorted = [...(items ?? [])].sort(
-    (a, b) => Date.parse(a.updated_at) - Date.parse(b.updated_at),
-  );
+  const [dropping, setDropping] = useState<string | undefined>(undefined);
+
+  // Soonest resurface first (§5.3). An item with no window sorts last: it
+  // predates the defer_until column and nothing will wake it on its own.
+  const sorted = [...(items ?? [])].sort((a, b) => {
+    const at = a.defer_until ? Date.parse(a.defer_until) : Infinity;
+    const bt = b.defer_until ? Date.parse(b.defer_until) : Infinity;
+    return at - bt;
+  });
+
+  async function drop(item: ActionItem, responseId: string) {
+    setDropping(item.id);
+    try {
+      await api.respond(item.id, { response_id: responseId });
+      onToast("Dropped. Removed from the queue.", "ok");
+      reload();
+    } catch (err) {
+      onToast((err as ApiError).message ?? "Could not drop that item.", "err");
+    } finally {
+      setDropping(undefined);
+    }
+  }
 
   return (
     <>
       <h1 className="h-greet">Deferred</h1>
-      <p className="h-sub">
-        Snoozed. Open one to act on it now, or leave it here.
-      </p>
+      <p className="h-sub">Snoozed. These resurface in your inbox at the time shown.</p>
 
       {error ? <ErrorBanner error={error} onRetry={reload} /> : null}
-
-      <div className="notice">
-        <b>No resurface schedule yet.</b> The daemon has no job that moves a deferred item back to
-        pending, so these stay here until you open one. Deferring is a way to clear the inbox, not a
-        reminder.
-      </div>
 
       {loading && !items ? (
         <SkeletonRows count={3} />
       ) : sorted.length === 0 ? (
         <EmptyState>Nothing deferred. Snoozed items will show up here.</EmptyState>
       ) : (
-        sorted.map((item) => (
-          <div className="lrow" key={item.id}>
-            <div className="body">
-              <b>{itemTitle(item, catalogue.resolveItem(item))}</b>
-              <div className="m">
-                You deferred this {relativeTime(item.updated_at)} · from{" "}
-                {item.context.source.kind} · {item.capability_id}
+        sorted.map((item) => {
+          const resolved = catalogue.resolveItem(item);
+          const discard = responsesFor(item, resolved).find((r) => r.outcome === "discard");
+          const busy = dropping === item.id;
+
+          return (
+            <div className="lrow" key={item.id}>
+              <div className="body">
+                <b>{itemTitle(item, resolved)}</b>
+                <div className="m">
+                  You deferred this {relativeTime(item.updated_at)} · from{" "}
+                  {item.context.source.kind} · {item.capability_id}
+                </div>
+              </div>
+              {item.defer_until ? (
+                <div className="when">↩ {resurfaceLabel(item.defer_until)}</div>
+              ) : (
+                <div
+                  className="when"
+                  style={{ color: "var(--muted)" }}
+                  title="Deferred before resurface times existed, so nothing will wake it on its own. Act on it here."
+                >
+                  ↩ no schedule
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 7 }}>
+                <Button small onClick={() => navigate(`/inbox/${item.id}`)} disabled={busy}>
+                  Act now
+                </Button>
+                <Button
+                  small
+                  disabled={!discard || busy}
+                  onClick={discard ? () => void drop(item, discard.id) : undefined}
+                  title={
+                    discard
+                      ? undefined
+                      : `${item.capability_id} declares no discard response for this type, so there is nothing to send.`
+                  }
+                >
+                  {busy ? "Dropping…" : "Drop"}
+                </Button>
               </div>
             </div>
-            <div style={{ display: "flex", gap: 7 }}>
-              <Button small onClick={() => navigate(`/inbox/${item.id}`)}>
-                Act now
-              </Button>
-              <Button
-                small
-                disabled
-                title="The API has no deferred to rejected transition, so a drop would be refused. Open the item and respond from there."
-              >
-                Drop
-              </Button>
-            </div>
-          </div>
-        ))
+          );
+        })
       )}
     </>
   );

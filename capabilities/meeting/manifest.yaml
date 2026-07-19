@@ -53,7 +53,7 @@ emits:
       - { id: approve, label: "File it", outcome: execute }
       - { id: edit_approve, label: "Edit and file", outcome: execute }
       - { id: reject, label: "Discard", outcome: discard }
-      - { id: defer, label: "Later", outcome: defer }
+      - { id: defer, label: "Later", outcome: defer, defer_for: 1d }
 
     execution:
       mode: automated

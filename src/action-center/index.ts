@@ -22,11 +22,13 @@ import type { Db } from "../store/db.js";
 import {
   DraftActionItem,
   isSettled,
+  parseDuration,
   type ActionItem,
   type ActionItemExecution,
   type Actor,
   type ExecutionMode,
 } from "../types/index.js";
+import { isWithinQuietHours, parseQuietHours, quietHoursEnd } from "../delivery/quiet-hours.js";
 
 const logger = log("action-center");
 
@@ -57,6 +59,12 @@ export interface ActionCenterDeps {
   execution: ExecutionRegistry;
   routing: RoutingResolver;
   delivery?: Delivery;
+  /**
+   * e.g. "22:00-07:00". Snoozes that would land inside the window are pushed to
+   * the moment it opens, so a resurfaced item is never one Sandip sleeps through
+   * (UI-SPEC §5.3). Omitted means no window and no adjustment.
+   */
+  quietHours?: string;
 }
 
 export class ActionCenterError extends Error {
@@ -381,7 +389,16 @@ export class ActionCenter {
       case "discard":
         return transition(db, { id, to: "rejected", actor, reason: `responded: ${response.id}` });
       case "defer":
-        return transition(db, { id, to: "deferred", actor, reason: `responded: ${response.id}` });
+        return transition(db, {
+          id,
+          to: "deferred",
+          actor,
+          reason: `responded: ${response.id}`,
+          patch: {
+            ...(patch ?? {}),
+            defer_until: deferUntil(response.defer_for, this.deps.quietHours),
+          },
+        });
       case "ask_more_info":
         return transition(db, {
           id,
@@ -446,6 +463,42 @@ export class ActionCenter {
     return due.length;
   }
 
+  /**
+   * Returns snoozed items to the Inbox once their defer window elapses, and
+   * re-notifies. Without this a defer was a one-way door: `deferred` had no
+   * resurface time and nothing swept it, so "Snooze 1 day" meant "discard
+   * quietly". Returns how many woke.
+   *
+   * Run `expire()` first if you run both: an item past both its ttl and its
+   * snooze should expire rather than briefly reappear.
+   */
+  async resurface(now = new Date()): Promise<number> {
+    const { db } = this.deps;
+    const due = db
+      .prepare<{ id: string }>(
+        `SELECT id FROM action_items
+          WHERE status = 'deferred' AND defer_until IS NOT NULL AND defer_until <= ?
+          ORDER BY defer_until ASC`,
+      )
+      .all(now.toISOString());
+
+    for (const { id } of due) {
+      const item = transition(db, {
+        id,
+        to: "pending",
+        actor: "system",
+        reason: "defer window elapsed",
+      });
+      logger.info({ id, type: item.type }, "resurfaced from deferred");
+      // Same side-channel treatment as escalation: a notification failure must
+      // not undo a wake that is already committed.
+      await this.deps.delivery?.notify(item).catch((err: unknown) => {
+        logger.warn({ id, err: String(err) }, "delivery failed");
+      });
+    }
+    return due.length;
+  }
+
   #require(id: string): ActionItem {
     const item = getActionItem(this.deps.db, id);
     if (!item) throw new ActionCenterError(`action item ${id} not found`, "not_found", 404);
@@ -456,9 +509,28 @@ export class ActionCenter {
 /** Turns a manifest ttl like "24h" into an absolute expiry. */
 export function expiresAt(ttl: string | null, from = new Date()): string | null {
   if (!ttl) return null;
-  const match = /^(\d+)\s*([smhd])$/.exec(ttl.trim());
-  if (!match) throw new Error(`invalid ttl "${ttl}"; expected a form like "24h"`);
-  const amount = Number(match[1]);
-  const unitMs = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 }[match[2]!]!;
-  return new Date(from.getTime() + amount * unitMs).toISOString();
+  return new Date(from.getTime() + parseDuration(ttl)).toISOString();
+}
+
+/**
+ * How long a defer response snoozes for when its manifest does not say. A day
+ * matches the label the shipped capabilities use ("Snooze 1 day").
+ */
+export const DEFAULT_DEFER_FOR = "1d";
+
+/**
+ * Turns a response's `defer_for` into the absolute moment the item comes back,
+ * skipping quiet hours. A 2 AM snooze on a "22:00-07:00" window resolves to 7 AM
+ * rather than waking to a notification nobody reads (UI-SPEC §5.3).
+ */
+export function deferUntil(
+  deferFor: string | undefined,
+  quietHours: string | undefined,
+  from = new Date(),
+): string {
+  const at = new Date(from.getTime() + parseDuration(deferFor ?? DEFAULT_DEFER_FOR));
+  if (!quietHours) return at.toISOString();
+
+  const window = parseQuietHours(quietHours);
+  return isWithinQuietHours(at, window) ? quietHoursEnd(at, window).toISOString() : at.toISOString();
 }

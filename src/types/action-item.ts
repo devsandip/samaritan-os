@@ -68,6 +68,12 @@ export const ActionItem = DraftActionItem.extend({
   priority: Priority,
   deadline: IsoDateTime.nullable(),
   expires_at: IsoDateTime.nullable(),
+  /**
+   * When a deferred item returns to the Inbox. Set on the defer response and
+   * cleared on the way out of `deferred`, so it is non-null only while the item
+   * is actually snoozed (UI-SPEC §5.3).
+   */
+  defer_until: IsoDateTime.nullable().default(null),
   created_at: IsoDateTime,
   updated_at: IsoDateTime,
 });

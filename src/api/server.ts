@@ -220,12 +220,46 @@ export function buildServer(app: App): FastifyInstance {
   return server;
 }
 
+/** How often the ttl and resurface sweeps run while the server is up. */
+const SWEEP_INTERVAL_MS = 60_000;
+
+/**
+ * Runs the time-based sweeps. v0 has no daemon (§12 step 14), so the API server
+ * is the only long-lived process and therefore the only thing that can notice
+ * that a ttl or a defer window has elapsed. Both were previously written and
+ * never called, which is why a deferred item never came back.
+ *
+ * Order matters: an item past both its ttl and its snooze should expire rather
+ * than briefly reappear in the Inbox.
+ */
+async function sweep(app: App): Promise<void> {
+  try {
+    const expired = app.actionCenter.expire();
+    const resurfaced = await app.actionCenter.resurface();
+    if (expired || resurfaced) logger.info({ expired, resurfaced }, "swept");
+  } catch (err) {
+    // A failed sweep must not take down the server; the next tick retries.
+    logger.error({ err: String(err) }, "sweep failed");
+  }
+}
+
 export async function start(options: CreateAppOptions = {}): Promise<FastifyInstance> {
   const app = createApp(options);
   const server = buildServer(app);
   const { host, port } = app.config.server;
 
+  // Both before listen(): Fastify refuses addHook once the instance is
+  // listening, and unref() keeps the timer from holding the process open.
+  const timer = setInterval(() => void sweep(app), SWEEP_INTERVAL_MS);
+  timer.unref();
+  server.addHook("onClose", () => clearInterval(timer));
+
   await server.listen({ host, port });
+
+  // Once on boot, so anything that came due while the process was down is
+  // handled immediately rather than up to a minute later.
+  await sweep(app);
+
   logger.info({ url: `http://${host}:${port}` }, "samaritan api listening");
   return server;
 }

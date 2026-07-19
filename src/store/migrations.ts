@@ -192,4 +192,19 @@ CREATE TABLE delivery_queue (
 CREATE INDEX idx_delivery_pending ON delivery_queue(delivered_at, deliver_after);
 `,
   },
+  {
+    version: 3,
+    name: "defer_until",
+    sql: `
+-- When a snoozed item comes back (UI-SPEC §5.3). Deferred previously had no
+-- resurface time at all, so an item sent there stayed there: nothing swept it
+-- back to pending and the Deferred view had no time to render.
+ALTER TABLE action_items ADD COLUMN defer_until TEXT;
+
+-- Partial: the resurface sweep only ever reads rows that are actually snoozed,
+-- and every other row has defer_until NULL.
+CREATE INDEX idx_action_items_defer_until
+  ON action_items(defer_until) WHERE defer_until IS NOT NULL;
+`,
+  },
 ];

@@ -61,7 +61,14 @@ export function createApp(options: CreateAppOptions = {}): App {
   logger.info({ capabilities: loaded.length, problems: problems.length }, "registry loaded");
 
   const delivery = createDelivery(db);
-  const actionCenter = new ActionCenter({ db, capabilities, execution, routing, delivery });
+  const actionCenter = new ActionCenter({
+    db,
+    capabilities,
+    execution,
+    routing,
+    delivery,
+    quietHours: config.delivery.quiet_hours,
+  });
 
   return {
     config,

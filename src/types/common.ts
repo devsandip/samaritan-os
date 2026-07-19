@@ -88,3 +88,23 @@ export const ExecutionCapabilityId = z
 export function nowIso(): string {
   return new Date().toISOString();
 }
+
+/** Duration shorthand: a count and a unit, e.g. "24h", "30m", "1d". */
+const DURATION = /^(\d+)\s*([smhd])$/;
+
+const UNIT_MS = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 } as const;
+
+export function isDuration(spec: string): boolean {
+  return DURATION.test(spec.trim());
+}
+
+/**
+ * Turns a duration shorthand into milliseconds. Shared by manifest `ttl` and
+ * response `defer_for` so the two cannot drift into accepting different spellings
+ * of the same thing.
+ */
+export function parseDuration(spec: string): number {
+  const match = DURATION.exec(spec.trim());
+  if (!match) throw new Error(`invalid duration "${spec}"; expected a form like "24h"`);
+  return Number(match[1]) * UNIT_MS[match[2] as keyof typeof UNIT_MS];
+}

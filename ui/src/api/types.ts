@@ -64,6 +64,8 @@ export interface ActionItem {
   execution: ActionItemExecution;
   deadline: string | null;
   expires_at: string | null;
+  /** When a deferred item returns to the inbox. Non-null only while deferred. */
+  defer_until: string | null;
   created_at: string;
   updated_at: string;
 }

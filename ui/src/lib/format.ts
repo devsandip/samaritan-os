@@ -48,6 +48,26 @@ export function fullTimestamp(iso: string): string {
   });
 }
 
+/**
+ * When a snoozed item comes back (§5.3): "Tomorrow 9:00 AM", "Monday", "Today
+ * 4:30 PM". Reads forward, unlike `relativeTime`, because the useful fact about
+ * a deferred row is the wall-clock moment it returns, not how far away that is.
+ */
+export function resurfaceLabel(iso: string, now = new Date()): string {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return iso;
+  if (t <= now.getTime()) return "Due now";
+
+  const when = new Date(t);
+  const midnight = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((midnight(when) - midnight(now)) / DAY);
+
+  if (days === 0) return `Today ${clockTime(iso)}`;
+  if (days === 1) return `Tomorrow ${clockTime(iso)}`;
+  if (days < 7) return when.toLocaleDateString(undefined, { weekday: "long" });
+  return when.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 /** "Today" / "Yesterday" / a date, for the Completed day grouping (§5.4). */
 export function dayLabel(iso: string, now = new Date()): string {
   const t = new Date(Date.parse(iso));

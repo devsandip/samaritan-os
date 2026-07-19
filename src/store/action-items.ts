@@ -31,6 +31,7 @@ export interface CreateActionItemInput {
   priority?: Priority;
   deadline?: string | null;
   expires_at?: string | null;
+  defer_until?: string | null;
 }
 
 export interface TransitionInput {
@@ -46,6 +47,7 @@ export interface TransitionInput {
     priority?: Priority;
     deadline?: string | null;
     expires_at?: string | null;
+    defer_until?: string | null;
   };
 }
 
@@ -77,8 +79,10 @@ const LEGAL_TRANSITIONS: Record<ActionItemStatus, readonly ActionItemStatus[]> =
   // Dispatched but not committed. Closed by POST /confirm, sent back to the
   // Inbox by POST /reopen (§5.1).
   awaiting_confirmation: ["executed", "pending", "failed"],
-  // Snoozed. Returns to the Inbox when its defer window elapses.
-  deferred: ["pending", "in_review", "expired"],
+  // Snoozed. Returns to the Inbox when its defer window elapses, but the
+  // Deferred view can also act on it in place: "Act now" approves without
+  // waiting and "Drop" discards it (UI-SPEC §5.3).
+  deferred: ["pending", "in_review", "approved", "rejected", "expired"],
   // Retry re-approves with the same idempotency key; exhausted retries fall back
   // to guided, which stages and therefore awaits confirmation (§10).
   failed: ["approved", "awaiting_confirmation", "pending", "rejected"],
@@ -122,6 +126,7 @@ interface ActionItemRow {
   execution_json: string;
   deadline: string | null;
   expires_at: string | null;
+  defer_until: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -140,6 +145,7 @@ function rowToActionItem(row: ActionItemRow): ActionItem {
     execution: JSON.parse(row.execution_json),
     deadline: row.deadline,
     expires_at: row.expires_at,
+    defer_until: row.defer_until,
     created_at: row.created_at,
     updated_at: row.updated_at,
   });
@@ -259,6 +265,7 @@ export function createActionItem(
     execution: input.execution,
     deadline: input.deadline ?? null,
     expires_at: input.expires_at ?? null,
+    defer_until: input.defer_until ?? null,
     created_at: now,
     updated_at: now,
   });
@@ -268,8 +275,8 @@ export function createActionItem(
       `INSERT INTO action_items
          (id, capability_id, type, status, dedupe_key, priority, context_json,
           custom_json, responses_json, execution_json, deadline, expires_at,
-          created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          defer_until, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       item.id,
       item.capability_id,
@@ -283,6 +290,7 @@ export function createActionItem(
       JSON.stringify(item.execution),
       item.deadline,
       item.expires_at,
+      item.defer_until,
       item.created_at,
       item.updated_at,
     );
@@ -341,6 +349,15 @@ export function transition(db: Db, input: TransitionInput): ActionItem {
       ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
       ...(patch.deadline !== undefined ? { deadline: patch.deadline } : {}),
       ...(patch.expires_at !== undefined ? { expires_at: patch.expires_at } : {}),
+      // A resurface time only means anything while the item is snoozed. Clearing
+      // it on the way out keeps a woken item from rendering a stale "returns at"
+      // in the Inbox, and keeps the resurface sweep's index free of dead rows.
+      defer_until:
+        patch.defer_until !== undefined
+          ? patch.defer_until
+          : input.to === "deferred"
+            ? before.defer_until
+            : null,
       status: input.to,
       updated_at: nowIso(),
     });
@@ -348,7 +365,8 @@ export function transition(db: Db, input: TransitionInput): ActionItem {
     db.prepare(
       `UPDATE action_items
           SET status = ?, priority = ?, context_json = ?, custom_json = ?,
-              execution_json = ?, deadline = ?, expires_at = ?, updated_at = ?
+              execution_json = ?, deadline = ?, expires_at = ?, defer_until = ?,
+              updated_at = ?
         WHERE id = ?`,
     ).run(
       next.status,
@@ -358,6 +376,7 @@ export function transition(db: Db, input: TransitionInput): ActionItem {
       JSON.stringify(next.execution),
       next.deadline,
       next.expires_at,
+      next.defer_until,
       next.updated_at,
       next.id,
     );
