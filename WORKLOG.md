@@ -212,3 +212,63 @@ Append-only session archive. Newest at the bottom.
 - Commit `f9cb4be` must not ship without `9c50ce6`. Alone it makes the stale
   dispatch worse: the replay returns a link and instructions for the wrong task
   where previously the action bar was merely empty.
+
+## 2026-07-21 — Agents that can actually run: Run Layer, six agents, seed, importer
+
+**Did:**
+- Built the Run Layer (`src/run-layer/`), the `run-capability` CLI that
+  `package.json` had pointed at a nonexistent file since the scaffold, and
+  `POST /api/capabilities/:id/run`. Entrypoints import as TypeScript with no
+  build step, since Node 26 strips types natively.
+- Added four agents chosen to span the platform: `newsletter-digest` (policy
+  decides between two outcomes), `email-triage` (the assisted loop plus §10
+  degradation), `weekly-digest` (auto-completes, never seen), and
+  `subscription-watch` (exists to be refused by the money lock). Gave `wrap` and
+  `meeting` the entrypoints they had always declared.
+- `samaritan new-capability` scaffolder, and `samaritan seed`, which fills the
+  Inbox by running every agent against a fixture through the real ingest path.
+- `samaritan import-task` plus a Claude skill: paste a scheduled task's
+  instructions, get an LLM-backed agent whose output lands in the Inbox.
+- Dashboard on real run telemetry with a "Run now" button, Settings rescan
+  without a restart, and `docs/DEMO.md`.
+
+**State now:**
+- 330 tests, typecheck clean, everything merged to main and pushed.
+- Seeded store: 9 pending, 1 awaiting confirmation, 2 executed, 1 deferred,
+  1 rejected. Every audit trail genuine.
+- Still not built and named as such in the runbook: no daemon (crons are
+  declarations), no Event Bus, Recall indexed but not queryable.
+
+**Next:**
+- Walk `docs/DEMO.md` end to end once on the machine you will present from.
+- The scheduler (§12 step 17) is the next real gap: six agents declare triggers
+  and nothing fires them.
+
+**Decisions:**
+- The four new agents are deterministic, with the model call marked as a seam
+  and not made. A demo agent that needs a network round-trip and an API key has
+  a failure mode on stage testing does not remove. `wrap`, `meeting` and
+  imported tasks are the LLM half.
+- The seed drives the real API and only ever defers, dismisses, or approves
+  guided items. It is not entitled to file to Notion on Sandip's behalf, which
+  is the point of the thing being demoed.
+- `seed --clear` resolves rather than deletes: the audit trail is append-only
+  behind a trigger, so erasing it is impossible and would be wrong anyway.
+- Ingest now resolves routing for the item's stored mode. The Inbox was showing
+  a money-locked renewal as "Automated — on approve, this is filed directly",
+  promising exactly what §9 exists to refuse.
+
+**Found while building:**
+- `647af8f` committed `pnpm-workspace.yaml` with unresolved placeholders, so
+  `pnpm install` failed and both test and typecheck were broken on the branch.
+  That commit was not green as reported.
+- `vitest.config.ts` pointed `SAMARITAN_CONFIG` at a path without writing a
+  config there, so `loadConfig` fell back to the real vault path. The first
+  file-writing test would have written into the actual Obsidian vault.
+- Re-seeding forked new items and re-executed auto-completing agents, appending
+  the weekly digest to the vault twice. Correct branch 3 behaviour for a real
+  capability, wrong for a seed replaying a fixture.
+- The registry reported every directory without a manifest as a capability that
+  failed to load, raising a red banner for a `node_modules` or a scratch folder.
+- The card renderer drew its container from the unfiltered field count and then
+  dropped blanks inside it, leaving an empty box on most wrap notes.

@@ -174,9 +174,20 @@ next starts.
 
 ### Progress
 
+All merged to main.
+
 - [x] A1-A2 Run Layer core — `ff1e99b`
-- [ ] A3 run CLI and route
-- [ ] B, C, D, E, F, G
+- [x] A3 run CLI and route — `f1f01cd`
+- [x] B scaffolder — `04363a5`
+- [x] C1 newsletter-digest — `73a5171`
+- [x] C2 email-triage — `56f0c6c`
+- [x] C3 weekly-digest — `26c0ab3`
+- [x] C4 subscription-watch — `d497599`
+- [x] C5 roster tests, wrap/meeting entrypoints — `1404d3b`
+- [x] D seed — `2718210`
+- [x] E Dashboard telemetry, Run now, rescan — `f293a01`
+- [x] G import-task — `614a53d`
+- [x] F docs/DEMO.md — `6da6b89`
 
 ---
 

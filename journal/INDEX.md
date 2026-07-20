@@ -1,14 +1,32 @@
 # Samaritan — Journal Index
 
-Last refreshed: 2026-07-20 10:55
+Last refreshed: 2026-07-21 02:15
 
-Latest entry: [2026-07-20-1055-my-own-fix-was-broken](entries/2026-07-20-1055-my-own-fix-was-broken.md)
+Latest entry: [2026-07-21-0215-agents-can-finally-run](entries/2026-07-21-0215-agents-can-finally-run.md)
 
 Local-first personal agentic OS. The Action Center is a universal
 human-in-the-loop layer and a pluggable capability platform: one inbox for
 everything that needs me.
 
 ## Where we are now
+
+Demo-ready. Six agents that actually run, a seeded Inbox, and a runbook whose
+every step was executed before it was written down.
+
+The Run Layer is the piece that changed things. Until 2026-07-21 a capability
+could describe itself and could not be run: `src/run-layer/` did not exist,
+neither did the CLI `package.json` had pointed at since the scaffold, and both
+`wrap` and `meeting` declared entrypoints that were not there. Everything
+reaching the Inbox came from a Claude skill shelling out to `samaritan emit`.
+Now a capability folder is executable, with no build step, and adding one is
+still just dropping a folder in.
+
+The roster covers the platform rather than repeating one shape: policy deciding
+between two outcomes, the assisted loop that does not end at approve,
+auto-completion nobody sees, and one agent whose job is to be refused by the
+money lock. `samaritan seed` fills the Inbox through the real ingest path, so
+every audit trail in the demo is true. `samaritan import-task` converts a
+Claude scheduled task into an agent, keeping its prompt verbatim.
 
 v0 is complete and verified against the real Notion workspace. Ten commits,
 public at github.com/devsandip/samaritan-os. The whole thing was built in one
@@ -52,6 +70,10 @@ different version instead of replaying the voided attempt. 201 tests.
 
 ## Recent entries
 
+- [2026-07-21-0215-agents-can-finally-run](entries/2026-07-21-0215-agents-can-finally-run.md)
+  — there was no Run Layer, so no agent could actually run; six agents, a seed,
+  an importer, and a screen that was promising the opposite of what the money
+  lock enforces
 - [2026-07-20-1055-my-own-fix-was-broken](entries/2026-07-20-1055-my-own-fix-was-broken.md)
   — `awaiting_confirmation` had the same bug as `deferred`, my fix for it would
   have caused the thing it prevented, and my fix for that was broken too
