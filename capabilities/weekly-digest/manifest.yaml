@@ -1,0 +1,90 @@
+# Weekly Digest (TECH-SPEC §11(a), UI-SPEC §4.5).
+#
+# The spec's first sequence flow, built. Its job in the roster is to be the
+# capability Sandip never sees: it auto-completes, writes a file, and shows up
+# only in "handled automatically today". Everything else in the roster proves
+# the review gate works. This one proves the gate is not the only path, which
+# is what makes the gate mean something.
+#
+# It is the only unconditional auto_complete in the roster, and it earns that
+# on §5.6's terms: writing a derived markdown file to a local vault is
+# reversible, low blast radius, and produces nothing a human has to check.
+#
+# One divergence from §11(a). The target is obsidian.note.append rather than
+# obsidian.note.create, because note.create refuses to touch a file that
+# already exists. A digest is derived content that can legitimately be
+# regenerated mid-week, and under note.create the regenerated one fails instead
+# of updating. Appending a dated section keeps every version and cannot destroy
+# a hand-edit, which is the property that actually matters for a file in
+# someone's vault.
+
+id: weekly-digest
+name: Weekly Digest
+description: >-
+  Synthesizes the week into one note: what shipped, what got decided, what is
+  stuck, and what is next. Files itself.
+version: 0.1.0
+owner: sandip
+enabled: true
+entrypoint: index.ts
+
+trigger:
+  mode: scheduled
+  cron: "0 20 * * 0"
+
+context:
+  # Nothing resolves `requires` yet (§5.2). Until the Run Layer injects them,
+  # the capability reads the same keys out of `inputs` and falls back to an
+  # empty week, which produces an honest "nothing to report" digest rather than
+  # a fabricated one.
+  requires: [hourly_log.week, notion.decisions.week, notion.insights.week]
+  memory: [recall]
+
+emits:
+  - type: weekly-digest-ready
+    render:
+      # document, and the sections are the attribute names in declaration
+      # order (UI-SPEC §4.5). Nobody sees this in the Inbox because it
+      # auto-completes; it is what Completed renders when Sandip goes looking.
+      layout: document
+      primary: headline
+
+    custom_attributes:
+      headline: string
+      shipped: string[]
+      decided: string[]
+      stuck: string[]
+      next_week: string[]
+
+      # The last two are for the adapter, not the reader. `custom` doubles as
+      # the execution payload, so anything the target needs has to be declared
+      # alongside what a human reviews. Declared last so they sort to the
+      # bottom of the rendered document.
+      path: string
+      content: string
+
+    responses:
+      # An auto-completed item still needs responses declared: if the policy
+      # ever changes, or a run escalates for another reason, the item has to be
+      # answerable. An item with no way to respond is a dead end in the Inbox.
+      - { id: acknowledge, label: "Got it", outcome: discard }
+      - { id: open_note, label: "Open the note", outcome: guided }
+
+    execution:
+      mode: automated
+      capability: obsidian.note.append
+
+    policy:
+      auto_complete_when: "true"
+
+    priority: low
+    ttl: null
+
+requires_capabilities:
+  - obsidian.note.append
+
+delivery:
+  channels: [inbox, telegram]
+
+audit: true
+timeout_ms: 120000

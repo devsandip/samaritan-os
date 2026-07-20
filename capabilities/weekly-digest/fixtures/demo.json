@@ -1,0 +1,22 @@
+{
+  "_comment": "A week's raw material, in the shape the Run Layer will inject once context.requires resolution exists (TECH-SPEC §5.2). Until then this stands in for it. One decision is deliberately left unresolved so the digest derives a 'stuck' section and a next-week item from it rather than being told about them.",
+
+  "hourly_log.week": [
+    { "at": "2026-07-14T11:20:00Z", "text": "Shipped the Action Center review gate to my own inbox", "project": "Samaritan" },
+    { "at": "2026-07-15T16:05:00Z", "text": "Moved wrap and meeting off direct Notion writes", "project": "Samaritan" },
+    { "at": "2026-07-16T09:40:00Z", "text": "Pricing v2 draft to Priya for a first read", "project": "Northwind" },
+    { "at": "2026-07-17T14:15:00Z", "text": "Killed the standalone digest cron, folded it into the daemon plan", "project": "Samaritan" },
+    { "at": "2026-07-19T10:30:00Z", "text": "Recall index landed: chunker, embeddings, kNN", "project": "Samaritan" }
+  ],
+
+  "notion.decisions.week": [
+    { "title": "Use node:sqlite instead of better-sqlite3", "project": "Samaritan", "status": "resolved" },
+    { "title": "Local embeddings by default, cloud only on explicit opt-in", "project": "Samaritan", "status": "resolved" },
+    { "title": "Whether the middle pricing tier stays usage-based", "project": "Northwind", "status": "pending" }
+  ],
+
+  "notion.insights.week": [
+    { "title": "A guardrail nobody can see is a guardrail nobody trusts", "project": "Samaritan" },
+    { "title": "Every test passed whether or not the vector extension loaded, which is how a silent degrade survives a green suite", "project": "Samaritan" }
+  ]
+}
