@@ -5,6 +5,7 @@
  * schemas and error handler without binding a port. The layer had no coverage at
  * all, which is how a crash on boot got through a green suite once already.
  */
+import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
@@ -187,8 +188,15 @@ describe("the item routes", () => {
 
 describe("/healthz", () => {
   it("reports the loaded capabilities so a boot problem is visible", async () => {
+    // Counted from the folder rather than hardcoded. The number is not the
+    // claim: the claim is that every capability on disk loaded and none of them
+    // reported a problem, and a literal here fails on the day someone adds one.
+    const onDisk = readdirSync(join(repoRoot(), "capabilities"), { withFileTypes: true }).filter(
+      (entry) => entry.isDirectory() && !entry.name.startsWith("."),
+    ).length;
+
     const response = await server.inject({ method: "GET", url: "/healthz" });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ status: "ok", capabilities: 2, problems: 0 });
+    expect(response.json()).toEqual({ status: "ok", capabilities: onDisk, problems: 0 });
   });
 });

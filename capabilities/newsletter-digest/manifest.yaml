@@ -1,0 +1,98 @@
+# Newsletter Digest (TECH-SPEC §4.6).
+#
+# The worked example from the spec, built. Its job in the roster is to show the
+# Policy Engine deciding: one action-item type, two outcomes, no human in the
+# loop for the decision itself. A digest Sandip should see escalates; a
+# low-signal one files itself and he finds it later if he goes looking.
+#
+# Two deliberate divergences from §4.6, both about being safe to run twice:
+#
+#   - `execution.capability` is `pm-os.item.file` rather than
+#     `notion.insight.create`. pm-os dispatches on `custom.kind`, so a
+#     low-signal digest (`kind: note`) auto-files to the local daily note while
+#     one worth acting on (`kind: insight`) reaches Notion only after Sandip
+#     approves it. A seed script that wrote to the real Notion workspace on
+#     every run would be a bad demo and a worse habit: re-ingesting a settled
+#     item forks a new row with a new idempotency key (§5.1 branch 3), so the
+#     registry's replay guard would not catch the second write.
+#   - `url.open` is dropped from requires_capabilities. No such adapter exists,
+#     and the `open_link` response is outcome `guided`, which needs none.
+
+id: newsletter-digest
+name: Newsletter Digest
+description: >-
+  Reads configured newsletters, summarizes them, and flags the ones worth
+  acting on. Low-signal issues file themselves.
+version: 0.1.0
+owner: sandip
+enabled: true
+entrypoint: index.ts
+
+trigger:
+  mode: event
+  on: [email.received]
+  filter:
+    from_in: ["@newsletters"]
+
+context:
+  requires: [user.interests, projects.active]
+  inputs: [email.message]
+  memory: [recall]
+
+emits:
+  - type: newsletter-digest-review
+    render:
+      layout: card
+      primary: title
+      secondary: detail
+      badges: [kind, project, relevance_notes]
+
+    custom_attributes:
+      # The uniform PM-OS filing shape, same as wrap and meeting. Keeping it
+      # identical is what lets one adapter file every capability's output.
+      kind: string # insight | note
+      title: string
+      detail: string
+      project: string
+      owner: string
+      due: string
+      evidence: string
+
+      # Newsletter-specific signals. `worth_acting` exists because §5.6 only
+      # lets a predicate read declared attributes, so a policy signal has to be
+      # on the item or policy cannot see it.
+      worth_acting: boolean
+      top_links: string[]
+      relevance_notes: string
+
+    responses:
+      - { id: file_insight, label: "File to Notion", outcome: execute }
+      - { id: open_link, label: "Open link", outcome: guided }
+      - { id: dismiss, label: "Dismiss", outcome: discard }
+      - { id: defer, label: "Later", outcome: defer, defer_for: 1d }
+
+    execution:
+      mode: automated
+      capability: pm-os.item.file
+
+    policy:
+      escalate_when: "worth_acting == true"
+      # Silently file low-signal digests. This is the only auto-complete in the
+      # roster that a human never sees, which is the point of showing it.
+      auto_complete_when: "worth_acting == false"
+      # A digest the capability is unsure about escalates even if it decided the
+      # issue was low-signal, because being unsure is itself worth surfacing.
+      confidence_threshold: 0.7
+
+    priority: normal
+    ttl: null
+
+requires_capabilities:
+  - pm-os.item.file
+
+delivery:
+  channels: [inbox, telegram]
+  quiet_hours: "22:00-07:00"
+
+audit: true
+timeout_ms: 60000

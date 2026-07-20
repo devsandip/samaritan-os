@@ -1,0 +1,32 @@
+{
+  "_comment": "Two newsletters that take opposite routes through the same manifest. The first matches two interests and escalates to the Inbox; the second matches none, clears confidence_threshold, and files itself as a note without ever being seen. Same capability, same action-item type, different policy outcome. Used by `samaritan seed` and by `pnpm run-capability newsletter-digest --input-file capabilities/newsletter-digest/fixtures/demo.json`.",
+
+  "email.message": [
+    {
+      "id": "nl-2026-07-20-latent-space",
+      "from": "swyx <news@latent.space>",
+      "subject": "The agent evals gap nobody wants to own",
+      "received_at": "2026-07-20T06:12:00Z",
+      "permalink": "https://mail.google.com/mail/u/0/#inbox/nl-2026-07-20-latent-space",
+      "body": "Everyone shipping agent products has the same unspoken problem. The evals that got you to a demo are not the evals that keep you honest in production, and almost nobody has budget for the second kind.\n\nThe teams doing this well have stopped treating evals as a test suite and started treating them as a product surface. They version them. They review regressions in standup. One team we spoke to runs a weekly retrieval bake-off against last quarter's queries and treats a drop as a Sev-2.\n\nWhat is striking is how much of this is product management work wearing an engineering hat: deciding what good looks like, defending the definition when it is inconvenient, and keeping the scoreboard visible.\n\nRead the full teardown: https://latent.space/p/agent-evals-gap\nThe bake-off template: https://latent.space/p/retrieval-bakeoff"
+    },
+    {
+      "id": "nl-2026-07-20-morning-brew",
+      "from": "Morning Brew <crew@morningbrew.com>",
+      "subject": "Coffee futures, a very good dog, and the return of the mall",
+      "received_at": "2026-07-20T05:45:00Z",
+      "permalink": "https://mail.google.com/mail/u/0/#inbox/nl-2026-07-20-morning-brew",
+      "body": "Good morning. Coffee futures hit a nine-month high, which means your cold brew habit is about to get more expensive and your barista is about to get more philosophical about it.\n\nIn other news, a golden retriever in Ohio has been elected honorary mayor for the third consecutive term, running unopposed on a platform of enthusiasm.\n\nRetail is quietly having a moment again. Foot traffic at suburban malls is up year over year for the first time since 2019, and the anchor tenants are no longer department stores.\n\nMore: https://morningbrew.com/daily/2026/07/20"
+    }
+  ],
+
+  "user.interests": [
+    "agent",
+    "evals",
+    "local-first",
+    "product management",
+    "pricing",
+    "retrieval",
+    "sqlite"
+  ]
+}
