@@ -50,7 +50,15 @@ class SqliteDb implements Db {
 
   constructor(path: string) {
     if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
-    this.raw = new DatabaseSync(path, { enableForeignKeyConstraints: true });
+    this.raw = new DatabaseSync(path, {
+      enableForeignKeyConstraints: true,
+      // Recall loads sqlite-vec for kNN (§7). node:sqlite refuses
+      // `enableLoadExtension` outright unless it was allowed here, so without
+      // this the extension silently never loads and vector search quietly
+      // degrades to a full scan. Loading is still an explicit call, never
+      // something data in the file can trigger.
+      allowExtension: true,
+    });
     // WAL lets the API server and a shelled-out CLI (TECH-SPEC §12 step 14) read
     // and write the same file concurrently; busy_timeout absorbs the overlap.
     this.raw.exec("PRAGMA journal_mode = WAL");

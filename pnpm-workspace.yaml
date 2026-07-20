@@ -6,3 +6,6 @@ allowBuilds:
   # vitest's transform layer. Its install script links a prebuilt platform
   # binary; there is no build from source.
   esbuild: true
+  onnxruntime-node: set this to true or false
+  protobufjs: set this to true or false
+  sharp: set this to true or false

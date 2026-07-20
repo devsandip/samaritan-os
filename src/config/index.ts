@@ -114,6 +114,27 @@ export const ConfigSchema = z.object({
       model: z.string().default("Xenova/all-MiniLM-L6-v2"),
     })
     .prefault({}),
+
+  recall: z
+    .object({
+      /**
+       * §7 step 4 synthesis. Default "none" for the same reason embeddings
+       * default to local: answering a question means sending the retrieved
+       * passages of the vault, journals and audit trail to a third party, and
+       * §9 says that is a choice Sandip makes consciously rather than a thing
+       * that happens because he asked a question.
+       *
+       * With "none", `POST /api/recall/query` still retrieves and cites. It
+       * just returns the passages instead of prose over them.
+       */
+      synthesis: z.enum(["none", "anthropic"]).default("none"),
+      /** Keychain lookup is service "samaritan", account "anthropic:<this>". */
+      account: z.string().default("default"),
+      model: z.string().default("claude-sonnet-5"),
+      /** How many fused chunks reach the synthesiser (§7 step 3 says ~8). */
+      context_chunks: z.number().int().min(1).max(40).default(8),
+    })
+    .prefault({}),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
@@ -140,6 +161,14 @@ logging:
 
 embeddings:
   provider: local
+
+# Ask-Samaritan (§7). Retrieval is always local. "synthesis" controls whether the
+# retrieved passages are also sent to an LLM to be written up as an answer:
+# leave it "none" and you get the passages themselves, cited, and nothing leaves
+# this machine. Set it to "anthropic" and add the key with:
+#   security add-generic-password -s samaritan -a anthropic:default -w
+recall:
+  synthesis: none
 
 # Notion database ids for your own workspace. Find one in the database's URL:
 # notion.so/<workspace>/<32-hex-id>?v=... Leave blank to disable that target.

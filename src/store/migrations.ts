@@ -220,4 +220,35 @@ ALTER TABLE executions ADD COLUMN guided_link TEXT;
 ALTER TABLE executions ADD COLUMN guided_instructions TEXT;
 `,
   },
+  {
+    version: 5,
+    name: "recall_index",
+    sql: `
+-- Recall's bookkeeping (§7). recall_chunks and recall_chunks_fts already exist
+-- from migration 1; what was missing is everything needed to keep them in sync
+-- and to know when a source no longer needs re-reading.
+--
+-- The vec0 virtual table is NOT created here. It is an extension table, so it
+-- only exists once sqlite-vec is loaded, and a migration that assumes the
+-- extension would make the whole database unopenable without it. Recall creates
+-- it on demand instead, and falls back to scanning when the extension is absent.
+ALTER TABLE recall_chunks ADD COLUMN content_hash TEXT;
+ALTER TABLE recall_chunks ADD COLUMN chunk_index INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE recall_chunks ADD COLUMN source_ref TEXT;
+
+CREATE INDEX idx_recall_chunks_kind ON recall_chunks(source_kind);
+
+-- One row per indexed source document, so a reindex can skip anything whose
+-- content hash is unchanged rather than re-embedding the whole vault.
+CREATE TABLE recall_sources (
+  source_path TEXT PRIMARY KEY,
+  source_kind TEXT NOT NULL,
+  content_hash TEXT NOT NULL,
+  chunk_count INTEGER NOT NULL,
+  embedded INTEGER NOT NULL DEFAULT 0,   -- 0 while chunks exist but vectors do not
+  indexed_at TEXT NOT NULL
+);
+CREATE INDEX idx_recall_sources_kind ON recall_sources(source_kind);
+`,
+  },
 ];
