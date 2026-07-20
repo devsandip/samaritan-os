@@ -164,3 +164,51 @@ Append-only session archive. Newest at the bottom.
   that omits the `paths` section, and the real one does not. Blast radius on this
   machine was zero. The fix and its regression test still stand, since a trimmed
   config is a reasonable thing for a future install to have.
+
+## 2026-07-20 (afternoon) — Found the deferred bug's sibling, then found two bugs in my own fix for it
+
+**Did:**
+- Cross-read `awaiting_confirmation` against TECH-SPEC, UI-SPEC and the code.
+  §5.1 called it "nothing external has been committed yet" while §2.2 and §5.3
+  say the OS has already dispatched. The code implemented §5.1.
+- Added §5.1 branch 2a: a dispatched row is held untouched on re-ingest and the
+  re-emission is recorded as an event whose from and to are the same status.
+- Scoped the §10 idempotency key to `<item id>:<dispatch generation>`, where the
+  generation counts prior `awaiting_confirmation -> pending` events.
+- Persisted `guided_link`/`guided_instructions` on the executions table
+  (migration 4) so the registry's replay returns them.
+- Fixed three smaller things the review found: `samaritan emit` printed a held
+  item under "auto-completed by policy", the held `payload_diff` used a shape the
+  trail's renderer cannot read, and the audit copy promised something false.
+- 201 tests, up from 197. `test/confirm.test.ts` is new, 18 cases.
+
+**State now:**
+- Branch `claude/what-next-89afb8` at 5 commits ahead of main, clean.
+- Live store still on migration 3. Migration 4 has not been applied, so the
+  executions table has neither new column yet.
+- Daemon still running `eb40f95`, which predates all of this.
+- Recall still not started.
+
+**Next:**
+- Recall, section 7. Still the last unbuilt v0 piece.
+- The `failed` re-ingest bug, logged not fixed. It is on main today and needs no
+  unusual conditions: a superseded `failed` row stays visible and approvable, and
+  approving it files the stale content. Reproduced.
+- The `approved` race, logged not fixed. Needs the §878 startup reconciliation
+  sweep first, because the obvious fix removes the only rescue for a wedged row.
+
+**Decisions:**
+- Held the dispatched row rather than moving `awaiting_confirmation` to
+  `SETTLED_STATUSES`. Moving it would have forked a fresh row, minting a new
+  idempotency key, missing the registry's replay guard, and dispatching a second
+  time for real. That was the duplicate I had claimed the change would prevent.
+  My original recommendation would have caused the bug I described.
+- Kept the generation counter tied to `reopen` alone. A retry after a failure is
+  the same approval and must keep replaying; a reopen is me saying the handoff is
+  void, which is the only thing that should re-arm a dispatch.
+- Did not take the review's advice to hold `approved` the same way. It removes
+  the only rescue for a row wedged by a crash mid-dispatch, and the sweep that
+  would replace that rescue does not exist. Bounded and pre-existing, so it waits.
+- Commit `f9cb4be` must not ship without `9c50ce6`. Alone it makes the stale
+  dispatch worse: the replay returns a link and instructions for the wrong task
+  where previously the action bar was merely empty.

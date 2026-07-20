@@ -1,8 +1,8 @@
 # Samaritan — Journal Index
 
-Last refreshed: 2026-07-20 10:08
+Last refreshed: 2026-07-20 10:55
 
-Latest entry: [2026-07-20-1008-merged-and-first-contact](entries/2026-07-20-1008-merged-and-first-contact.md)
+Latest entry: [2026-07-20-1055-my-own-fix-was-broken](entries/2026-07-20-1055-my-own-fix-was-broken.md)
 
 Local-first personal agentic OS. The Action Center is a universal
 human-in-the-loop layer and a pluggable capability platform: one inbox for
@@ -43,8 +43,18 @@ executed against real data despite being written, tested and merged. The
 database is empty of action items, so the sweep has still not run with real
 rows in it.
 
+Since then, `awaiting_confirmation` turned out to have the same misclassification
+`deferred` did. A re-ingest against a dispatched item rolled it back to
+`pending`, destroyed the deep link, and stranded it, because `confirm` and
+`reopen` answer only that one status. It holds now, and the idempotency key
+carries a dispatch generation so a reopened item can dispatch a genuinely
+different version instead of replaying the voided attempt. 201 tests.
+
 ## Recent entries
 
+- [2026-07-20-1055-my-own-fix-was-broken](entries/2026-07-20-1055-my-own-fix-was-broken.md)
+  — `awaiting_confirmation` had the same bug as `deferred`, my fix for it would
+  have caused the thing it prevented, and my fix for that was broken too
 - [2026-07-20-1008-merged-and-first-contact](entries/2026-07-20-1008-merged-and-first-contact.md)
   — everything merged to main, and the restart that finally ran migration 3
   against the live store
@@ -68,7 +78,14 @@ rows in it.
 - Strict validation earns its cost. Rejecting undeclared keys rather than
   stripping them has already turned two silent shape mismatches into loud ones.
 - Tests catch logic errors; only contact with the real system catches
-  integration errors. A green suite is not evidence that something works.
+  integration errors. A green suite is not evidence that something works. The
+  same applies one level in: a test I write asserts what I already believe, so
+  it passes for the same reason the bug exists. Twice now the assertion was
+  about a database column while the defect was in what the user reads.
+- Review that is told to refute, and made to reproduce rather than argue, finds
+  things I do not. It reversed a recommendation of mine and then found a defect
+  in the fix I had already verified and committed. Both corrections arrived as
+  transcripts.
 - Merged is not running. There is no deploy step, the daemon is not in watch
   mode, and migrations apply on boot, so a merge changes nothing until something
   restarts the process and nothing announces the difference. Worth surfacing the
