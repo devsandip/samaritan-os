@@ -190,9 +190,20 @@ export class ActionCenter {
       // Branch 2: nothing external has been committed, so the stale draft is
       // superseded in place. Whatever Sandip was reviewing no longer matches the
       // content, so review state rolls back to pending and policy re-runs.
+      //
+      // A snoozed row is the exception: it stays snoozed, for the window it
+      // already had. Deferring is a decision about *when* to look at this and a
+      // re-ingest only says what the content is now, so refreshing the content
+      // and holding the window honours both. Rolling it back to pending would
+      // let any capability that re-emits on every run cancel the snooze, and
+      // forking a fresh row instead leaves the old one to resurface as a
+      // duplicate. Policy still runs below, so a refresh that now auto-completes
+      // executes without waiting, which is the way through for something that
+      // has become urgent.
+      const staysDeferred = existing.status === "deferred";
       item = transition(db, {
         id: existing.id,
-        to: "pending",
+        to: staysDeferred ? "deferred" : "pending",
         actor: "capability",
         reason: "superseded_by_reingest",
         patch: { context: draft.context, custom: draft.custom, execution },
@@ -226,6 +237,14 @@ export class ActionCenter {
         reason: decision.reason,
       });
       item = await this.execute(approved);
+    } else if (item.status === "deferred") {
+      // Refreshed in place but still snoozed, so it is not in the Inbox and must
+      // not ping: notifying here would defeat the snooze through the side door.
+      // resurface() delivers when the window actually elapses.
+      logger.info(
+        { id: item.id, type: item.type, defer_until: item.defer_until },
+        "refreshed a snoozed item in place",
+      );
     } else {
       logger.info(
         { id: item.id, type: item.type, rule: decision.matched_rule },

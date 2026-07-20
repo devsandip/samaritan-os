@@ -44,24 +44,35 @@ export type ActionItemStatus = z.infer<typeof ActionItemStatus>;
 /**
  * Statuses where nothing external has been committed yet, so a re-ingest may
  * supersede the existing row in place (§5.1, branch 2).
+ *
+ * `deferred` belongs here despite being a decision Sandip made, because the test
+ * is whether the logical event has run its course, and a snoozed item is
+ * explicitly waiting to. It is the one member that does not roll back to
+ * `pending` on supersede: the deferral says *when* he wants to look at this and
+ * a re-ingest only says what the content is now, so the Action Center refreshes
+ * the content and holds the window.
  */
 export const UNSETTLED_STATUSES = [
   "pending",
   "in_review",
   "approved",
   "awaiting_confirmation",
+  "deferred",
 ] as const satisfies readonly ActionItemStatus[];
 
 /**
  * Statuses where the logical event already ran its course, so a re-ingest must
  * not mutate the row and instead inserts a fresh one (§5.1, branch 3).
+ *
+ * `failed` counts as run-its-course even though it is not terminal: execution
+ * was attempted, so something external may already be half-committed and the
+ * attempt is worth keeping as its own row.
  */
 export const SETTLED_STATUSES = [
   "executed",
   "failed",
   "rejected",
   "expired",
-  "deferred",
 ] as const satisfies readonly ActionItemStatus[];
 
 export function isSettled(status: ActionItemStatus): boolean {

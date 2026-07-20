@@ -6,8 +6,13 @@
  * quietly." These tests pin the round trip — snooze, wake, act — and the two
  * in-place actions the Deferred view offers on a snoozed item.
  */
-import { describe, expect, it, vi } from "vitest";
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { DEFAULT_DEFER_FOR, deferUntil } from "../src/action-center/index.js";
+import { repoRoot } from "../src/config/index.js";
 import {
   canTransition,
   createActionItem,
@@ -280,5 +285,204 @@ describe("resurface", () => {
 
     expect(await h.actionCenter.resurface(new Date(Date.now() + 25 * 3_600_000))).toBe(2);
     expect(listActionItems(h.db, { status: "pending" })).toHaveLength(2);
+  });
+});
+
+/** The same logical item as `wrapItem()`, re-extracted with a sharper title. */
+const revised = () =>
+  wrapItem({
+    custom: {
+      kind: "decision",
+      title: "Use node:sqlite; better-sqlite3 has no Node 26 binary",
+      detail: "Confirmed against the 0.28 release notes",
+      project: "Samaritan",
+      owner: "sandip",
+      due: "",
+      evidence: "pnpm refused to run the build script",
+    },
+  });
+
+const temps: string[] = [];
+
+afterEach(() => {
+  while (temps.length) rmSync(temps.pop()!, { recursive: true, force: true });
+});
+
+/**
+ * A copy of the real capabilities folder with wrap's policy rewritten to escalate
+ * while the item has no owner and auto-complete once it names one. Editing the
+ * manifest the daemon actually loads keeps the fixture from drifting off-schema.
+ */
+function autoCompleteOnOwner(): string {
+  const dir = mkdtempSync(join(tmpdir(), "samaritan-caps-"));
+  temps.push(dir);
+  cpSync(join(repoRoot(), "capabilities"), dir, { recursive: true });
+
+  const path = join(dir, "wrap", "manifest.yaml");
+  const manifest = parseYaml(readFileSync(path, "utf8")) as {
+    emits: { policy: Record<string, string> }[];
+  };
+  manifest.emits[0]!.policy = {
+    escalate_when: 'owner == ""',
+    auto_complete_when: 'owner != ""',
+  };
+  writeFileSync(path, stringifyYaml(manifest));
+  return dir;
+}
+
+/** Ingests one wrap item and snoozes it. Returns the row and the window it got. */
+async function snoozed(options: Parameters<typeof harness>[0] = {}) {
+  const h = harness(options);
+  const { accepted } = await h.actionCenter.ingest("wrap", [wrapItem()]);
+  const id = accepted[0]!.id;
+  const deferred = await h.actionCenter.respond(id, { response_id: "defer" });
+  return { h, id, until: deferred.defer_until! };
+}
+
+describe("re-ingesting an item that is snoozed", () => {
+  it("supersedes the snoozed row rather than forking a second one", async () => {
+    const { h, id } = await snoozed();
+
+    const { accepted, rejected } = await h.actionCenter.ingest("wrap", [revised()]);
+
+    expect(rejected).toEqual([]);
+    expect(accepted[0]!.id).toBe(id);
+    expect(listActionItems(h.db, {})).toHaveLength(1);
+  });
+
+  it("keeps the item snoozed for exactly the window Sandip set", async () => {
+    // The whole point of the branch. A re-ingest says what the content is now;
+    // it says nothing about when Sandip wants to look at it.
+    const { h, id, until } = await snoozed();
+
+    await h.actionCenter.ingest("wrap", [revised()]);
+
+    const item = getActionItem(h.db, id)!;
+    expect(item.status).toBe("deferred");
+    expect(item.defer_until).toBe(until);
+  });
+
+  it("refreshes the content, so the wake shows what is true now", async () => {
+    const { h, id } = await snoozed();
+
+    await h.actionCenter.ingest("wrap", [revised()]);
+
+    const item = getActionItem(h.db, id)!;
+    expect(item.custom).toMatchObject({
+      title: "Use node:sqlite; better-sqlite3 has no Node 26 binary",
+      owner: "sandip",
+    });
+    // The custom payload doubles as the execution payload, so both move together
+    // or the item files stale content on approval.
+    expect(item.execution.payload).toMatchObject({
+      title: "Use node:sqlite; better-sqlite3 has no Node 26 binary",
+    });
+  });
+
+  it("wakes once, not twice", async () => {
+    // The reported duplicate, end to end: the old row used to survive the
+    // re-ingest as an orphan with its defer_until intact, so the sweep woke it
+    // alongside the fresh row and the Inbox showed the same thing twice.
+    const { h } = await snoozed();
+    await h.actionCenter.ingest("wrap", [revised()]);
+
+    const woke = await h.actionCenter.resurface(new Date(Date.now() + 25 * 3_600_000));
+
+    expect(woke).toBe(1);
+    expect(listActionItems(h.db, { status: "pending" })).toHaveLength(1);
+  });
+
+  it("leaves no superseded key behind, which is the orphan's fingerprint", async () => {
+    const { h } = await snoozed();
+
+    await h.actionCenter.ingest("wrap", [revised()]);
+
+    expect(listActionItems(h.db, {}).map((i) => i.dedupe_key)).toEqual(["wrap:sess-2026-07-19:0"]);
+  });
+
+  it("does not notify, because the snooze is still in force", async () => {
+    // Pinging about an item Sandip explicitly snoozed would defeat the snooze
+    // through the side door.
+    const notify = vi.fn(async () => {});
+    const { h } = await snoozed({ delivery: { notify } });
+    notify.mockClear();
+
+    await h.actionCenter.ingest("wrap", [revised()]);
+
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it("records the supersede in the audit trail", async () => {
+    const { h, id } = await snoozed();
+
+    await h.actionCenter.ingest("wrap", [revised()]);
+
+    expect(listAuditTrail(h.db, id).at(-1)).toMatchObject({
+      from_status: "deferred",
+      to_status: "deferred",
+      actor: "capability",
+      reason: "superseded_by_reingest",
+    });
+  });
+
+  it("still lets policy pull an urgent refresh through the snooze", async () => {
+    // Holding the window is only safe because this way through exists. If the
+    // refreshed content no longer needs a human, it files without waiting.
+    const h = harness({ capabilitiesDir: autoCompleteOnOwner() });
+    const { accepted } = await h.actionCenter.ingest("wrap", [wrapItem()]);
+    const id = accepted[0]!.id;
+    expect(accepted[0]!.status).toBe("pending");
+    await h.actionCenter.respond(id, { response_id: "defer" });
+
+    const again = await h.actionCenter.ingest("wrap", [revised()]);
+
+    expect(again.accepted[0]!.id).toBe(id);
+    expect(again.accepted[0]!.policy.outcome).toBe("auto_complete");
+    const item = getActionItem(h.db, id)!;
+    expect(item.status).toBe("executed");
+    expect(item.defer_until).toBeNull();
+    expect(h.notionDecision.calls).toHaveLength(1);
+  });
+
+  it("still wakes on the original schedule after several re-ingests", async () => {
+    // A capability that re-emits on every run must not be able to push the
+    // window out indefinitely, which is the other way to lose a snooze.
+    const { h, until } = await snoozed();
+
+    for (let i = 0; i < 3; i++) await h.actionCenter.ingest("wrap", [revised()]);
+
+    expect(listActionItems(h.db, {})).toHaveLength(1);
+    expect(listActionItems(h.db, {})[0]!.defer_until).toBe(until);
+  });
+});
+
+describe("re-ingesting an item that really did run its course", () => {
+  // Guarding the other side of the line: moving deferred out of settled must not
+  // drag the genuinely finished statuses with it.
+  it("forks a fresh row for a rejected item", async () => {
+    const h = harness();
+    const { accepted } = await h.actionCenter.ingest("wrap", [wrapItem()]);
+    const id = accepted[0]!.id;
+    await h.actionCenter.respond(id, { response_id: "reject" });
+
+    const again = await h.actionCenter.ingest("wrap", [revised()]);
+
+    expect(again.accepted[0]!.id).not.toBe(id);
+    expect(listActionItems(h.db, {})).toHaveLength(2);
+    expect(getActionItem(h.db, id)?.status).toBe("rejected");
+    expect(getActionItem(h.db, id)?.dedupe_key).toBe(`wrap:sess-2026-07-19:0:superseded:${id}`);
+  });
+
+  it("forks a fresh row for an executed item", async () => {
+    const h = harness();
+    const { accepted } = await h.actionCenter.ingest("wrap", [wrapItem()]);
+    const id = accepted[0]!.id;
+    await h.actionCenter.respond(id, { response_id: "approve" });
+    expect(getActionItem(h.db, id)?.status).toBe("executed");
+
+    const again = await h.actionCenter.ingest("wrap", [revised()]);
+
+    expect(again.accepted[0]!.id).not.toBe(id);
+    expect(listActionItems(h.db, {})).toHaveLength(2);
   });
 });

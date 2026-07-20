@@ -279,9 +279,17 @@ describe("status partitioning", () => {
 
   it("treats executed as settled and pending as not", () => {
     expect(isSettled("executed")).toBe(true);
-    expect(isSettled("deferred")).toBe(true);
     expect(isSettled("pending")).toBe(false);
     expect(isSettled("awaiting_confirmation")).toBe(false);
+  });
+
+  it("treats deferred as unsettled, because a snooze is a pause and not an end", () => {
+    // It read as settled once, on the grounds that Sandip had decided something.
+    // But the test the partition applies is whether the logical event has run its
+    // course, and a snoozed item is explicitly waiting to. Calling it settled sent
+    // a re-ingest down the fork-a-fresh-row branch, which orphaned the snoozed row
+    // with its defer_until intact and woke it as a duplicate (§5.1).
+    expect(isSettled("deferred")).toBe(false);
   });
 });
 
