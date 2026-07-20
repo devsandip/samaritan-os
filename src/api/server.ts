@@ -183,18 +183,34 @@ export function buildServer(app: App): FastifyInstance {
 
   // ---- Capabilities --------------------------------------------------------
 
-  server.get("/api/capabilities", async () => ({
-    capabilities: app.capabilities.all().map((c) => ({
-      ...c.manifest,
-      types: [...c.types.entries()].map(([type, loaded]) => ({
-        type,
-        declared_mode: loaded.spec.execution.mode,
-        effective_mode: loaded.effectiveMode,
-        ...(loaded.degradedReason ? { degraded_reason: loaded.degradedReason } : {}),
+  server.get("/api/capabilities", async () => {
+    // Run telemetry lives on the `capabilities` row, written by the Run Layer.
+    // Before it existed the Dashboard's agent grid approximated "last run" from
+    // item timestamps and said so in a comment; this is the real thing.
+    const runs = new Map(
+      app.db
+        .prepare<{ id: string; last_run_at: string | null; last_run_status: string | null }>(
+          "SELECT id, last_run_at, last_run_status FROM capabilities",
+        )
+        .all()
+        .map((row) => [row.id, row]),
+    );
+
+    return {
+      capabilities: app.capabilities.all().map((c) => ({
+        ...c.manifest,
+        last_run_at: runs.get(c.manifest.id)?.last_run_at ?? null,
+        last_run_status: runs.get(c.manifest.id)?.last_run_status ?? null,
+        types: [...c.types.entries()].map(([type, loaded]) => ({
+          type,
+          declared_mode: loaded.spec.execution.mode,
+          effective_mode: loaded.effectiveMode,
+          ...(loaded.degradedReason ? { degraded_reason: loaded.degradedReason } : {}),
+        })),
       })),
-    })),
-    problems: app.capabilities.problems(),
-  }));
+      problems: app.capabilities.problems(),
+    };
+  });
 
   server.get<{ Params: { id: string } }>("/api/capabilities/:id", async (request, reply) => {
     const capability = app.capabilities.get(request.params.id);

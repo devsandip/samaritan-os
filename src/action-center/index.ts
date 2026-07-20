@@ -80,6 +80,9 @@ export class ActionCenterError extends Error {
   }
 }
 
+/** How much autonomy each mode carries. Guided is the floor (§1). */
+const MODE_RANK: Record<ExecutionMode, number> = { guided: 0, assisted: 1, automated: 2 };
+
 export class ActionCenter {
   constructor(private readonly deps: ActionCenterDeps) {}
 
@@ -154,6 +157,40 @@ export class ActionCenter {
     return { accepted, rejected };
   }
 
+  /**
+   * The mode this item will actually run in, resolved at ingest so the Inbox
+   * can say so before Sandip decides.
+   *
+   * `type.effectiveMode` is the manifest's mode after §10's missing-adapter
+   * degradation, and it is not the whole answer: when a type declares an
+   * `action_type`, Routing decides the mode and `execute()` re-resolves it at
+   * dispatch. Storing the manifest's mode meant a money-locked renewal was
+   * shown as "Automated → on approve, this is filed directly" — on the one
+   * item in the system that can never be automated. The card was promising
+   * exactly what §9 exists to refuse.
+   *
+   * This is a preview, not a decision: `execute()` resolves again at dispatch,
+   * so a routing change between ingest and approval still wins.
+   */
+  #previewMode(type: LoadedType): ExecutionMode {
+    const actionType = type.spec.execution.action_type;
+    if (!actionType) return type.effectiveMode;
+
+    try {
+      const resolved = this.deps.routing.resolve(actionType, {
+        declaredExecutionCapabilityId: type.spec.execution.capability,
+      });
+      // Never above the manifest's own ceiling: routing choosing a freer mode
+      // than the capability asked for would be a promotion nobody authored.
+      return MODE_RANK[resolved.mode] < MODE_RANK[type.effectiveMode]
+        ? resolved.mode
+        : type.effectiveMode;
+    } catch {
+      // No routing entry for this action type. execute() has the same fallback.
+      return type.effectiveMode;
+    }
+  }
+
   async #ingestOne(draft: DraftActionItem, type: LoadedType): Promise<IngestAccepted> {
     const { db } = this.deps;
 
@@ -166,7 +203,7 @@ export class ActionCenter {
     // declares the attributes its execution target needs, so the manifest is
     // the single place the two shapes are kept in agreement.
     const execution: ActionItemExecution = {
-      mode: type.effectiveMode,
+      mode: this.#previewMode(type),
       capability: type.spec.execution.capability,
       payload: draft.custom,
     };

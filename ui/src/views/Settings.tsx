@@ -45,7 +45,35 @@ export function SettingsView({
 }) {
   const routing = useAsync(() => api.routing(), []);
   const [savingType, setSavingType] = useState<string | undefined>(undefined);
+  const [rescanning, setRescanning] = useState(false);
   const [routingError, setRoutingError] = useState<string | undefined>(undefined);
+
+  /**
+   * Re-walks capabilities/ without a restart.
+   *
+   * This is the "plug in an agent" gesture made visible. The registry already
+   * supported it (POST /api/capabilities/reload); nothing in the UI called it,
+   * so the only way to pick up a new folder was to restart the daemon, which
+   * made a pluggable system look like it was not.
+   */
+  const rescan = async () => {
+    setRescanning(true);
+    try {
+      const result = await api.reloadCapabilities();
+      const failed = result.problems.length;
+      onToast(
+        failed
+          ? `${result.reloaded.length} loaded, ${failed} failed. See the banner.`
+          : `${result.reloaded.length} capabilities loaded.`,
+        failed ? "err" : "ok",
+      );
+      reload();
+    } catch (err) {
+      onToast(`Rescan failed: ${(err as Error).message}`, "err");
+    } finally {
+      setRescanning(false);
+    }
+  };
 
   const changeMode = async (entry: RoutingEntry, mode: ExecutionMode) => {
     setSavingType(entry.action_type);
@@ -73,13 +101,24 @@ export function SettingsView({
       {error ? <ErrorBanner error={error} onRetry={reload} /> : null}
 
       <div className="card">
-        <h2>Capabilities</h2>
+        <h2>
+          Capabilities
+          <button className="link" type="button" onClick={rescan} disabled={rescanning}>
+            {rescanning ? "rescanning…" : "Rescan capabilities/"}
+          </button>
+        </h2>
+        <p className="detail-text" style={{ marginTop: 0 }}>
+          Adding one is dropping a folder into <code>capabilities/</code> with a{" "}
+          <code>manifest.yaml</code> and an <code>index.ts</code>. Scaffold it with{" "}
+          <code>pnpm new-capability &lt;id&gt;</code>, then rescan. No restart, no code to
+          register it anywhere.
+        </p>
         {loading && capabilities.length === 0 ? (
           <Skeleton variant="row" count={2} />
         ) : capabilities.length === 0 ? (
           <EmptyState left>
-            No capabilities loaded. Drop a folder with a <code>manifest.yaml</code> into{" "}
-            <code>capabilities/</code>, then restart the daemon.
+            No capabilities loaded. Run <code>pnpm new-capability my-agent</code> to scaffold
+            one, then rescan.
           </EmptyState>
         ) : (
           <div className="agents">

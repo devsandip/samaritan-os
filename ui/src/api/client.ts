@@ -15,6 +15,7 @@ import type {
   LoadProblem,
   Priority,
   RoutingEntry,
+  RunReport,
 } from "./types";
 
 export class ApiError extends Error {
@@ -134,6 +135,19 @@ export const api = {
 
   capabilities: () =>
     request<{ capabilities: CapabilityManifest[]; problems: LoadProblem[] }>("/api/capabilities"),
+
+  /** Fires a capability now. A failed run is a 200 with the reason in the body. */
+  runCapability: (id: string) =>
+    request<RunReport>(`/api/capabilities/${encodeURIComponent(id)}/run`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  /** Re-walks capabilities/ so a folder dropped in is picked up without a restart. */
+  reloadCapabilities: () =>
+    request<{ reloaded: string[]; problems: LoadProblem[] }>("/api/capabilities/reload", {
+      method: "POST",
+    }),
 
   routing: () => request<{ routing: RoutingEntry[] }>("/api/routing").then((r) => r.routing),
 

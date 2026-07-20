@@ -376,3 +376,30 @@ describe("POST /api/capabilities/:id/run", () => {
     expect((forced.json() as RunReport).logs).toEqual(["woke"]);
   });
 });
+
+describe("GET /api/capabilities", () => {
+  it("reports run telemetry so the Dashboard need not approximate it", async () => {
+    const root = writeCapability(
+      "reported",
+      `export async function run() { return { action_items: [], status: "ok", logs: [] }; }`,
+    );
+    const app = createApp({ dbPath: ":memory:", capabilitiesDir: root });
+    const server = buildServer(app);
+    servers.push({ app, server });
+
+    const before = await server.inject({ method: "GET", url: "/api/capabilities" });
+    // Never run is not the same as ran and emitted nothing, and the old
+    // approximation from item timestamps could not tell them apart.
+    expect((before.json() as { capabilities: { last_run_at: string | null }[] }).capabilities[0]!
+      .last_run_at).toBeNull();
+
+    await server.inject({ method: "POST", url: "/api/capabilities/reported/run" });
+
+    const after = await server.inject({ method: "GET", url: "/api/capabilities" });
+    const capability = (
+      after.json() as { capabilities: { last_run_at: string | null; last_run_status: string }[] }
+    ).capabilities[0]!;
+    expect(capability.last_run_status).toBe("ok");
+    expect(capability.last_run_at).toBeTruthy();
+  });
+});

@@ -234,3 +234,41 @@ describe("subscription-watch: refused", () => {
     expect(() => app.routing.update("payment.make", { mode: "automated" })).toThrow();
   });
 });
+
+describe("what the Inbox promises before you decide", () => {
+  it("shows a money-locked item as guided, not automated", async () => {
+    // The manifest declares automated and the adapter is registered, so the
+    // item used to be stored as automated and the card read "Automated — on
+    // approve, this is filed directly". On the one action the system can never
+    // automate. Routing decides this, and now it decides it at ingest too.
+    await runWithFixture("subscription-watch");
+    const items = listActionItems(app.db, { capability_id: "subscription-watch" });
+
+    expect(items.length).toBeGreaterThan(0);
+    for (const item of items) expect(item.execution.mode).toBe("guided");
+  });
+
+  it("matches what dispatch actually does", async () => {
+    const report = await runWithFixture("subscription-watch");
+    const id = report.accepted[0]!.id;
+    const promised = listActionItems(app.db, { capability_id: "subscription-watch" }).find(
+      (i) => i.id === id,
+    )!.execution.mode;
+
+    await app.actionCenter.respond(id, { response_id: "let_it_renew", actor: "sandip" });
+    const row = app.db
+      .prepare<{ mode: string }>("SELECT mode FROM executions WHERE action_item_id = ?")
+      .get(id);
+
+    // The promise and the outcome are the same string. That is the assertion.
+    expect(row?.mode).toBe(promised);
+  });
+
+  it("does not let routing promote past what the manifest asked for", async () => {
+    // note.file routes to automated, but wrap's items declare no action_type,
+    // so nothing here should be able to raise a type above its own ceiling.
+    await runWithFixture("email-triage");
+    const item = listActionItems(app.db, { capability_id: "email-triage" })[0]!;
+    expect(item.execution.mode).toBe("guided");
+  });
+});

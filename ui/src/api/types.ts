@@ -135,6 +135,21 @@ export interface CapabilityManifest {
   timeout_ms: number;
   /** Added by the API on top of the stored manifest. */
   types: CapabilityTypeStatus[];
+  /** Run telemetry, written by the Run Layer. Null until it has ever run. */
+  last_run_at: string | null;
+  last_run_status: string | null;
+}
+
+/** What POST /api/capabilities/:id/run answers with. */
+export interface RunReport {
+  capability_id: string;
+  status: "ok" | "error" | "timeout" | "skipped";
+  error?: string;
+  duration_ms: number;
+  accepted: { id: string; dedupe_key: string; status: string }[];
+  rejected: { errors: string[] }[];
+  logs: string[];
+  missing_inputs: string[];
 }
 
 export interface LoadProblem {

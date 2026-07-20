@@ -99,6 +99,7 @@ export function App() {
               capabilities.reload();
               reloadAll();
             }}
+            onToast={showToast}
           />
         ) : null}
 

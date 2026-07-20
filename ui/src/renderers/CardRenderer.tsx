@@ -27,6 +27,12 @@ export function CardRenderer(props: RendererProps) {
   const secondaryValue = secondary ? draft[secondary] : undefined;
   const showSecondary = secondary && !isBlank(secondaryValue);
 
+  // Filtered before the container is decided, not inside it. Checking
+  // `fields.length` and then dropping the blank ones left an empty bordered box
+  // on any item whose optional attributes were all unset — a wrap note with no
+  // project, owner, due or evidence, which is most of them.
+  const visible = fields.filter((field) => editing || !isBlank(field.value));
+
   return (
     <>
       {showSecondary ? (
@@ -49,20 +55,18 @@ export function CardRenderer(props: RendererProps) {
         </div>
       ) : null}
 
-      {fields.length > 0 ? (
+      {visible.length > 0 ? (
         <div className="dcard">
-          {fields
-            .filter((field) => editing || !isBlank(field.value))
-            .map((field) => (
-              <Field
-                key={field.name}
-                name={field.name}
-                value={field.value}
-                declared={field.declared}
-                editing={editing}
-                onChange={(value) => onChange(field.name, value)}
-              />
-            ))}
+          {visible.map((field) => (
+            <Field
+              key={field.name}
+              name={field.name}
+              value={field.value}
+              declared={field.declared}
+              editing={editing}
+              onChange={(value) => onChange(field.name, value)}
+            />
+          ))}
         </div>
       ) : null}
     </>

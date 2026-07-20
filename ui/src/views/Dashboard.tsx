@@ -2,12 +2,18 @@
  * Dashboard (UI-SPEC §5.1) — "what's the state of my world" in one screenful.
  *
  * Every number here is derived from data the views below it already fetch, so
- * the Dashboard can never disagree with the Inbox. Two things §5.1 asks for are
- * approximated and say so on screen rather than being faked: the agent grid's
- * "last run" (no run-layer telemetry exists yet, `src/run-layer/` is empty), and
- * the auto-handled feed, which is reconstructed from items that reached
- * `executed` without ever being pending long enough to need Sandip.
+ * the Dashboard can never disagree with the Inbox.
+ *
+ * "Last run" used to be approximated from item timestamps because no run-layer
+ * telemetry existed. It now comes from the `capabilities` row the Run Layer
+ * writes, so a capability that ran and emitted nothing is distinguishable from
+ * one that never ran, which the approximation could not do.
+ *
+ * The auto-handled feed is still reconstructed, from items that reached
+ * `executed` without ever waiting on Sandip.
  */
+import { useState } from "react";
+import { api } from "../api/client";
 import type { ActionItem, CapabilityManifest, LoadProblem } from "../api/types";
 import type { ApiError } from "../api/client";
 import { EmptyState, ErrorBanner, Skeleton, SkeletonRows } from "../components/states";
@@ -27,6 +33,7 @@ export function DashboardView({
   loading,
   error,
   reload,
+  onToast,
 }: {
   inbox: ActionItem[] | undefined;
   deferred: ActionItem[] | undefined;
@@ -37,6 +44,7 @@ export function DashboardView({
   loading: boolean;
   error: ApiError | undefined;
   reload: () => void;
+  onToast: (message: string, variant?: "ok" | "err") => void;
 }) {
   const items = [...(inbox ?? [])].sort(byPriorityThenNewest);
   const urgent = items.filter((item) => item.priority === "urgent" || item.priority === "high");
@@ -119,43 +127,15 @@ export function DashboardView({
           </EmptyState>
         ) : (
           <div className="agents">
-            {capabilities.map((capability) => {
-              const degraded = capability.types?.some((type) => type.degraded_reason);
-              const pending = pendingByCapability.get(capability.id) ?? 0;
-              return (
-                <div
-                  className={degraded ? "agent err" : "agent"}
-                  key={capability.id}
-                  title={capability.description}
-                >
-                  <div className="top">
-                    <StatusDot
-                      state={!capability.enabled ? "idle" : degraded ? "err" : "ok"}
-                      label={!capability.enabled ? "disabled" : degraded ? "degraded" : "active"}
-                    />
-                    <b>{capability.name}</b>
-                  </div>
-                  <div className="meta">
-                    {capability.trigger.mode}
-                    {capability.trigger.command ? ` (${capability.trigger.command})` : ""} ·{" "}
-                    {capability.enabled ? "enabled" : "disabled"}
-                    <br />
-                    {pending > 0 ? (
-                      <span className="pend">{pending} waiting for you</span>
-                    ) : (
-                      "nothing waiting"
-                    )}
-                    {degraded ? (
-                      <>
-                        <br />
-                        degraded to guided:{" "}
-                        {capability.types.find((type) => type.degraded_reason)?.degraded_reason}
-                      </>
-                    ) : null}
-                  </div>
-                </div>
-              );
-            })}
+            {capabilities.map((capability) => (
+              <AgentCard
+                key={capability.id}
+                capability={capability}
+                pending={pendingByCapability.get(capability.id) ?? 0}
+                onRan={reload}
+                onToast={onToast}
+              />
+            ))}
           </div>
         )}
       </div>
@@ -268,5 +248,96 @@ function isToday(item: ActionItem): boolean {
     at.getFullYear() === now.getFullYear() &&
     at.getMonth() === now.getMonth() &&
     at.getDate() === now.getDate()
+  );
+}
+
+/**
+ * One capability (UI-SPEC §6.3), with the ability to fire it.
+ *
+ * "Run now" is the only place in the UI that makes something happen without an
+ * action item existing first, and it is deliberately not an exception to the
+ * review gate: the run emits, policy decides, and whatever needed a human turns
+ * up in the Inbox a moment later. Running an agent and approving its output
+ * stay two separate acts.
+ *
+ * `last run` comes from the Run Layer's telemetry rather than being inferred
+ * from item timestamps, which is what this card used to do.
+ */
+function AgentCard({
+  capability,
+  pending,
+  onRan,
+  onToast,
+}: {
+  capability: CapabilityManifest;
+  pending: number;
+  onRan: () => void;
+  onToast: (message: string, variant?: "ok" | "err") => void;
+}) {
+  const [running, setRunning] = useState(false);
+
+  const degraded = capability.types?.some((type) => type.degraded_reason);
+  const failed = capability.last_run_status && capability.last_run_status !== "ok";
+  const state = !capability.enabled ? "idle" : degraded || failed ? "err" : "ok";
+
+  const run = async () => {
+    setRunning(true);
+    try {
+      const report = await api.runCapability(capability.id);
+      const waiting = report.accepted.filter((a) => a.status === "pending").length;
+      const auto = report.accepted.filter((a) => a.status === "executed").length;
+
+      if (report.status !== "ok") {
+        onToast(`${capability.name}: ${report.error ?? report.status}`, "err");
+      } else if (!report.accepted.length) {
+        // A run that emits nothing is a normal outcome, not a failure. Triage
+        // deciding three messages need no reply is the system working.
+        onToast(`${capability.name} ran, nothing to surface`);
+      } else {
+        const parts = [
+          waiting ? `${waiting} for you` : "",
+          auto ? `${auto} handled automatically` : "",
+        ].filter(Boolean);
+        onToast(`${capability.name}: ${parts.join(", ")}`);
+      }
+      onRan();
+    } catch (err) {
+      onToast(`Could not run ${capability.name}: ${(err as Error).message}`, "err");
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return (
+    <div className={state === "err" ? "agent err" : "agent"} title={capability.description}>
+      <div className="top">
+        <StatusDot
+          state={state}
+          label={!capability.enabled ? "disabled" : degraded ? "degraded" : "active"}
+        />
+        <b>{capability.name}</b>
+        <button className="link" type="button" onClick={run} disabled={running}>
+          {running ? "running…" : "Run now"}
+        </button>
+      </div>
+      <div className="meta">
+        {capability.trigger.mode}
+        {capability.trigger.command ? ` (${capability.trigger.command})` : ""} ·{" "}
+        {capability.last_run_at
+          ? `last run ${relativeTime(capability.last_run_at)}${
+              failed ? ` (${capability.last_run_status})` : ""
+            }`
+          : "never run"}
+        <br />
+        {pending > 0 ? <span className="pend">{pending} waiting for you</span> : "nothing waiting"}
+        {degraded ? (
+          <>
+            <br />
+            degraded to guided:{" "}
+            {capability.types.find((type) => type.degraded_reason)?.degraded_reason}
+          </>
+        ) : null}
+      </div>
+    </div>
   );
 }
