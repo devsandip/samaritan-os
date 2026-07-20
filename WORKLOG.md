@@ -119,3 +119,48 @@ Append-only session archive. Newest at the bottom.
 - Corrected the spec instead of logging a deviation in `DECISIONS.md`. That file
   is for build-time choices that depart from a spec that stays right. Section 5.1
   was wrong: following it as written produces the duplicate.
+
+## 2026-07-20 — Merged to main, restarted the daemon, and the defer feature ran for the first time
+
+**Did:**
+- Rebased `claude/what-next-89afb8` onto main. Nothing to replay: all four of its
+  commits were already in main via the `heuristic-shirley` merge, which was built
+  on top of this branch rather than beside it. Pure fast-forward, no conflicts.
+- Verified the merge independently before touching anything, rather than trusting
+  the handoff: confirmed each of the four commits is an ancestor of main, that the
+  branch had nothing unique, and that the tree was clean.
+- Restarted the daemon. It had been up 13.5 hours, not in watch mode, running
+  pre-merge code. The restart applied migration 3, so `defer_until` and
+  `idx_action_items_defer_until` now exist in the live store.
+- Ran the full suite against the merged state here: 183 passing, typecheck clean.
+- Wrote the week 30 journal entry and a postscript on the W29 summary.
+
+**State now:**
+- Main at `eb40f95`, pushed. `claude/what-next-89afb8` is identical to it.
+  `claude/heuristic-shirley-e076a9` and its worktree are gone.
+- Daemon live on 127.0.0.1:4173 from the main worktree, pids 16032/16057/16063,
+  stdout appending to `~/Library/Logs/samaritan/serve-stdout.log`. Health green,
+  2 capabilities, 0 problems.
+- Live store on migration 3. `action_items` still empty, so nothing has exercised
+  the sweep with real rows yet.
+- Recall is still the last unbuilt v0 piece.
+
+**Next:**
+- Recall, section 7. Unblocks Ask-Samaritan, which is a placeholder in the UI.
+- Consider making the merged-versus-running gap visible: either a restart step
+  next to the merge, or have `/healthz` report schema version and build commit.
+  Nothing surfaced that the daemon was 13 hours behind main.
+- Cross-read `awaiting_confirmation` and the reopen path for the same failure
+  mode that produced the deferred bug, per the other session's note: TECH-SPEC
+  and UI-SPEC disagreeing about one status.
+
+**Decisions:**
+- Appended a postscript to the W29 weekly summary instead of editing its body.
+  Two of its claims went stale within a day, but they were true when written and
+  the summaries are meant to be frozen. A dated addendum corrects the record
+  without rewriting what I believed at the time.
+- Corrected yesterday's claim that the tilde bug was live via `logging.dir`.
+  Nothing reads that key, so it could never have fired. The bug needed a config
+  that omits the `paths` section, and the real one does not. Blast radius on this
+  machine was zero. The fix and its regression test still stand, since a trimmed
+  config is a reasonable thing for a future install to have.

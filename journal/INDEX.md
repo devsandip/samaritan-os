@@ -1,8 +1,8 @@
 # Samaritan — Journal Index
 
-Last refreshed: 2026-07-20 09:42
+Last refreshed: 2026-07-20 10:08
 
-Latest entry: [2026-07-20-0942-snooze-survives-reingest](entries/2026-07-20-0942-snooze-survives-reingest.md)
+Latest entry: [2026-07-20-1008-merged-and-first-contact](entries/2026-07-20-1008-merged-and-first-contact.md)
 
 Local-first personal agentic OS. The Action Center is a universal
 human-in-the-loop layer and a pluggable capability platform: one inbox for
@@ -11,8 +11,8 @@ everything that needs me.
 ## Where we are now
 
 v0 is complete and verified against the real Notion workspace. Ten commits,
-public at github.com/devsandip/samaritan-os. The whole thing was built today
-from a design suite that was already written.
+public at github.com/devsandip/samaritan-os. The whole thing was built in one
+sitting on 2026-07-19, from a design suite that was already written.
 
 The anchor works. `wrap` and `meeting` no longer write to Notion or TickTick
 directly. They extract as before and emit to the Action Center, where each item
@@ -23,24 +23,31 @@ sentence.
 
 The stack is Node with `node:sqlite` (not better-sqlite3, which has no Node 26
 prebuild), Fastify, zod contracts with types inferred from the schemas, and a
-React SPA served from the same origin. 119 tests. The Inbox renders items by
-dispatching on `render.layout`, so no UI code knows the name of any capability.
+React SPA served from the same origin. The Inbox renders items by dispatching on
+`render.layout`, so no UI code knows the name of any capability.
 
 Notion is live end to end. Telegram is written, tested and parked, disabled by
 default. Recall is not started, so Ask-Samaritan is a placeholder in the UI.
 
-Since v0 closed, the lifecycle gaps have been filled on branches rather than on
-main. `claude/what-next-89afb8` carries four commits: defer and resurface so a
-snooze is no longer a one-way door, a universal dismiss for items whose
-capability was unloaded, multi-status filtering on `GET /api/actions`, and tilde
-expansion in config path defaults. `claude/heuristic-shirley-e076a9` contains
-all four plus the re-ingest fix below. 183 tests on that branch.
+The lifecycle gaps that v0 left open are now closed and merged. Main is at
+`eb40f95` and pushed: defer and resurface so a snooze is no longer a one-way
+door, a universal dismiss for items whose capability was unloaded, multi-status
+filtering on `GET /api/actions`, tilde expansion in config path defaults, and
+the re-ingest fix that keeps a snooze through a supersede. 183 tests. Both
+feature branches are resolved, one deleted and one now identical to main.
 
-Main is still at the v0 tip. Two branches now point at overlapping work, one
-strictly containing the other, and neither is merged.
+The daemon runs that code as of this morning, which is also when migration 3
+first reached the live store. Until the restart it was thirteen hours behind
+main and the `defer_until` column did not exist, so the defer work had never
+executed against real data despite being written, tested and merged. The
+database is empty of action items, so the sweep has still not run with real
+rows in it.
 
 ## Recent entries
 
+- [2026-07-20-1008-merged-and-first-contact](entries/2026-07-20-1008-merged-and-first-contact.md)
+  — everything merged to main, and the restart that finally ran migration 3
+  against the live store
 - [2026-07-20-0942-snooze-survives-reingest](entries/2026-07-20-0942-snooze-survives-reingest.md)
   — deferred was on the wrong side of the settled partition, so a re-ingest
   orphaned the snoozed row and it woke as a duplicate
@@ -62,6 +69,10 @@ strictly containing the other, and neither is merged.
   stripping them has already turned two silent shape mismatches into loud ones.
 - Tests catch logic errors; only contact with the real system catches
   integration errors. A green suite is not evidence that something works.
+- Merged is not running. There is no deploy step, the daemon is not in watch
+  mode, and migrations apply on boot, so a merge changes nothing until something
+  restarts the process and nothing announces the difference. Worth surfacing the
+  schema version and build commit on `/healthz` rather than remembering.
 - A wrong classification sits harmless until something starts reading it.
   `deferred` was on the settled side of the partition from the day the contracts
   were written, and it cost nothing until `resurface()` gave it a reader. Worth
@@ -70,10 +81,6 @@ strictly containing the other, and neither is merged.
 
 ## Open questions
 
-- Are any rows in the live store already orphaned by the old re-ingest
-  behaviour? A deferred row with a `:superseded:` suffix in its dedupe key is
-  the fingerprint, but a legitimate failed to pending to deferred row matches it
-  too, so this needs a look rather than a blind sweep.
 - Should policy auto-complete be allowed to break through a snooze? It can
   today, on the grounds that a deferred item should not be more protected than a
   fresh one. The opposite rule, that an explicit "not now" outranks everything,
@@ -99,3 +106,8 @@ strictly containing the other, and neither is merged.
   for the MCP tool, not database ids for the REST API. Ask the API instead.
 - Denylisting built-ins in the expr-eval sandbox. They live in three separate
   tables and removing the obvious one leaves callables behind. Allowlist.
+- Rows orphaned in the live store by the old re-ingest behaviour. There are
+  none, and there could not have been: checked read-only on 2026-07-20 and the
+  live database was still on migration 2, so `defer_until` did not exist and
+  `resurface()` had never run. The read was real rather than an empty-result
+  artifact, since `capabilities` returned its two rows from the same connection.

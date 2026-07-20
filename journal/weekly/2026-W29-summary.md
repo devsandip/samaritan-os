@@ -56,3 +56,20 @@ a latent misclassification into a live bug. `deferred` had been on the settled
 side of the re-ingest partition since the first commit, harmless because nothing
 ever woke a deferred row. Adding the sweep gave it a reader. That became the
 first thing found in week 30.
+
+## Postscript, added 2026-07-20 10:08
+
+Two claims above were true when written and are not any more. Noting them here
+rather than editing the body, so the record still says what I believed at the
+time.
+
+"All four sit on a branch. None of it is merged." Merged on the Monday morning,
+along with the week 30 re-ingest fix. Main went from `3bd7df2` to `eb40f95` in
+one fast-forward and was pushed.
+
+The section on the lifecycle gaps reads as though the work was finished on the
+Sunday. It compiled and passed on the Sunday. It did not run. The daemon was not
+in watch mode and the live database was still on migration 2, so `defer_until`
+did not exist and `resurface()` had never executed against real data until the
+Monday restart. Week 29 built the feature. Week 30 is where it first existed
+outside a test.
