@@ -75,9 +75,10 @@ function reasonText(event: ActionItemEvent): string | undefined {
   if (reason === "reingest_held_awaiting_confirmation") {
     return (
       "The capability re-sent this item with newer content. Samaritan had already " +
-      "staged the earlier version, so the row was left untouched rather than " +
-      'overwritten. Use "Didn\'t do it" if that handoff is void, and the newer ' +
-      "content will land on the next run."
+      "staged the version above, so the item was left exactly as it is rather " +
+      'than overwritten. If that handoff is void, press "Didn\'t do it": the ' +
+      "newer content lands the next time the capability runs, and approving it " +
+      "then stages it for real rather than pointing you back at this one."
     );
   }
   if (reason === "confirmed by hand") return undefined;
@@ -138,7 +139,12 @@ export function AuditTrail({
             <div className="headline">
               <span className="who">{headline(event)}</span>{" "}
               <span className="from">
-                {event.from_status ? `(${event.from_status} → ${event.to_status})` : `(new → ${event.to_status})`}
+                {event.from_status === null
+                  ? `(new → ${event.to_status})`
+                  : event.from_status === event.to_status
+                    ? // Not a move, so an arrow pointing at itself is noise.
+                      `(${event.to_status}, unchanged)`
+                    : `(${event.from_status} → ${event.to_status})`}
               </span>
             </div>
             <div className="sub">

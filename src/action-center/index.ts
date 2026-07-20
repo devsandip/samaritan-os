@@ -206,10 +206,22 @@ export class ActionCenter {
       // unanswered handoff would make the amber chip claim "we staged X" over
       // content that now reads X'. "Didn't do it" (`POST /reopen`) is how he
       // says the handoff is void, and the next re-ingest lands normally.
+      // Same {slot: {from, to}} shape every other event uses. The trail's
+      // renderer probes `slot.from`, so a bare value stores the withheld
+      // revision in a form the one surface built to read it cannot.
+      const withheld: Record<string, unknown> = {};
+      if (JSON.stringify(draft.context) !== JSON.stringify(existing.context)) {
+        withheld["context"] = { from: existing.context, to: draft.context };
+      }
+      if (JSON.stringify(draft.custom) !== JSON.stringify(existing.custom)) {
+        withheld["custom"] = { from: existing.custom, to: draft.custom };
+      }
       noteAgainstItem(db, existing, {
         actor: "capability",
         reason: "reingest_held_awaiting_confirmation",
-        payload_diff: { context: draft.context, custom: draft.custom },
+        // A re-emission of identical content is a no-op worth recording as one,
+        // matching branch 2, which writes no diff when nothing changed.
+        ...(Object.keys(withheld).length ? { payload_diff: withheld } : {}),
       });
       logger.info(
         { id: existing.id, type: existing.type },
@@ -345,9 +357,7 @@ export class ActionCenter {
       capability: capabilityId,
       mode,
       payload: item.execution.payload,
-      // The item id is stable across retries of the same approval, which is
-      // exactly the idempotency scope §10 asks for.
-      idempotency_key: item.id,
+      idempotency_key: dispatchKey(db, item),
     });
 
     if (result.status === "succeeded") {
@@ -587,6 +597,32 @@ export function expiresAt(ttl: string | null, from = new Date()): string | null 
  * How long a defer response snoozes for when its manifest does not say. A day
  * matches the label the shipped capabilities use ("Snooze 1 day").
  */
+/**
+ * The idempotency key for dispatching this item (§10).
+ *
+ * The item id alone over-scopes it. §10 wants a key stable across *retries of
+ * the same approval*, and the id is stable for the item's entire life, so once
+ * an approval has staged, the registry replays that attempt forever and a
+ * genuinely different version of the same item can never be dispatched at all.
+ * That turns "Didn't do it, here is the revised version" into a card showing the
+ * new content over instructions for the old, which is worse than refusing it.
+ *
+ * So the key carries a generation: how many times a dispatch on this item has
+ * been declared void. `POST /reopen` is the only thing that says so, and it is
+ * Sandip saying it by hand. A retry after a failure does not bump it, because
+ * that genuinely is the same approval, which is the case the guard exists for.
+ */
+export function dispatchKey(db: Db, item: ActionItem): string {
+  const row = db
+    .prepare<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM action_item_events
+        WHERE action_item_id = ?
+          AND from_status = 'awaiting_confirmation' AND to_status = 'pending'`,
+    )
+    .get(item.id);
+  return `${item.id}:${row?.n ?? 0}`;
+}
+
 export const DEFAULT_DEFER_FOR = "1d";
 
 /**

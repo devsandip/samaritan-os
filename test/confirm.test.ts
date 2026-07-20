@@ -18,6 +18,7 @@ import {
   listActionItems,
   listAuditTrail,
 } from "../src/store/action-items.js";
+import { dispatchKey } from "../src/action-center/index.js";
 import { harness, wrapItem, type Harness } from "./helpers.js";
 
 /** A wrap draft whose `kind` routes to an adapter that stages rather than commits. */
@@ -237,6 +238,85 @@ describe("the way through", () => {
     const after = getActionItem(h.db, id)!;
     expect(after.status).toBe("pending");
     expect(after.custom["title"]).toBe("Send the vendor the REVISED scope");
+  });
+
+  it("actually dispatches the revision, rather than replaying the old one", async () => {
+    const h = harness();
+    const id = await dispatched(h);
+
+    await h.actionCenter.ingest("wrap", [revisedDraft()]);
+    h.actionCenter.reopen(id, { reason: "did not do it" });
+    await h.actionCenter.ingest("wrap", [revisedDraft()]);
+    const restaged = await h.actionCenter.respond(id, { response_id: "approve" });
+
+    // The whole point of the documented route. Keying idempotency on the item id
+    // alone made this replay the first attempt forever: the card showed the new
+    // title over instructions for the old task, and the adapter was never called
+    // for the revision. Worse than refusing the revision outright, because it
+    // reads as though the new version was staged.
+    expect(restaged.status).toBe("awaiting_confirmation");
+    expect(restaged.execution.payload["_guided_instructions"]).toContain("REVISED");
+    expect(restaged.execution.payload["_guided_instructions"]).not.toContain(
+      "Send the vendor the revised scope",
+    );
+
+    const attempts = h.db
+      .prepare<{ n: number }>("SELECT COUNT(*) AS n FROM executions WHERE action_item_id = ?")
+      .get(id);
+    expect(attempts?.n).toBe(2);
+  });
+
+  it("still replays rather than re-dispatching within one approval", async () => {
+    const h = harness();
+    const id = await dispatched(h);
+
+    // A retry of the *same* approval is what §10's guard exists for, and it must
+    // keep working: no reopen, so no new generation, so the adapter stays uncalled.
+    const key = dispatchKey(h.db, getActionItem(h.db, id)!);
+    const replay = await h.execution.execute({
+      action_item_id: id,
+      capability: "ticktick.task.create",
+      mode: "guided",
+      payload: getActionItem(h.db, id)!.execution.payload,
+      idempotency_key: key,
+    });
+
+    expect(replay.status).toBe("staged");
+    expect(replay.guided_link).toBe("ticktick://");
+    const attempts = h.db
+      .prepare<{ n: number }>("SELECT COUNT(*) AS n FROM executions WHERE action_item_id = ?")
+      .get(id);
+    expect(attempts?.n).toBe(1);
+  });
+
+  it("files the withheld revision in the shape the trail can read", async () => {
+    const h = harness();
+    const id = await dispatched(h);
+
+    await h.actionCenter.ingest("wrap", [revisedDraft()]);
+
+    // Every other event stores {slot: {from, to}}, and the renderer probes
+    // `slot.from`. A bare value stores the revision where the one surface built
+    // to show it cannot find it.
+    const held = listAuditTrail(h.db, id).find(
+      (e) => e.reason === "reingest_held_awaiting_confirmation",
+    );
+    const custom = held?.payload_diff?.["custom"] as { from?: unknown; to?: unknown };
+    expect(custom?.from).toBeDefined();
+    expect(JSON.stringify(custom?.to)).toContain("REVISED");
+  });
+
+  it("records no diff when the re-emission changed nothing", async () => {
+    const h = harness();
+    const id = await dispatched(h);
+
+    await h.actionCenter.ingest("wrap", [taskDraft()]);
+
+    const held = listAuditTrail(h.db, id).find(
+      (e) => e.reason === "reingest_held_awaiting_confirmation",
+    );
+    expect(held).toBeDefined();
+    expect(held?.payload_diff).toBeUndefined();
   });
 
   it("still supersedes a pending item in place, unchanged", async () => {

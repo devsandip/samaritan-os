@@ -281,7 +281,7 @@ describe("audit completeness", () => {
     expect(trail[1]!.reason).toContain("approve");
   });
 
-  it("records an execution row with the item id as the idempotency key", async () => {
+  it("records an execution row keyed to the item and its dispatch generation", async () => {
     const h = harness();
     const { accepted } = await h.actionCenter.ingest("wrap", [wrapItem()]);
     const id = accepted[0]!.id;
@@ -292,6 +292,9 @@ describe("audit completeness", () => {
         "SELECT idempotency_key, status, attempt FROM executions WHERE action_item_id = ?",
       )
       .get(id);
-    expect(row).toMatchObject({ idempotency_key: id, status: "succeeded", attempt: 1 });
+    // The generation suffix is what lets a reopened item dispatch a genuinely
+    // different version instead of replaying the first attempt forever. It is 0
+    // here because nothing has been reopened. See test/confirm.test.ts.
+    expect(row).toMatchObject({ idempotency_key: `${id}:0`, status: "succeeded", attempt: 1 });
   });
 });

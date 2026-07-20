@@ -65,7 +65,13 @@ try {
   const result = await emit(capabilityId, items as Record<string, unknown>[]);
 
   const escalated = result.accepted.filter((a) => a.status === "pending");
-  const auto = result.accepted.filter((a) => a.status !== "pending");
+  // Held by §5.1 branch 2a: already dispatched, so this emission was recorded
+  // and not applied. Bucketing on "not pending" would file it under
+  // auto-completed, which reports the opposite of what happened.
+  const held = result.accepted.filter((a) => a.status === "awaiting_confirmation");
+  const auto = result.accepted.filter(
+    (a) => a.status !== "pending" && a.status !== "awaiting_confirmation",
+  );
 
   console.log(
     `Emitted ${result.accepted.length}/${items.length} item(s) from "${capabilityId}".`,
@@ -73,6 +79,12 @@ try {
   if (escalated.length) {
     console.log(`\n${escalated.length} awaiting review in the Inbox:`);
     for (const a of escalated) console.log(`  ${a.id}  ${a.policy?.reason ?? ""}`);
+  }
+  if (held.length) {
+    console.log(`\n${held.length} held: already dispatched and waiting on you.`);
+    console.log(`  The newer content was recorded but not applied.`);
+    console.log(`  Use "Didn't do it" in the Inbox to void the handoff first.`);
+    for (const a of held) console.log(`  ${a.id}`);
   }
   if (auto.length) {
     console.log(`\n${auto.length} auto-completed by policy:`);
