@@ -6,6 +6,15 @@ allowBuilds:
   # vitest's transform layer. Its install script links a prebuilt platform
   # binary; there is no build from source.
   esbuild: true
-  onnxruntime-node: set this to true or false
-  protobufjs: set this to true or false
-  sharp: set this to true or false
+
+  # The local embedder's ONNX runtime (§7). Its install script links a prebuilt
+  # native binary; blocked, `@huggingface/transformers` silently falls back to
+  # WASM, which is several times slower for the same result. Allowed, because a
+  # slow path nobody can see is worse than a build script.
+  onnxruntime-node: true
+
+  # Pulled in by the transformers stack. protobufjs's script only generates CLI
+  # helper bundles and sharp's fetches an image-processing binary we never call:
+  # Recall indexes text, never images. Neither is needed, so neither runs.
+  protobufjs: false
+  sharp: false
