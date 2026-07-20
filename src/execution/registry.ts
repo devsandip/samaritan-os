@@ -45,6 +45,8 @@ interface ExecutionRow {
   attempt: number;
   result_json: string | null;
   error: string | null;
+  guided_link: string | null;
+  guided_instructions: string | null;
 }
 
 export class Registry implements ExecutionRegistryContract {
@@ -142,6 +144,13 @@ export class Registry implements ExecutionRegistryContract {
       return {
         status: settled.status as ExecutionResult["status"],
         ...(settled.result_json ? { result: JSON.parse(settled.result_json) } : {}),
+        // A staged replay without these is a "staged" the caller cannot act on:
+        // the link is the whole point of the result, and re-deriving it means
+        // dispatching again, which is the one thing the replay exists to avoid.
+        ...(settled.guided_link ? { guided_link: settled.guided_link } : {}),
+        ...(settled.guided_instructions
+          ? { guided_instructions: settled.guided_instructions }
+          : {}),
       };
     }
 
@@ -178,12 +187,17 @@ export class Registry implements ExecutionRegistryContract {
 
     this.db
       .prepare(
-        "UPDATE executions SET status = ?, result_json = ?, error = ?, finished_at = ? WHERE id = ?",
+        `UPDATE executions
+            SET status = ?, result_json = ?, error = ?,
+                guided_link = ?, guided_instructions = ?, finished_at = ?
+          WHERE id = ?`,
       )
       .run(
         result.status,
         result.result ? JSON.stringify(result.result) : null,
         result.error ?? null,
+        result.guided_link ?? null,
+        result.guided_instructions ?? null,
         nowIso(),
         executionId,
       );

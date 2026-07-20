@@ -207,4 +207,17 @@ CREATE INDEX idx_action_items_defer_until
   ON action_items(defer_until) WHERE defer_until IS NOT NULL;
 `,
   },
+  {
+    version: 4,
+    name: "execution_guided_fields",
+    sql: `
+-- A staged execution's deep link and instructions are top-level on
+-- ExecutionResult, but only result.result was persisted, so both were dropped
+-- on write. The registry replays a settled attempt instead of re-running the
+-- adapter (§10), and a replay that cannot return the link hands back a "staged"
+-- result with nothing to open.
+ALTER TABLE executions ADD COLUMN guided_link TEXT;
+ALTER TABLE executions ADD COLUMN guided_instructions TEXT;
+`,
+  },
 ];

@@ -253,3 +253,30 @@ describe("the way through", () => {
     expect(listActionItems(h.db, {})).toHaveLength(1);
   });
 });
+
+describe("the registry's replay", () => {
+  it("carries the deep link, not just the result", async () => {
+    const h = harness();
+    const id = await dispatched(h);
+    const payload = getActionItem(h.db, id)!.execution.payload;
+
+    // §10 replays a settled attempt rather than calling the adapter again. Only
+    // `result.result` was persisted, so `guided_link` and `guided_instructions`
+    // were dropped on write and a replay handed back a "staged" with nothing to
+    // open. Today nothing user-facing depends on it, because execute() spreads
+    // the item's existing payload over the result and the old link survives by
+    // accident. That is a coincidence, not a design, and the branch 2a hold is
+    // what keeps it true.
+    const replay = await h.execution.execute({
+      action_item_id: id,
+      capability: "ticktick.task.create",
+      mode: "guided",
+      payload,
+      idempotency_key: id,
+    });
+
+    expect(replay.status).toBe("staged");
+    expect(replay.guided_link).toBe("ticktick://");
+    expect(replay.guided_instructions).toBeTruthy();
+  });
+});
