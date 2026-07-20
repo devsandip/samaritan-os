@@ -1,8 +1,8 @@
 # Samaritan — Journal Index
 
-Last refreshed: 2026-07-19 20:31
+Last refreshed: 2026-07-20 09:42
 
-Latest entry: [2026-07-19-2031-bootstrap](entries/2026-07-19-2031-bootstrap.md)
+Latest entry: [2026-07-20-0942-snooze-survives-reingest](entries/2026-07-20-0942-snooze-survives-reingest.md)
 
 Local-first personal agentic OS. The Action Center is a universal
 human-in-the-loop layer and a pluggable capability platform: one inbox for
@@ -29,14 +29,28 @@ dispatching on `render.layout`, so no UI code knows the name of any capability.
 Notion is live end to end. Telegram is written, tested and parked, disabled by
 default. Recall is not started, so Ask-Samaritan is a placeholder in the UI.
 
+Since v0 closed, the lifecycle gaps have been filled on branches rather than on
+main. `claude/what-next-89afb8` carries four commits: defer and resurface so a
+snooze is no longer a one-way door, a universal dismiss for items whose
+capability was unloaded, multi-status filtering on `GET /api/actions`, and tilde
+expansion in config path defaults. `claude/heuristic-shirley-e076a9` contains
+all four plus the re-ingest fix below. 183 tests on that branch.
+
+Main is still at the v0 tip. Two branches now point at overlapping work, one
+strictly containing the other, and neither is merged.
+
 ## Recent entries
 
+- [2026-07-20-0942-snooze-survives-reingest](entries/2026-07-20-0942-snooze-survives-reingest.md)
+  — deferred was on the wrong side of the settled partition, so a re-ingest
+  orphaned the snoozed row and it woke as a duplicate
 - [2026-07-19-2031-bootstrap](entries/2026-07-19-2031-bootstrap.md) — v0 built
   in one sitting, from design docs to a working review gate
 
 ## Weekly summaries
 
-None yet. Week 29 has one entry; the summary is due Monday.
+None yet. Week 29 has one entry and its summary is due now that week 30 has
+started.
 
 ## Working hypotheses
 
@@ -48,8 +62,22 @@ None yet. Week 29 has one entry; the summary is due Monday.
   stripping them has already turned two silent shape mismatches into loud ones.
 - Tests catch logic errors; only contact with the real system catches
   integration errors. A green suite is not evidence that something works.
+- A wrong classification sits harmless until something starts reading it.
+  `deferred` was on the settled side of the partition from the day the contracts
+  were written, and it cost nothing until `resurface()` gave it a reader. Worth
+  suspecting the same shape elsewhere when adding a sweep or a new consumer of
+  an existing enum.
 
 ## Open questions
+
+- Are any rows in the live store already orphaned by the old re-ingest
+  behaviour? A deferred row with a `:superseded:` suffix in its dedupe key is
+  the fingerprint, but a legitimate failed to pending to deferred row matches it
+  too, so this needs a look rather than a blind sweep.
+- Should policy auto-complete be allowed to break through a snooze? It can
+  today, on the grounds that a deferred item should not be more protected than a
+  fresh one. The opposite rule, that an explicit "not now" outranks everything,
+  is also defensible.
 
 - Is one action-item type per capability with a `kind` discriminator right, or
   would four separate types have been cleaner? The dispatching adapter stays a
