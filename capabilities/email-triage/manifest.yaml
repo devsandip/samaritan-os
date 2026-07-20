@@ -1,0 +1,88 @@
+# Email Triage (TECH-SPEC §11(b)).
+#
+# The sequence flow from the spec, built. Its job in the roster is the assisted
+# loop, which is the only one that does not finish when Sandip clicks approve:
+# the OS stages a draft, hands it over, and the item sits in
+# `awaiting_confirmation` until he says he sent it. That state is the honest
+# answer to "did this happen?" when the answer lives in someone else's system.
+#
+# It is also the roster's demonstration of §10 degradation, and this one is not
+# staged. `gmail.draft.create` genuinely does not exist: no Gmail adapter is
+# registered, so the loader drops this type to guided, the Settings page shows
+# why, and executing it renders a copy-ready draft instead of failing. The
+# manifest keeps declaring `assisted` on purpose. The day a Gmail adapter
+# registers under that id, this promotes itself with no edit here (§10).
+#
+# Nothing in this capability sends anything. §9 connects Gmail read+compose
+# rather than send precisely so that it cannot.
+
+id: email-triage
+name: Email Triage
+description: >-
+  Reads incoming mail, decides what actually needs a reply, and drafts one for
+  review. Never sends.
+version: 0.1.0
+owner: sandip
+enabled: true
+entrypoint: index.ts
+
+trigger:
+  mode: event
+  on: [email.received]
+
+context:
+  requires: [projects.active, people.known]
+  inputs: [email.message]
+  memory: [recall]
+
+emits:
+  - type: email-reply-review
+    render:
+      # form, not card: the draft is the point and it has to be editable in
+      # place. An edit here becomes a payload_diff on the audit trail (§4.5),
+      # so what Sandip changed is recorded, not just that he approved.
+      layout: form
+      primary: subject
+      secondary: thread_summary
+      badges: [from, urgency]
+
+    custom_attributes:
+      from: string
+      subject: string
+      thread_summary: string
+      draft_body: string
+      urgency: string # routine | timely | urgent
+      asks: string[]
+
+    responses:
+      - { id: send_reply, label: "Send it", outcome: execute }
+      - { id: draft_only, label: "Just draft it", outcome: guided }
+      - { id: no_reply, label: "No reply needed", outcome: discard }
+      - { id: defer, label: "Later today", outcome: defer, defer_for: 4h }
+
+    execution:
+      mode: assisted
+      capability: gmail.draft.create
+
+    policy:
+      # Unconditional, and not because the capability is unsure. §5.6 puts
+      # sending email in the always-escalate class regardless of confidence:
+      # the blast radius of a wrong send is someone else's inbox, and it is not
+      # recoverable. trigger_reason on these items is "action_type" for exactly
+      # this reason.
+      escalate_when: "true"
+
+    priority: normal
+    # A reply that has waited two days is no longer the reply you would send.
+    # Expiring it is more honest than letting it rot at the bottom of the Inbox.
+    ttl: 48h
+
+requires_capabilities:
+  - gmail.draft.create
+
+delivery:
+  channels: [inbox, telegram]
+  quiet_hours: "22:00-07:00"
+
+audit: true
+timeout_ms: 60000

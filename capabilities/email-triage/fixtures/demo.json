@@ -1,0 +1,32 @@
+{
+  "_comment": "Three messages, two of which produce nothing. The point of the fixture is that triage's first job is deciding what NOT to surface: only the message containing a direct ask reaches the Inbox. The other two are a broadcast and a thread where Sandip is cc'd but nobody is waiting on him.",
+
+  "email.message": [
+    {
+      "id": "msg-2026-07-21-priya",
+      "thread_id": "thr-pricing-v2",
+      "from": "Priya Raghunathan <priya@northwind.co>",
+      "from_name": "Priya Raghunathan",
+      "subject": "Re: Pricing v2 — need your read before Thursday",
+      "received_at": "2026-07-21T08:02:00Z",
+      "permalink": "https://mail.google.com/mail/u/0/#inbox/thr-pricing-v2",
+      "body": "Sandip, the deck is in decent shape but I'm stuck on the middle tier.\n\nCould you look at slides 8-11 and tell me whether the usage-based cut holds up? My worry is that it reads clean to us and looks arbitrary to a buyer who hasn't been in these conversations.\n\nAlso, what's your take on keeping the annual discount at 20%? Finance is pushing for 15 and I'd rather not fight it without a reason.\n\nI need to send this to the board by end of day Thursday, so any time before Wednesday evening works."
+    },
+    {
+      "id": "msg-2026-07-21-statuspage",
+      "from": "Vercel Status <no-reply@vercel-status.com>",
+      "subject": "Resolved: Elevated error rates in iad1",
+      "received_at": "2026-07-21T07:40:00Z",
+      "body": "This incident has been resolved. Between 06:12 and 06:48 UTC, a subset of deployments in iad1 returned elevated 5xx responses. No action is required."
+    },
+    {
+      "id": "msg-2026-07-21-standup",
+      "thread_id": "thr-standup",
+      "from": "Marcus Bell <marcus@northwind.co>",
+      "from_name": "Marcus Bell",
+      "subject": "Notes from Tuesday standup",
+      "received_at": "2026-07-21T06:15:00Z",
+      "body": "Quick notes for anyone who missed it.\n\nThe migration is done and the old workers are drained. Dana is picking up the alerting cleanup this week. We agreed to push the retro to Monday so the whole team can make it.\n\nNothing blocking. Copying Sandip for visibility."
+    }
+  ]
+}
