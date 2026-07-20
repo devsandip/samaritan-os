@@ -10,7 +10,7 @@
  * dropping a folder here, and nothing in this file knows the name of any
  * particular capability.
  */
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { z } from "zod";
@@ -209,6 +209,17 @@ export class CapabilityRegistry {
     for (const entry of entries.sort()) {
       const dir = join(capabilitiesDir, entry);
       if (entry.startsWith(".") || !statSync(dir).isDirectory()) continue;
+
+      // A directory with no manifest never claimed to be a capability, so it is
+      // not a failure to load one: node_modules, a scratch folder, or a
+      // half-created directory would otherwise each raise a red banner on the
+      // Dashboard. A manifest that exists and does not parse is still a
+      // problem, which is the distinction worth keeping — it catches the typo
+      // in the filename that silent skipping would hide.
+      if (!existsSync(join(dir, "manifest.yaml"))) {
+        logger.debug({ dir }, "no manifest.yaml; not a capability");
+        continue;
+      }
 
       const result = loadOne(dir, executionCatalogue);
       if (isProblem(result)) {

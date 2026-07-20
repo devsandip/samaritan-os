@@ -17,6 +17,7 @@
     "migrate": "tsx src/cli/migrate.ts",
     "run-capability": "tsx src/cli/run-capability.ts",
     "new-capability": "tsx src/cli/new-capability.ts",
+    "import-task": "tsx src/cli/import-task.ts",
     "seed": "tsx src/cli/seed.ts",
     "test": "vitest run",
     "test:watch": "vitest",
