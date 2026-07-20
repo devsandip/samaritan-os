@@ -1,0 +1,32 @@
+{
+  "_comment": "What the /meeting Claude skill produces after reading a transcript. The meeting note itself is written by the skill directly and is not gated: it is a reversible local file, and writing it is what makes the extraction checkable. Its path rides on every item so a reviewer can open the source of a claim instead of trusting the extraction.",
+
+  "meeting_topic": "Pricing v2 review",
+  "meeting_date": "2026-07-20",
+  "meeting_note_path": "Meetings/2026-07-20-pricing-v2-review.md",
+
+  "items": [
+    {
+      "kind": "decision",
+      "title": "Middle tier stays usage-based, revisit after two enterprise calls",
+      "detail": "Priya argued the seat-based version is easier to sell and harder to defend. Agreed to keep usage-based and test it on the next two enterprise conversations before committing.",
+      "project": "Northwind",
+      "owner": "Sandip",
+      "evidence": "Discussed at length around the slide 8-11 walkthrough."
+    },
+    {
+      "kind": "task",
+      "title": "Rewrite slides 8-11 so the usage cut reads as deliberate",
+      "detail": "The current version reads clean internally and arbitrary to a buyer who was not in these conversations.",
+      "project": "Northwind",
+      "owner": "Priya",
+      "due": "2026-07-23"
+    },
+    {
+      "kind": "insight",
+      "title": "Finance pushing 15% annual discount without a stated reason",
+      "detail": "The 20% figure has never been defended in writing. Worth settling the rationale before it gets negotiated down by default.",
+      "project": "Northwind"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "_comment": "What the /wrap Claude skill produces after reading a working session. Extraction is the skill's job; this is its output, so the fixture stands in for the model rather than for the session. Four items of three kinds, which is what makes the anchor worth watching: the decision goes to Notion, the task to TickTick, and neither moves until Sandip says so.",
+
+  "session_id": "sess-2026-07-20-recall",
+
+  "items": [
+    {
+      "kind": "decision",
+      "title": "Local embeddings by default, cloud only on explicit opt-in",
+      "detail": "Recall runs all-MiniLM-L6-v2 in-process. A cloud embedding provider stays available but never becomes the silent default, so no passage of the vault leaves the machine without a config change made on purpose.",
+      "project": "Samaritan",
+      "evidence": "TECH-SPEC §7 and §9 both call for it; the config block defaults synthesis to none."
+    },
+    {
+      "kind": "insight",
+      "title": "Every test passed whether or not the vector extension loaded",
+      "detail": "sqlite-vec silently failed to load for two separate reasons and the suite stayed green both times, because the JS fallback returns the same answers more slowly. A correct result is not evidence that the intended path ran.",
+      "project": "Samaritan",
+      "evidence": "Found by adding a test that asserts the extension is loaded, not that search works."
+    },
+    {
+      "kind": "task",
+      "title": "Restart the daemon so migration 5 reaches the live store",
+      "detail": "The running daemon is on migration 4. Recall's tables exist only in test databases until it restarts.",
+      "project": "Samaritan",
+      "due": "today"
+    },
+    {
+      "kind": "note",
+      "title": "The Notion adapter ignores idempotency_key",
+      "detail": "§10 requires adapters to check-or-create by key. The Notion one does not, so a re-ingested settled item would create a second row rather than replaying the first.",
+      "project": "Samaritan"
+    }
+  ]
+}
