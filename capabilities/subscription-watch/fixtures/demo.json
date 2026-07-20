@@ -1,0 +1,36 @@
+{
+  "_comment": "Four subscriptions. Dates are relative (+Nd / -Nd) so the fixture does not fall outside the 14-day horizon a fortnight after it was written. Two renew soon and reach the Inbox; one renews in two months and is filtered out before any item exists; one has no usage data, which produces low confidence and an honest 'I don't know' rather than a guess.",
+
+  "subscriptions.renewals": [
+    {
+      "vendor": "Figma Organization",
+      "amount": 540,
+      "currency": "USD",
+      "renews_on": "+4d",
+      "last_used": "-97d",
+      "seats": 3,
+      "note": "Bought for the wndr.ist redesign, which shipped in April."
+    },
+    {
+      "vendor": "Linear",
+      "amount": 96,
+      "currency": "USD",
+      "renews_on": "+9d",
+      "last_used": "-2d",
+      "seats": 1
+    },
+    {
+      "vendor": "Descript Pro",
+      "amount": 288,
+      "currency": "USD",
+      "renews_on": "+11d"
+    },
+    {
+      "vendor": "AWS Reserved Instance",
+      "amount": 1840,
+      "currency": "USD",
+      "renews_on": "+61d",
+      "last_used": "-1d"
+    }
+  ]
+}

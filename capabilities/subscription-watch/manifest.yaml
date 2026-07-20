@@ -1,0 +1,92 @@
+# Subscription Watch (TECH-SPEC §9, "Money-never-auto enforcement").
+#
+# Its job in the roster is to be refused.
+#
+# This manifest asks for exactly what §9 forbids: `execution.mode: automated`
+# and `auto_complete_when: "true"`, on an action type in the payment namespace.
+# That is not a mistake left in for effect, it is the test. A guardrail that is
+# only ever exercised by a unit test is a guardrail nobody has watched hold,
+# and §9 spends three independent layers on this one:
+#
+#   1. Policy Engine    - checks the money lock before any manifest predicate,
+#                         so auto_complete_when never gets a vote. The decision
+#                         comes back `matched_rule: hardcoded:payment.make`.
+#   2. Routing Config   - routing.yaml ships payment.make with `locked: true`,
+#                         so resolve() answers guided no matter what mode this
+#                         manifest declares, and PUT /api/routing/payment.make
+#                         returns 409 to anyone who tries to change it.
+#   3. Execution Registry - refuses at load time to register any adapter
+#                         claiming automated for a payment-namespaced id, so
+#                         there is nothing for a promotion to promote to.
+#
+# The result: even after Sandip approves, the OS does not pay anything. It
+# hands him instructions and waits for him to say he did it. That is the whole
+# posture in one screen.
+
+id: subscription-watch
+name: Subscription Watch
+description: >-
+  Watches recurring charges and surfaces the ones renewing soon that no longer
+  look worth it. Never pays or cancels anything itself.
+version: 0.1.0
+owner: sandip
+enabled: true
+entrypoint: index.ts
+
+trigger:
+  mode: scheduled
+  cron: "0 8 * * *"
+
+context:
+  requires: [subscriptions.active]
+  inputs: [subscriptions.renewals]
+
+emits:
+  - type: renewal-review
+    render:
+      layout: card
+      primary: vendor
+      secondary: recommendation
+      badges: [amount, renews_in, last_used]
+
+    custom_attributes:
+      vendor: string
+      amount: string
+      renews_on: string
+      renews_in: string
+      last_used: string
+      recommendation: string
+      # Declared so a predicate could read it, and so the card can show what
+      # the capability thought. Policy ignores it here: the money lock does not
+      # consult the item.
+      worth_keeping: boolean
+
+    responses:
+      - { id: let_it_renew, label: "Let it renew", outcome: execute }
+      - { id: cancel_it, label: "Cancel it", outcome: guided }
+      - { id: keep_quiet, label: "Stop asking about this", outcome: discard }
+      - { id: defer, label: "Remind me in a week", outcome: defer, defer_for: 7d }
+
+    execution:
+      # Both of these are refused. Left as written on purpose: this is what a
+      # capability author who had not read §9 would plausibly write, and the
+      # point is that writing it changes nothing.
+      mode: automated
+      capability: guided.fallback
+      action_type: payment.make
+
+    policy:
+      auto_complete_when: "true"
+
+    priority: normal
+    # A renewal decision is worthless after the charge lands.
+    ttl: 72h
+
+requires_capabilities:
+  - guided.fallback
+
+delivery:
+  channels: [inbox, telegram]
+
+audit: true
+timeout_ms: 30000
