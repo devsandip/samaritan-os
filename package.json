@@ -16,6 +16,7 @@
     "start": "node dist/cli/serve.js",
     "migrate": "tsx src/cli/migrate.ts",
     "run-capability": "tsx src/cli/run-capability.ts",
+    "new-capability": "tsx src/cli/new-capability.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "serve": "tsx src/cli/serve.ts",
