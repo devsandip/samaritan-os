@@ -49,8 +49,8 @@ strictly containing the other, and neither is merged.
 
 ## Weekly summaries
 
-None yet. Week 29 has one entry and its summary is due now that week 30 has
-started.
+- [2026-W29](weekly/2026-W29-summary.md) — the whole project in one Sunday
+  evening, v0 plus the four lifecycle fixes that followed the handoff
 
 ## Working hypotheses
 

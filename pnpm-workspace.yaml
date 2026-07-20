@@ -1,3 +1,8 @@
+# Dependencies allowed to run install scripts. pnpm blocks them by default and
+# leaves an unresolved entry blocked, so a placeholder here fails `pnpm install`
+# with ERR_PNPM_IGNORED_BUILDS and, more confusingly, leaves vitest reporting
+# "No test files found" because esbuild's binary was never linked.
 allowBuilds:
-  better-sqlite3: set this to true or false
-  esbuild: set this to true or false
+  # vitest's transform layer. Its install script links a prebuilt platform
+  # binary; there is no build from source.
+  esbuild: true
