@@ -162,6 +162,52 @@ next starts.
 
 - F1 `docs/DEMO.md` runbook.
 
+**Phase G — Import a Claude scheduled task as an agent**
+
+- G1 `src/cli/import-task.ts` — takes a scheduled task's instructions and a
+  schedule, writes a capability folder around them.
+- G2 An LLM-backed entrypoint template: the generated `run()` calls Claude with
+  the original instructions plus a structured-output schema and emits the
+  result as action items.
+- G3 `plugin/skills/import-task/SKILL.md` — the front door, since the
+  instructions are being pasted from inside Claude anyway.
+
+### Progress
+
+- [x] A1-A2 Run Layer core — `ff1e99b`
+- [ ] A3 run CLI and route
+- [ ] B, C, D, E, F, G
+
+---
+
+## Importing a Claude scheduled task (Phase G)
+
+A Claude scheduled task is a prompt plus a cadence. Its intelligence is
+Claude's, so a conversion that produced a deterministic function would not
+produce the same agent — it would produce a different, worse one.
+
+So the generated entrypoint calls Claude with the original instructions and a
+structured-output schema derived from the manifest's `custom_attributes`, and
+emits what comes back. The task keeps working the way it worked. The one thing
+that changes is where its output lands: the Inbox review gate instead of
+straight into Notion or TickTick.
+
+Two halves, because they have different strengths:
+
+- **`samaritan import-task`** does the mechanical part — folder, manifest
+  skeleton, entrypoint wired to the SDK, cron translated from the schedule.
+  Deterministic, no API key, works offline.
+- **`/samaritan:import-task`** is a Claude skill and the front door. Reading a
+  paragraph of instructions and deciding what `custom_attributes` it implies is
+  a judgement call a regex cannot make, and the instructions are being pasted
+  from inside Claude anyway.
+
+§8's scheduler-sync contract already covers the other direction: a task that
+still fires from Claude's own scheduler attaches
+`source: { kind: "claude_scheduled_task", task_ref, capability_id }` to its
+emit, and the ownership rule keeps the in-process scheduler from double-firing
+it. Imported agents should attach that source until their cron is migrated.
+
 ---
 
 ## Decisions

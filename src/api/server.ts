@@ -16,6 +16,7 @@ import { createApp, type App, type CreateAppOptions } from "../app.js";
 import { repoRoot } from "../config/index.js";
 import { log } from "../logger.js";
 import { RoutingLockedError, UnknownActionTypeError } from "../routing/index.js";
+import { runCapability } from "../run-layer/index.js";
 import { MoneyLockViolation } from "../guardrails.js";
 import {
   getActionItem,
@@ -65,6 +66,13 @@ const ConfirmBody = z.object({
 const ReopenBody = z.object({
   actor: z.enum(["sandip", "system"]).default("sandip"),
   reason: z.string().optional(),
+});
+
+const RunBody = z.object({
+  /** Resolved from `manifest.context.inputs`; unsupplied keys are reported, not fatal. */
+  inputs: z.record(z.string(), z.unknown()).optional(),
+  /** Run even when the manifest says `enabled: false`. */
+  force: z.boolean().default(false),
 });
 
 const RoutingBody = z.object({
@@ -199,6 +207,29 @@ export function buildServer(app: App): FastifyInstance {
   server.post("/api/capabilities/reload", async () => {
     const { loaded, problems } = app.capabilities.reload();
     return { reloaded: loaded.map((c) => c.manifest.id), problems };
+  });
+
+  /**
+   * Fires a capability now. Backs the Dashboard's "Run now" and gives a Claude
+   * scheduled task a way to trigger a run against the live daemon rather than
+   * opening the Action Store a second time.
+   *
+   * A failed run is still a 200: the report *is* the answer, and §10's contract
+   * is that one capability failing is a normal condition the OS absorbs, not an
+   * API error. The one 4xx is a capability that does not exist, which is a
+   * caller mistake rather than a run outcome.
+   */
+  server.post<{ Params: { id: string } }>("/api/capabilities/:id/run", async (request, reply) => {
+    const body = RunBody.safeParse(request.body ?? {});
+    if (!body.success) return reply.code(400).send(badRequest(body.error));
+
+    if (!app.capabilities.get(request.params.id)) {
+      return reply.code(404).send({ error: { code: "not_found", message: "capability not found" } });
+    }
+    return runCapability(app, request.params.id, {
+      ...(body.data.inputs ? { inputs: body.data.inputs } : {}),
+      force: body.data.force,
+    });
   });
 
   // ---- Routing -------------------------------------------------------------

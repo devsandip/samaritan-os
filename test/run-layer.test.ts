@@ -10,12 +10,20 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { runCapability } from "../src/run-layer/index.js";
+import type { FastifyInstance } from "fastify";
+import { buildServer } from "../src/api/server.js";
+import { createApp, type App } from "../src/app.js";
+import { runCapability, type RunReport } from "../src/run-layer/index.js";
 import { harness, testContext } from "./helpers.js";
 
 const roots: string[] = [];
+const servers: { app: App; server: FastifyInstance }[] = [];
 
-afterEach(() => {
+afterEach(async () => {
+  for (const { app, server } of servers.splice(0)) {
+    await server.close();
+    app.close();
+  }
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
@@ -41,16 +49,20 @@ requires_capabilities: [guided.fallback]
 ${extra}`;
 }
 
-/** Writes a capability folder and returns a harness pointed at its parent. */
-function capability(id: string, entrypoint: string, extra = "") {
+/** Writes a capability folder into a fresh temp dir and returns that dir. */
+function writeCapability(id: string, entrypoint: string, extra = ""): string {
   const root = mkdtempSync(join(tmpdir(), "samaritan-run-"));
   roots.push(root);
   mkdirSync(join(root, id));
   writeFileSync(join(root, id, "manifest.yaml"), manifest(id, extra));
   writeFileSync(join(root, id, "index.ts"), entrypoint);
+  return root;
+}
 
-  const h = harness({ capabilitiesDir: root });
-  return { ...h, root, path: join(root, id, "index.ts") };
+/** The same, wired to a harness pointed at its parent. */
+function capability(id: string, entrypoint: string, extra = "") {
+  const root = writeCapability(id, entrypoint, extra);
+  return { ...harness({ capabilitiesDir: root }), root, path: join(root, id, "index.ts") };
 }
 
 /** A draft the ingest pipeline will accept, as a capability would build it. */
@@ -277,5 +289,90 @@ describe("the manifest's declarations", () => {
     );
 
     expect((await runCapability(cap, "quiet")).logs).toEqual(["undefined"]);
+  });
+});
+
+describe("POST /api/capabilities/:id/run", () => {
+  async function serve(root: string) {
+    const app = createApp({ dbPath: ":memory:", capabilitiesDir: root });
+    const server = buildServer(app);
+    servers.push({ app, server });
+    return server;
+  }
+
+  it("runs the capability and returns its report", async () => {
+    const server = await serve(
+      writeCapability(
+        "web",
+        `export async function run() {
+           return { action_items: [${DRAFT("web")}], status: "ok", logs: ["via http"] };
+         }`,
+      ),
+    );
+
+    const response = await server.inject({ method: "POST", url: "/api/capabilities/web/run" });
+    expect(response.statusCode).toBe(200);
+
+    const report = response.json() as RunReport;
+    expect(report.status).toBe("ok");
+    expect(report.logs).toEqual(["via http"]);
+    expect(report.accepted[0]!.status).toBe("pending");
+  });
+
+  it("passes inputs through to the run", async () => {
+    const server = await serve(
+      writeCapability(
+        "echo",
+        `export async function run(ctx) {
+           return { action_items: [], status: "ok", logs: [String(ctx.inputs.who)] };
+         }`,
+      ),
+    );
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/capabilities/echo/run",
+      payload: { inputs: { who: "sandip" } },
+    });
+    expect((response.json() as RunReport).logs).toEqual(["sandip"]);
+  });
+
+  it("reports a failed run as 200, not as an API error", async () => {
+    // §10: one capability failing is a condition the OS absorbs. A 5xx here
+    // would make a routine capability bug look like the daemon falling over.
+    const server = await serve(
+      writeCapability("bad", `export async function run() { throw new Error("kaboom"); }`),
+    );
+
+    const response = await server.inject({ method: "POST", url: "/api/capabilities/bad/run" });
+    expect(response.statusCode).toBe(200);
+    expect((response.json() as RunReport).error).toBe("kaboom");
+  });
+
+  it("404s an unknown capability", async () => {
+    const server = await serve(writeCapability("real", `export async function run() {}`));
+
+    const response = await server.inject({ method: "POST", url: "/api/capabilities/ghost/run" });
+    expect(response.statusCode).toBe(404);
+  });
+
+  it("honours force for a disabled capability", async () => {
+    const server = await serve(
+      writeCapability(
+        "sleeping",
+        `export async function run() { return { action_items: [], status: "ok", logs: ["woke"] }; }`,
+        "enabled: false\n",
+      ),
+    );
+
+    const skipped = await server.inject({ method: "POST", url: "/api/capabilities/sleeping/run" });
+    expect((skipped.json() as RunReport).status).toBe("skipped");
+
+    const forced = await server.inject({
+      method: "POST",
+      url: "/api/capabilities/sleeping/run",
+      payload: { force: true },
+    });
+    expect((forced.json() as RunReport).logs).toEqual(["woke"]);
   });
 });
