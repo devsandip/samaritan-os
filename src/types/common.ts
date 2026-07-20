@@ -42,15 +42,25 @@ export const ActionItemStatus = z.enum([
 export type ActionItemStatus = z.infer<typeof ActionItemStatus>;
 
 /**
- * Statuses where nothing external has been committed yet, so a re-ingest may
- * supersede the existing row in place (§5.1, branch 2).
+ * Statuses where the logical event has not yet run its course, so a re-ingest
+ * may supersede the existing row rather than insert beside it (§5.1, branch 2).
  *
- * `deferred` belongs here despite being a decision Sandip made, because the test
- * is whether the logical event has run its course, and a snoozed item is
- * explicitly waiting to. It is the one member that does not roll back to
+ * The test is whether the event is over, not whether anything external has
+ * happened. Those are not the same question, and two members prove it:
+ *
+ * `deferred` belongs here despite being a decision Sandip made, because a
+ * snoozed item is explicitly waiting to run its course. It does not roll back to
  * `pending` on supersede: the deferral says *when* he wants to look at this and
  * a re-ingest only says what the content is now, so the Action Center refreshes
  * the content and holds the window.
+ *
+ * `awaiting_confirmation` belongs here for the same reason, and is the one
+ * member a re-ingest does not touch at all. Something external already exists by
+ * then, a staged draft or an issued deep link, and `execution.payload` is the
+ * only record of it. §5.1 branch 2a holds the row and records the re-emission
+ * instead. Membership here is still right: the item is waiting on Sandip's hand,
+ * so it has not run its course, and it must never be forked, because the row id
+ * is the §10 idempotency key.
  */
 export const UNSETTLED_STATUSES = [
   "pending",

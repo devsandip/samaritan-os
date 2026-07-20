@@ -15,6 +15,7 @@ import {
   createActionItem,
   getActionItem,
   getActionItemByDedupeKey,
+  noteAgainstItem,
   releaseDedupeKey,
   transition,
 } from "../store/action-items.js";
@@ -186,6 +187,40 @@ export class ActionCenter {
         priority: type.spec.priority,
         expires_at: expiresAt(type.spec.ttl),
       });
+    } else if (existing.status === "awaiting_confirmation") {
+      // Branch 2a: already dispatched. The row is left byte-identical and only
+      // the re-emission is recorded.
+      //
+      // Neither of the other two branches is safe here. Superseding in place
+      // rolls the status back to pending, which overwrites `execution` and takes
+      // `_guided_link` with it: that link is the only record of what the OS put
+      // in the world, there is no way to un-issue it, and `confirm()`/`reopen()`
+      // both refuse anything that is not awaiting_confirmation, so the item is
+      // left with no way to close its own loop. Forking a fresh row instead
+      // mints a new id, and the id *is* the idempotency key (§10), so the next
+      // approve would miss the registry's replay guard and dispatch a second
+      // time for real.
+      //
+      // So the refreshed content waits. The OS has already handed Sandip
+      // something and cannot take it back; stacking a revision on top of an
+      // unanswered handoff would make the amber chip claim "we staged X" over
+      // content that now reads X'. "Didn't do it" (`POST /reopen`) is how he
+      // says the handoff is void, and the next re-ingest lands normally.
+      noteAgainstItem(db, existing, {
+        actor: "capability",
+        reason: "reingest_held_awaiting_confirmation",
+        payload_diff: { context: draft.context, custom: draft.custom },
+      });
+      logger.info(
+        { id: existing.id, type: existing.type },
+        "held a dispatched item against re-ingest",
+      );
+      return {
+        id: existing.id,
+        dedupe_key: draft.dedupe_key,
+        status: existing.status,
+        policy: decision,
+      };
     } else if (!isSettled(existing.status)) {
       // Branch 2: nothing external has been committed, so the stale draft is
       // superseded in place. Whatever Sandip was reviewing no longer matches the

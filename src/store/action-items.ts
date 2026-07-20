@@ -247,6 +247,30 @@ function appendEvent(
 }
 
 /**
+ * Records something that happened *to* an item without moving it.
+ *
+ * The rule at the top of this file still holds. `transition()` is the only way
+ * to change a status, and this cannot change one: it reads both ends of the
+ * event off the item itself, so the row it writes always has `from` equal to
+ * `to`. That is how the trail records a deliberate decision to leave an item
+ * alone, which is otherwise indistinguishable from nothing having happened.
+ */
+export function noteAgainstItem(
+  db: Db,
+  item: ActionItem,
+  note: { actor: Actor; reason: string; payload_diff?: Record<string, unknown> },
+): ActionItemEvent {
+  return appendEvent(db, {
+    action_item_id: item.id,
+    from_status: item.status,
+    to_status: item.status,
+    actor: note.actor,
+    reason: note.reason,
+    ...(note.payload_diff !== undefined ? { payload_diff: note.payload_diff } : {}),
+  });
+}
+
+/**
  * Inserts a new action item in `pending` and records the ingest event.
  *
  * Callers must be inside the ingest path (§5.1), which decides insert-versus-

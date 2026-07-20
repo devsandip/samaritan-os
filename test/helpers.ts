@@ -119,6 +119,7 @@ export interface Harness {
   db: Db;
   actionCenter: ActionCenter;
   capabilities: CapabilityRegistry;
+  execution: ExecutionRegistry;
   notionDecision: ReturnType<typeof spyAdapter>;
   notionInsight: ReturnType<typeof spyAdapter>;
 }
@@ -168,6 +169,7 @@ export function harness({ capabilitiesDir, ...deps }: HarnessOptions = {}): Harn
     db,
     actionCenter: new ActionCenter({ db, capabilities, execution, routing, ...deps }),
     capabilities,
+    execution,
     notionDecision,
     notionInsight,
   };

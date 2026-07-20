@@ -25,6 +25,17 @@ const PROBLEM = new Set(["failed"]);
 /** Turns a transition into a sentence. Falls back to the status pair. */
 function headline(event: ActionItemEvent): string {
   const actor = ACTOR_LABEL[event.actor];
+
+  // An event that does not move the item is not a transition, so the table
+  // below would mislabel it: a held re-ingest against a dispatched row would
+  // read "Samaritan staged it", claiming a second dispatch that never happened.
+  if (event.from_status !== null && event.from_status === event.to_status) {
+    if (event.reason === "reingest_held_awaiting_confirmation") {
+      return `${actor} re-sent this, and it was left as it is`;
+    }
+    return `${actor} touched this without changing its state`;
+  }
+
   switch (event.to_status) {
     case "pending":
       return event.from_status === null
@@ -60,6 +71,14 @@ function reasonText(event: ActionItemEvent): string | undefined {
   if (responded?.[1]) return `Response: ${titleCase(responded[1])}`;
   if (reason === "superseded_by_reingest") {
     return "The capability re-sent this item, so the earlier draft was replaced.";
+  }
+  if (reason === "reingest_held_awaiting_confirmation") {
+    return (
+      "The capability re-sent this item with newer content. Samaritan had already " +
+      "staged the earlier version, so the row was left untouched rather than " +
+      'overwritten. Use "Didn\'t do it" if that handoff is void, and the newer ' +
+      "content will land on the next run."
+    );
   }
   if (reason === "confirmed by hand") return undefined;
   return reason;
