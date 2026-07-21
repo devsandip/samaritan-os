@@ -799,3 +799,48 @@ real inbox finishes a path the capabilities had been waiting on.
   mechanism — losing it costs a refetch, never a double-file.
 - A failed publish holds the mark back, so a rejected message is retried.
 - v0 carries a bearer token; a 401 says "reauthorise"; the refresh flow waits.
+
+## 2026-07-21 — The Fireflies webhook: the Event Bus's first inbound listener
+
+The second networked listener, and the first inbound one. Where the Gmail poller
+reaches out on a timer, Fireflies is reached into: it posts to a webhook when a
+meeting transcript is ready, and the whole path is a request I can sign and curl —
+no outbound call to a service the sandbox can't reach.
+
+**What I built:**
+- `fireflies-webhook.ts` (pure): `verifyFirefliesSignature` (constant-time
+  HMAC-SHA256 over the raw body, fails closed on a missing/short header) and
+  `firefliesEventToSamaritan` ("Transcription completed" → `meeting.transcribed`,
+  id `fireflies:<meetingId>`; null for anything else).
+- `src/api/webhooks.ts`: an encapsulated Fastify plugin with a `parseAs: "string"`
+  content-type parser, so the raw body needed for the HMAC is scoped to the
+  webhook routes and the rest of the API keeps the default JSON parser. The route
+  404s when disabled, 401s a bad/absent signature when a secret is set, accepts
+  unverified when none is (loopback-only v0, §9), and 202-ignores a non-transcript
+  event so Fireflies doesn't retry it.
+- A `fireflies` config block (off by default) + Keychain secret `fireflies:webhook`.
+
+**State now:**
+- 550 tests (was 533): +9 pure core, +8 route (incl. dedup, the scoped-parser
+  proof, and the disabled/401/ignored branches). Typecheck clean, full suite green.
+- Verified live over HTTP against a real daemon: a correctly HMAC-signed
+  transcript-ready POST returned 202 and published `meeting.transcribed`, a
+  redelivery came back `deduped:true`, a bad signature 401'd, a non-transcript
+  event was ignored, and other API routes kept parsing JSON — the scoped parser
+  changed nothing outside the plugin. This is the "fully curl-verifiable" an
+  inbound listener buys that the Gmail poll's outbound call could not.
+
+**Next:**
+- The Slack Events route — the last inbound listener (url_verification handshake +
+  signing-secret HMAC), the same encapsulated-plugin shape.
+- A consumer for `meeting.transcribed`: wire `meeting` to pull the transcript
+  (Fireflies GraphQL) and extract, which turns the notice into an Inbox item.
+
+**Decisions:**
+- Raw body via a per-plugin content-type parser, so signature verification never
+  changes how the rest of the API parses JSON.
+- Signature required when a secret is set, unverified allowed without one — §9's
+  "a check before any tunnel."
+- The event is the notice, not the transcript; a consumer that fetches is the
+  follow-up. Inert-but-authenticated on the bus today, and documented as such.
+- A deliberately-ignored event is a 202, not a 4xx, so Fireflies doesn't retry.

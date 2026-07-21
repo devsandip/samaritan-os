@@ -6,6 +6,50 @@ spec, so the spec stays the design record and this stays the build record.
 
 ---
 
+## 2026-07-21 — The Fireflies webhook: the bus's first inbound listener
+
+**Context:** §12 step 18's remaining listeners were the inbound webhooks. Where
+the Gmail poller reaches *out* on a timer, a webhook is reached *into* — Fireflies
+posts to a URL when a meeting transcript is ready — which makes it the more
+fully verifiable of the two: the whole path is a request I can sign and curl,
+with no outbound call to a service I can't reach from here.
+
+**Raw body, in an encapsulated plugin.** A webhook signature is an HMAC over the
+*exact bytes* the sender posted; re-serialising the parsed JSON reorders keys and
+drops whitespace and breaks the check. So the route needs the raw body, which
+means a `parseAs: "string"` content-type parser — and that parser must not become
+the whole server's, or every other route's `request.body` changes shape. Fastify's
+content-type parsers are per-plugin, so the fix is to register the webhooks in
+their own `server.register(...)`: the raw-body parser is scoped to them, and the
+rest of the API keeps the default JSON parser untouched. A test asserts exactly
+that — an ordinary route still parses normally with the webhook plugin loaded.
+
+**Signature required when a secret is set, unverified allowed without one.** §9's
+trust model is "loopback, no auth in v0, but a check before any tunnel." A webhook
+is inbound by definition and only reaches the daemon through a tunnel — the exact
+case §9 names. So when a signing secret is configured the signature is required
+and a mismatch is a 401; without one the route still works for local testing but
+logs that it is unverified. Fail-closed on the signature itself: a missing or
+wrong-length header is rejected, constant-time, never throwing.
+
+**The event is the notice, not the transcript.** A Fireflies webhook carries a
+`meetingId`, not the transcript — fetching that is a separate authenticated call.
+So the listener publishes `meeting.transcribed` as an *announcement*, and a
+consumer that pulls the transcript and runs the extraction is deliberately the
+follow-up. This is the same honest split the Gmail PR made with its refresh-token
+flow: build the half that is verifiable now, name the half that isn't. Today
+nothing subscribes to `meeting.transcribed` — `meeting` is manual — so the event
+is inert on arrival, which is fine and documented: the webhook's job is to get a
+real, authenticated meeting event onto the bus, and it does.
+
+**A non-transcript event is a 202, not an error.** Fireflies fires other event
+types too, and it retries on a non-2xx. So an event we deliberately ignore
+(anything but "transcription completed") returns 202 `{ignored:true}` rather than
+a 4xx, so Fireflies does not hammer the endpoint re-sending something we chose not
+to act on.
+
+---
+
 ## 2026-07-21 — The Gmail listener: the bus's first networked front end
 
 **Context:** §12 step 18 named three networked listeners still missing — a Gmail
