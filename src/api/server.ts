@@ -84,6 +84,11 @@ const RoutingBody = z.object({
   mode: ExecutionMode.optional(),
 });
 
+const RecallQueryBody = z.object({
+  question: z.string().min(1).max(2000),
+  max_citations: z.coerce.number().int().min(1).max(40).optional(),
+});
+
 function badRequest(error: z.ZodError) {
   return {
     error: {
@@ -280,6 +285,25 @@ export function buildServer(app: App): FastifyInstance {
     if (!event.success) return reply.code(400).send(badRequest(event.error));
     return reply.code(202).send(await app.eventBus.publish(event.data));
   });
+
+  // ---- Recall --------------------------------------------------------------
+
+  /**
+   * Ask-Samaritan (§5.5, §7). Retrieves cited passages from the vault, journals
+   * and audit trail and — when synthesis is enabled — writes an answer over them.
+   * A miss is a 200 with no citations and a plain "couldn't find it", not a 404:
+   * the question was well-formed, the index just held no answer for it.
+   */
+  server.post("/api/recall/query", async (request, reply) => {
+    const body = RecallQueryBody.safeParse(request.body);
+    if (!body.success) return reply.code(400).send(badRequest(body.error));
+    return app.recall.query(
+      body.data.question,
+      body.data.max_citations ? { maxCitations: body.data.max_citations } : {},
+    );
+  });
+
+  server.get("/api/recall/stats", async () => app.recall.stats());
 
   // ---- Routing -------------------------------------------------------------
 
