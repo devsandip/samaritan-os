@@ -358,6 +358,25 @@ async function sweep(app: App): Promise<void> {
   }
 }
 
+/** How often the daemon refreshes the Recall index while it is up (§7). */
+const RECALL_REINDEX_INTERVAL_MS = 15 * 60_000;
+
+/**
+ * Refreshes the Recall index in the background (§7). Idempotent by content hash,
+ * so a tick that finds nothing changed is a walk and a few hashes. Guarded like
+ * the sweep: an indexing failure logs and waits for the next tick rather than
+ * taking the daemon down. Runs after listen() — the local model downloads on
+ * first use, and that must never delay the socket.
+ */
+async function backgroundReindex(app: App): Promise<void> {
+  try {
+    const tally = await app.recall.reindex();
+    if (tally.indexed || tally.removed) logger.info(tally, "recall reindexed");
+  } catch (err) {
+    logger.error({ err: String(err) }, "recall reindex failed");
+  }
+}
+
 export async function start(options: CreateAppOptions = {}): Promise<FastifyInstance> {
   const app = createApp(options);
   const server = buildServer(app);
@@ -385,11 +404,14 @@ export async function start(options: CreateAppOptions = {}): Promise<FastifyInst
   });
 
   // Both before listen(): Fastify refuses addHook once the instance is
-  // listening, and unref() keeps the timer from holding the process open.
+  // listening, and unref() keeps the timers from holding the process open.
   const timer = setInterval(() => void sweep(app), SWEEP_INTERVAL_MS);
   timer.unref();
+  const reindexTimer = setInterval(() => void backgroundReindex(app), RECALL_REINDEX_INTERVAL_MS);
+  reindexTimer.unref();
   server.addHook("onClose", async () => {
     clearInterval(timer);
+    clearInterval(reindexTimer);
     scheduler.stop();
     await watcher.stop();
   });
@@ -413,6 +435,11 @@ export async function start(options: CreateAppOptions = {}): Promise<FastifyInst
   await scheduler.start();
   // After the scheduler, so a note written during boot catch-up still fires.
   await watcher.start();
+
+  // Recall refreshes its index once now, in the background: the first run
+  // downloads the local model and embeds the vault, which must not block the
+  // socket. The interval timer above keeps it current from here.
+  void backgroundReindex(app);
 
   logger.info({ url: `http://${host}:${port}` }, "samaritan api listening");
   return server;

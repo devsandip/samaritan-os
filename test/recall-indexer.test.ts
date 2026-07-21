@@ -130,4 +130,24 @@ describe("reindexFiles", () => {
     const answer = await recall.query("vendor pricing volatile");
     expect(answer.citations.map((c) => c.ref)).toContain("Meetings/vendor.md#Pricing");
   });
+
+  it("RecallService.reindex() fills the index from the configured paths", async () => {
+    const { base: vault, write } = tree();
+    write("note.md", "# Note\n\nvendor pricing volatility recorded here\n");
+    const { base: journals } = tree(); // empty journal root
+
+    const d = db();
+    const config = {
+      embeddings: { provider: "local", model: "hash-test-embedder" },
+      recall: { synthesis: "none", account: "default", model: "claude-sonnet-5", context_chunks: 8 },
+      paths: { vault, journals },
+    } as unknown as Config;
+
+    const recall = new RecallService({ db: d, config, embedder: new HashEmbedder() });
+    const tally = await recall.reindex();
+    expect(tally.indexed).toBeGreaterThan(0);
+
+    const answer = await recall.query("vendor pricing");
+    expect(answer.citations.length).toBeGreaterThan(0);
+  });
 });

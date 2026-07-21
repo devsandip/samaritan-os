@@ -20,6 +20,7 @@ import { log } from "../logger.js";
 import type { Db } from "../store/db.js";
 import { createEmbedder, type Embedder } from "./embed.js";
 import { indexStats, type IndexStats } from "./index-store.js";
+import { reindex, type IndexTally } from "./indexer.js";
 import { retrieve } from "./retrieve.js";
 import { chooseSynthesizer, validateCitations, type Citation, type Synthesizer } from "./synthesize.js";
 
@@ -46,17 +47,34 @@ export interface RecallDeps {
 
 export class RecallService {
   readonly #db: Db;
+  readonly #config: Config;
   readonly #embedder: Embedder;
   readonly #synth: Synthesizer;
   readonly #contextChunks: number;
 
   constructor(deps: RecallDeps) {
     this.#db = deps.db;
+    this.#config = deps.config;
     this.#embedder =
       deps.embedder ?? createEmbedder(deps.config.embeddings.provider, deps.config.embeddings.model);
     this.#synth = deps.synthesizer ?? chooseSynthesizer(deps.config.recall);
     this.#contextChunks = deps.config.recall.context_chunks;
     logger.info({ synthesis: this.#synth.kind, embedder: this.#embedder.model }, "recall ready");
+  }
+
+  /**
+   * Rebuilds the index from the vault, journals and audit trail, reusing this
+   * service's embedder so querying and indexing share one loaded model. The
+   * daemon calls it on a schedule; idempotent by content hash, so a re-run only
+   * touches what changed.
+   */
+  async reindex(): Promise<IndexTally> {
+    return reindex({
+      db: this.#db,
+      embedder: this.#embedder,
+      vaultDir: this.#config.paths.vault,
+      journalRoot: this.#config.paths.journals,
+    });
   }
 
   async query(question: string, opts: { maxCitations?: number } = {}): Promise<RecallAnswer> {
