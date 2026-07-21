@@ -6,6 +6,45 @@ spec, so the spec stays the design record and this stays the build record.
 
 ---
 
+## 2026-07-21 — The vault watch: one root now, a subscriber shipped with it
+
+**Context:** §2.2 and §12 step 18 name a `chokidar` filesystem watch on the vault
+and `~/Developer/*/journal`, normalising changes into `note.created` /
+`journal.updated` events. chokidar is already in §3's key-libraries list, so using
+it is not a deviation. Three under-specified points the build had to settle are.
+
+**The mapping is one rule, not two.** `fileChangeToEvent` (the pure core, split
+out the way the Scheduler's cron matcher was) reads a watched root's `kind` and
+emits `<kind>.created` on an add and `<kind>.updated` on a change. The vault is
+`kind: note`, so it yields the `note.created` the spec names; a journal root
+would be `kind: journal` and yield `journal.updated`. One rule produces both spec
+examples plus their natural siblings, and keeps the decision in a function tested
+without a disk — the source id is `file:<abs path>@<mtime>`, the "file path +
+mtime" §2.2 names as the dedup key, so a doubled event or a later reconcile
+re-reading a file fires once.
+
+**One root now: the vault, not `~/Developer/*/journal`.** chokidar 5 dropped glob
+support, so `*/journal/**/*.md` can no longer be a watch pattern — it would mean
+enumerating every `~/Developer/<repo>/journal` directory and watching each, a
+macOS-specific concern with no test surface in this environment. `WatchRoot[]` is
+built to take that second root the day it is wired; the vault watch alone is a
+complete, testable slice, so it ships and the journal root waits.
+
+**A publisher with no subscriber is the same dead text as a subscription with no
+publisher.** The scheduler and bus entries both turned on making a declaration
+real; a listener that emits `note.created` into a bus nothing listens to would be
+the same gap inverted. So the watch shipped with `note-capture`, a capability
+that answers `note.created` filtered to `Inbox/` and turns a captured note into a
+reviewable task candidate. Verified live: a file written to `vault/Inbox/`
+becomes a pending item; one written to `vault/Areas/` does not.
+
+**Known cost:** `seen_events` gains a row per vault write and is never pruned. At
+single-user scale that is a few thousand rows a year — fine — but §2.2 calls the
+seen-set "short-lived", so a pruning sweep (drop ids older than the longest
+redelivery window) is a future item, noted here so it is not forgotten.
+
+---
+
 ## 2026-07-21 — Event Bus: a mechanical filter DSL, and dedup that claims before it dispatches
 
 **Context:** §4.1 gives `trigger.filter` as a free-form `Record<string, unknown>`

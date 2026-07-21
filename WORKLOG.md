@@ -497,3 +497,54 @@ a demo-ready Samaritan.
   built yet.
 - Restarted the branch from merged main rather than stacking. A merged PR is
   finished; the Event Bus is a new change and will be its own PR.
+
+---
+
+## 2026-07-21 — The vault watch: the Event Bus's first real listener, with a subscriber to prove it
+
+**Did:**
+- Built the chokidar vault watch (TECH-SPEC §12 step 18). Split it the way the
+  scheduler was: a pure `fileChangeToEvent` (path + mtime → `SamaritanEvent`, or
+  null for a non-markdown / hidden / out-of-root change) tested without a disk,
+  and a thin `VaultWatcher` shell around chokidar that starts and stops with the
+  API server. `awaitWriteFinish` so a chunked write never fires a partial note,
+  `ignoreInitial` so the existing vault is not replayed on boot, hidden trees
+  (`.obsidian`, `.git`, `.trash`) skipped, a missing vault root skipped not fatal.
+- Shipped `note-capture` with it, so the listener drives something: it answers
+  `note.created` filtered to `Inbox/` and turns a captured note into a reviewable
+  task candidate (kind `task`, staged through `pm-os.item.file`). Always
+  escalates — the OS sees a note appeared, not what it is.
+- Verified live against a real daemon, not only in tests. Wrote a note to
+  `vault/Inbox/` and a `note-capture-review` item landed `pending` with an honest
+  audit trail (`null -> pending`, actor `capability`); the daemon logged
+  `note.created dispatched: ["note-capture"]`. Wrote one to `vault/Areas/` and it
+  dispatched to `[]` — the filter, live.
+
+**State now:**
+- 409 tests (was 389): +9 `file-event`, +4 `vault-watch` (real chokidar over a
+  temp dir), +6 `note-capture` (pure + end-to-end through the bus). Typecheck
+  clean. Seven capabilities load with zero problems.
+- The bus has one real listener. A note written to the vault fires an agent with
+  no curl. The networked listeners (Gmail poll, Fireflies/Slack webhooks) still
+  do not exist, so mail and meeting events arrive by `emit-event` or HTTP.
+- chokidar added as a dependency — it was already in §3's key-libraries list, so
+  not a deviation.
+
+**Next:**
+- The launchd plist, so the daemon survives a reboot (the rest of step 16), and
+  the §11 boot reconciliation sweep, which also clears the `approved` race.
+- Recall's query path (step 22), still the last placeholder in the UI.
+- The networked listeners, which need credentials and a network this environment
+  does not have — writable but unverifiable here.
+
+**Decisions:**
+- One mapping rule, driven by a root's `kind`: `<kind>.created` on add,
+  `<kind>.updated` on change. The vault is `note`, yielding the `note.created`
+  the spec names; a journal root would be `journal` and yield `journal.updated`.
+- One root now (the vault), not `~/Developer/*/journal`. chokidar 5 dropped glob
+  support, so that root means enumerating `*/journal` dirs — a macOS concern with
+  no test surface here. `WatchRoot[]` is ready for it; it waits.
+- A publisher with no subscriber is the same dead text as a subscription with no
+  publisher, so the watch shipped with `note-capture` rather than alone.
+- `seen_events` grows one row per vault write and is not pruned. Fine at
+  single-user scale; a pruning sweep is a noted future item.

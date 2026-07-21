@@ -54,8 +54,9 @@ append-only and erasing it would be both impossible and wrong.
 
 ## Beat 1: an agent posts to the Inbox
 
-Start on the **Dashboard**. Six agents, each with a status dot and a last-run
-time.
+Start on the **Dashboard**. Seven agents, each with a status dot and a last-run
+time — except **Note Capture**, which has never run, because nothing has dropped
+a note yet. You will make it run in Beat 3, without touching the app.
 
 Point at **Email Triage**, which is red: *"degraded to guided:
 `gmail.draft.create` is not registered."* Nothing is broken. The manifest asks
@@ -176,9 +177,24 @@ message can arrive by both a webhook and a poll and should fire once. Send one
 `from` an ordinary address and only triage takes it: the filter is what makes two
 agents on the same event type do different things.
 
-The listeners that would publish these events for real — a Gmail poller, a
-Fireflies webhook — are the next thing to build; today the event arrives by this
-command or the HTTP route, and everything after it is the real path.
+And one listener publishes for real, no curl. The vault has a chokidar watch on
+it, so a note written into `Inbox/` becomes a `note.created` event on the same
+bus. Drop one in front of the room:
+
+```bash
+mkdir -p ~/.samaritan/demo/vault/Inbox
+echo "# Call the dentist" > ~/.samaritan/demo/vault/Inbox/call-dentist.md
+```
+
+Go to the **Inbox**: a *Note Capture* item is there, "You captured
+'call-dentist' in Inbox", waiting to become a task. Nothing was clicked and no
+event was typed — a file appeared on disk and the OS noticed. Write one into
+`Areas/` instead and nothing happens: `note-capture`'s filter is `folder_eq:
+Inbox`, so the watch fires the whole vault but only the Inbox drop reaches it.
+
+The listeners still missing are the networked ones — a Gmail poller, a Fireflies
+webhook — so those events still arrive by `emit-event` or the HTTP route. The
+filesystem one is real.
 
 ---
 
@@ -189,7 +205,7 @@ policy decisions, the audit trails, the state machine, the files written to the
 vault. Open `~/.samaritan/demo/vault/Areas/Weekly/` and show the digest the
 weekly agent actually wrote.
 
-**"How smart are the agents?"** Four of the six are rule-based, on purpose. A
+**"How smart are the agents?"** Five of the seven are rule-based, on purpose. A
 demo agent that needs a network round-trip and an API key has a failure mode on
 stage that testing does not remove. `wrap` and `meeting` are LLM-driven and
 already in daily use, and `import-task` produces LLM-backed agents. The point
@@ -209,21 +225,25 @@ unaffected. Then restore it or delete the folder.
 **"What is not built?"** Say it plainly. Both clocks are in. The scheduler fires
 scheduled-mode agents on their cron, catching up a run missed while the Mac was
 asleep. The Event Bus fires event-mode agents on a published event, deduped by
-source id and narrowed by each manifest's filter. What is still missing sits at
-the two ends. At the front: no real listeners yet — a Gmail poller, a Fireflies
-webhook, a chokidar watch — so events arrive by `emit-event` or the HTTP route,
-not on their own; and no launchd plist, so the daemon does not survive a reboot.
-At the back: Recall is indexed but not queryable, which is why the sidebar says
-so instead of pretending. Everything on screen works.
+source id and narrowed by each manifest's filter, and its first real listener is
+live — the chokidar vault watch you used in Beat 3, which fires an agent because
+a file was written. What is still missing sits at the two ends. At the front: the
+networked listeners — a Gmail poller, a Fireflies webhook, a Slack route — so
+mail and meeting events still arrive by `emit-event` or the HTTP route; and no
+launchd plist, so the daemon does not survive a reboot. At the back: Recall is
+indexed but not queryable, which is why the sidebar says so instead of
+pretending. Everything on screen works.
 
 ---
 
 ## Before you present
 
 ```bash
-pnpm test        # 389 tests. test/agents.test.ts is this document, executable.
+pnpm test        # 409 tests. test/agents.test.ts is this document, executable.
 pnpm typecheck
 ```
 
-`test/agents.test.ts` asserts every beat above. If a demo step here is wrong,
-that file fails first.
+`test/agents.test.ts` asserts the capability beats; the autonomous ones — the
+scheduler, the Event Bus, the vault watch and `note-capture` — are asserted by
+`scheduler.test.ts`, `events.test.ts`, `vault-watch.test.ts` and
+`note-capture.test.ts`. If a demo step here is wrong, the suite fails first.
