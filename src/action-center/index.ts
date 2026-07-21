@@ -15,6 +15,7 @@ import {
   createActionItem,
   getActionItem,
   getActionItemByDedupeKey,
+  listActionItems,
   noteAgainstItem,
   releaseDedupeKey,
   transition,
@@ -615,6 +616,55 @@ export class ActionCenter {
       });
     }
     return due.length;
+  }
+
+  /**
+   * Boot reconciliation (§11). Recovers items a crash caught mid-handoff and
+   * returns how many were re-driven.
+   *
+   * `approved` is the instant an item is with the Execution Registry but its
+   * outcome is not yet recorded: `execute()` transitions to `approved`, awaits
+   * the adapter, then transitions to executed/awaiting_confirmation/failed. A
+   * process that dies in that await strands the item in `approved` — not in the
+   * Inbox (approved is not a reviewable state) and with nothing to move it, so
+   * without this it is lost. Re-running `execute()` is the recovery, and it is
+   * safe by construction because `dispatchKey` is derived deterministically from
+   * the item and its reopen count: a re-drive reuses the original key, so an
+   * attempt that already settled replays its recorded result (no second external
+   * effect) and one that never settled runs once more. That is exactly §5.3's
+   * retry-after-timeout guarantee, applied to a restart instead of a timeout.
+   *
+   * Must run while nothing else dispatches — before the socket opens and before
+   * the scheduler and listeners start. Only then is every `approved` item a
+   * genuine remnant rather than one a live `respond()` is mid-`execute()` on, and
+   * only then is `reconcileStalePending()` safe to fail every pending row.
+   */
+  async reconcile(): Promise<number> {
+    const { db, execution: registry } = this.deps;
+    // Correct the ledger first: fail the pending execution rows the same crash
+    // left behind, so the re-drive below opens a clean attempt rather than
+    // stacking on one that claims to still be running.
+    const failedRows = registry.reconcileStalePending();
+
+    const stranded = listActionItems(db, { status: "approved", limit: 500 });
+    for (const item of stranded) {
+      logger.info({ id: item.id, type: item.type }, "re-driving an item interrupted mid-execution");
+      try {
+        await this.execute(item);
+      } catch (err) {
+        // One item's recovery failing must not abort the boot pass or block the
+        // rest. It stays `approved`; the next restart tries it again.
+        logger.error({ id: item.id, err: String(err) }, "reconcile: re-drive failed");
+      }
+    }
+
+    if (failedRows || stranded.length) {
+      logger.info(
+        { failed_executions: failedRows, redriven: stranded.length },
+        "reconciled interrupted work on boot",
+      );
+    }
+    return stranded.length;
   }
 
   #require(id: string): ActionItem {

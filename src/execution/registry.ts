@@ -208,4 +208,36 @@ export class Registry implements ExecutionRegistryContract {
     );
     return result;
   }
+
+  /**
+   * Marks every execution still recorded as `pending` as `failed`, returning how
+   * many. This is the ledger half of §11's boot reconciliation.
+   *
+   * An `execute()` writes the `pending` row, awaits the adapter, then updates the
+   * row to its outcome. A process that dies in that await leaves a `pending` row
+   * that will never resolve — a permanent lie in the ledger. The replay guard
+   * ignores it (it trusts only `succeeded`/`staged`), so it neither blocks nor
+   * helps the retry; it just claims forever that an attempt is in flight. The
+   * spec's "treated as failed-and-retried, not silently dropped": this method is
+   * the failed half, and the caller re-driving the approved item is the retry.
+   *
+   * Callers must invoke this only when nothing is dispatching — at boot, before
+   * the socket opens and the scheduler and listeners start. Then every `pending`
+   * row is a crash remnant by construction, so no staleness threshold is needed
+   * to tell a dead attempt from a live one: there are no live ones. Run while the
+   * daemon is serving and this would fail an execution that is legitimately in
+   * flight.
+   */
+  reconcileStalePending(reason = "interrupted by restart"): number {
+    const stale = this.db
+      .prepare<{ id: string }>("SELECT id FROM executions WHERE status = 'pending'")
+      .all();
+    for (const { id } of stale) {
+      this.db
+        .prepare("UPDATE executions SET status = 'failed', error = ?, finished_at = ? WHERE id = ?")
+        .run(reason, nowIso(), id);
+    }
+    if (stale.length) logger.info({ count: stale.length }, "failed stale pending executions");
+    return stale.length;
+  }
 }
