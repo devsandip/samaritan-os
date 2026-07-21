@@ -192,9 +192,12 @@ event was typed — a file appeared on disk and the OS noticed. Write one into
 `Areas/` instead and nothing happens: `note-capture`'s filter is `folder_eq:
 Inbox`, so the watch fires the whole vault but only the Inbox drop reaches it.
 
-The listeners still missing are the networked ones — a Gmail poller, a Fireflies
-webhook — so those events still arrive by `emit-event` or the HTTP route. The
-filesystem one is real.
+One networked listener is real now too: a Gmail poller. Enable it in `config.yaml`
+and drop a token in the Keychain, and the daemon polls your inbox and posts each
+new message as the same `email.received` the demo hand-emits — no curl. It is off
+by default here so the demo stays offline; the ones still missing are the inbound
+webhooks, a Fireflies and a Slack route, so meeting and chat events still arrive
+by `emit-event` or the HTTP route. The filesystem and Gmail ones are real.
 
 ### Ask it something
 
@@ -253,16 +256,18 @@ cites every claim. And the Inbox triages: it sorts urgent-first then by deadline
 sweeps anything past its ttl to expired, and its "Select" mode clears a run of
 similar items in one approval — gated so the shortcut can only file what a single
 approve could, holding back anything money-locked, irreversible or high-value for
-its own look. What is still missing sits at the front: the networked listeners — a
-Gmail poller, a Fireflies webhook, a Slack route — so mail and meeting events
-still arrive by `emit-event` or the HTTP route. Everything on screen works.
+its own look. The first networked listener is live: a Gmail poller turns a real
+inbox into `email.received` events on the bus, off by default so the demo stays
+offline. What is still missing sits at the front: the inbound webhooks — a
+Fireflies webhook and a Slack route — so meeting and chat events still arrive by
+`emit-event` or the HTTP route. Everything on screen works.
 
 ---
 
 ## Before you present
 
 ```bash
-pnpm test        # 502 tests. test/agents.test.ts is this document, executable.
+pnpm test        # 533 tests. test/agents.test.ts is this document, executable.
 pnpm typecheck
 ```
 

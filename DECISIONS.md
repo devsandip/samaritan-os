@@ -6,6 +6,53 @@ spec, so the spec stays the design record and this stays the build record.
 
 ---
 
+## 2026-07-21 — The Gmail listener: the bus's first networked front end
+
+**Context:** §12 step 18 named three networked listeners still missing — a Gmail
+poller, a Fireflies webhook, a Slack route — so mail and meeting events reached
+the Event Bus only by a hand `emit-event`. The Gmail poller is the one with a
+live subscriber already waiting: `email-triage` (no filter) and
+`newsletter-digest` (`from_in`) both take `email.received`, so a real inbox
+completes a path that already existed from the capability end.
+
+**The same pure-core / thin-shell split as the vault watch.** `gmailMessageToEvent`
+is pure — a normalised Gmail message becomes the exact `email.received` payload
+the two capabilities read — and `GmailPoller` drives the loop against an injected
+`GmailSource`. So the decisions (how a `From` splits, what the event id is, which
+query to send, how a raw MIME tree collapses to a body) are tested without a
+network, and the messy half (OAuth, REST, base64) is swappable for a fake. Only
+the socket to `googleapis.com` is genuinely untestable, and the request-building
+and response-parsing around it are covered against an injected `fetch`.
+
+**The checkpoint is an optimisation, not the correctness mechanism.** A poll can
+re-see a message (Gmail's `after:` is second-granular, and a boundary message
+reappears). What keeps it from being filed twice is the Event Bus dedup on the
+stable `gmail:<id>`, exactly as for the vault watch — so the high-water checkpoint
+only exists to avoid *refetching* what we've handled. Losing it costs a refetch,
+which the dedup absorbs, never a double-file. That let me ship the poll engine
+with an in-memory checkpoint first and add the store-backed one (migration 7,
+`poll_state`) without a correctness gap.
+
+**A failed publish holds the mark back.** The high-water only advances over
+messages that published *and* are older than any that failed, so a message the bus
+rejected is refetched next poll rather than stranded behind a mark that jumped past
+it. This is the one place the checkpoint has to be careful, and it is careful in
+the pure loop where a test can pin it.
+
+**v0 carries a bearer token; the refresh flow is deferred.** The Gmail secret is
+an access token (`gmail:<account>`), and a 401 surfaces as "reauthorise" rather
+than being swallowed — the same shape as TickTick's OAuth gap in v0. A full
+refresh-token dance is real work with no way to verify it here, so it waits.
+
+**What the sandbox could and could not verify.** With the listener enabled and a
+token present, a live daemon started the poller, the source made a *real* request
+to `googleapis.com`, the bad token came back 401 and surfaced as "reauthorise",
+and the failed poll was isolated — the daemon stayed healthy. The one path a
+sandbox cannot reach is a valid-token 200, so the successful-fetch branch is
+covered by the injected-`fetch` unit test and left for a real inbox to confirm.
+
+---
+
 ## 2026-07-21 — Action Center triage v1: batch-approve gated on what a batch commits
 
 **Context:** §12 step 23 — "triage in the Action Center: priority/deadline
