@@ -174,6 +174,20 @@ export const ConfigSchema = z.object({
       max_per_poll: z.number().int().min(1).max(100).default(25),
     })
     .prefault({}),
+
+  fireflies: z
+    .object({
+      /**
+       * §2.2 Fireflies listener. Off by default: the webhook route returns 404
+       * until this is set, so exposing the daemon does not open an inbound path
+       * nobody asked for. The signing secret is the Keychain entry
+       * `fireflies:<account>`; with it set, an unsigned or mis-signed POST is
+       * rejected, and without it the route accepts unverified (loopback-only v0).
+       */
+      enabled: z.boolean().default(false),
+      account: z.string().default("webhook"),
+    })
+    .prefault({}),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
@@ -228,6 +242,15 @@ gmail:
   query: "in:inbox"
   poll_interval_ms: 60000
   backfill_days: 1
+
+# Fireflies listener (§2.2). Off by default. Turn it on and add a signing secret:
+#   security add-generic-password -s samaritan -a fireflies:webhook -w
+# Then point your Fireflies webhook at POST /api/webhooks/fireflies. With the
+# secret set, an unsigned or mis-signed request is rejected; a "Transcription
+# completed" event becomes a meeting.transcribed event on the bus.
+fireflies:
+  enabled: false
+  account: webhook
 
 # Notion database ids for your own workspace. Find one in the database's URL:
 # notion.so/<workspace>/<32-hex-id>?v=... Leave blank to disable that target.
