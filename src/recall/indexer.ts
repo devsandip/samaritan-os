@@ -19,7 +19,9 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { log } from "../logger.js";
+import { listActionItems, listAuditTrail } from "../store/action-items.js";
 import type { Db } from "../store/db.js";
+import type { ActionItem, ActionItemEvent } from "../types/index.js";
 import { chunkMarkdown, chunkPlain } from "./chunk.js";
 import type { Embedder } from "./embed.js";
 import {
@@ -176,4 +178,78 @@ export async function reindexFiles(deps: ReindexDeps): Promise<IndexTally> {
 
   logger.info(total, "reindexed files");
   return total;
+}
+
+// ---- Audit trail --------------------------------------------------------------
+
+function stringifyValue(value: unknown): string {
+  return typeof value === "string" ? value : JSON.stringify(value);
+}
+
+/**
+ * Renders one action item and its trail into a searchable block (§7 names the
+ * audit log a first-class RAG source). The point is questions like "what did I
+ * decide about the vendor?" or "when did I reject that renewal?" — so the render
+ * leads with what happened and the decision, then lays the status transitions out
+ * in order. Pure: item and events in, a Doc out.
+ */
+export function renderAuditDoc(item: ActionItem, events: ActionItemEvent[]): Doc {
+  const c = item.context;
+  const lines = [
+    c.what_happened,
+    `Type: ${item.type} · Capability: ${item.capability_id} · Status: ${item.status}`,
+    `Decision: ${c.decision_needed}`,
+  ];
+  if (c.why_flagged) lines.push(`Why: ${c.why_flagged}`);
+  if (c.outcome_preview) lines.push(`Outcome: ${c.outcome_preview}`);
+  if (c.provenance.length) lines.push(`Path: ${c.provenance.join(" → ")}`);
+
+  const custom = Object.entries(item.custom)
+    .filter(([, v]) => v !== null && v !== undefined && v !== "")
+    .map(([k, v]) => `${k}: ${stringifyValue(v)}`);
+  if (custom.length) lines.push(custom.join("; "));
+
+  if (events.length) {
+    lines.push("Trail:");
+    for (const e of events) {
+      const when = e.created_at.slice(0, 16).replace("T", " ");
+      const from = e.from_status ?? "∅";
+      lines.push(`- ${when} ${from} → ${e.to_status} by ${e.actor}${e.reason ? `: ${e.reason}` : ""}`);
+    }
+  }
+
+  return { sourcePath: `audit/${item.id}`, ref: item.id, text: lines.join("\n") };
+}
+
+/** Every action item, rendered with its trail. Paged so a big store still fits. */
+export function collectAudit(db: Db): Doc[] {
+  const docs: Doc[] = [];
+  const pageSize = 500;
+  for (let offset = 0; ; offset += pageSize) {
+    const items = listActionItems(db, { limit: pageSize, offset });
+    for (const item of items) docs.push(renderAuditDoc(item, listAuditTrail(db, item.id)));
+    if (items.length < pageSize) break;
+  }
+  return docs;
+}
+
+/** Reindexes the audit trail and prunes items that no longer exist. */
+export async function reindexAudit(deps: { db: Db; embedder: Embedder }): Promise<IndexTally> {
+  ensureVectorTable(deps.db, await deps.embedder.dimensions());
+  const { tally, seen } = await indexDocuments(deps.db, deps.embedder, "audit", collectAudit(deps.db));
+  tally.removed += pruneMissing(deps.db, "audit", seen);
+  logger.info(tally, "reindexed audit trail");
+  return tally;
+}
+
+/** The whole index: files (vault + journals) and the audit trail. */
+export async function reindex(deps: ReindexDeps): Promise<IndexTally> {
+  const files = await reindexFiles(deps);
+  const audit = await reindexAudit(deps);
+  return {
+    indexed: files.indexed + audit.indexed,
+    skipped: files.skipped + audit.skipped,
+    removed: files.removed + audit.removed,
+    chunks: files.chunks + audit.chunks,
+  };
 }

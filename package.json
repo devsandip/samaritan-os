@@ -23,6 +23,7 @@
     "test:watch": "vitest",
     "serve": "tsx src/cli/serve.ts",
     "install-daemon": "tsx src/cli/install-daemon.ts",
+    "index": "tsx src/cli/index-recall.ts",
     "emit": "tsx src/cli/emit.ts",
     "emit-event": "tsx src/cli/emit-event.ts"
   },
