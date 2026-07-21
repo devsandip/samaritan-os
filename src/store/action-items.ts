@@ -199,11 +199,15 @@ export function listActionItems(db: Db, filter: ListFilter = {}): ActionItem[] {
   }
 
   const where = clauses.length ? ` WHERE ${clauses.join(" AND ")}` : "";
-  // urgent first, then newest. CASE keeps the ordering semantic rather than
-  // alphabetical, which would put "high" after "urgent" and "low" first.
+  // Triage order (§12 step 23): urgent first, then within a priority the soonest
+  // deadline (items without one sort after those that have one), then newest. The
+  // CASE keeps priority semantic rather than alphabetical, which would put "high"
+  // after "urgent" and "low" first; the NULL-guard keeps a missing deadline from
+  // sorting ahead of a real one under SQLite's "NULLs are smallest" default.
   const order = `
     ORDER BY CASE priority
       WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END,
+      CASE WHEN deadline IS NULL THEN 1 ELSE 0 END, deadline ASC,
       created_at DESC`;
   params.push(filter.limit ?? 50, filter.offset ?? 0);
 

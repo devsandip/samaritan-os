@@ -26,6 +26,7 @@ nothing is filed until Sandip approves it.
 | 16 Daemon: one process hosts the scheduler, bus and sweeps; boot reconciliation (§11); launchd plist | Done |
 | 22 Recall query: hybrid retrieval (vector + BM25 → RRF), cited, with an indexer and the Ask box | Done |
 | 19 Policy Engine v1: confidence + reversibility + value rules, per-type overrides, money-lock (§9) | Done |
+| 23 Triage: priority/deadline sorting, batch-approve for similar low-risk items, ttl auto-expiry | Done |
 
 v0 is functionally complete. The serve process is the daemon: it hosts the
 scheduler, so scheduled-mode agents (`weekly-digest`, `subscription-watch`) fire
@@ -60,6 +61,17 @@ shape as the money-lock, one level softer, because these two are overridable
 per-type (`allow_irreversible`, `value_threshold`) where money never is. The
 global thresholds live in `config.yaml`'s `policy` block, so the line between
 "file it silently" and "ask me first" is Sandip's to set.
+
+The Inbox can clear a run of similar items in one decision. A "Select" mode
+locks to a single type — items that share a review surface and a response set —
+and approves the whole selection at once. The convenience is gated on what the
+response commits: an approve (which files or dispatches) only lands on items the
+risk check clears, so anything money-locked, irreversible, or above the value
+threshold is held back for its own look, while a bulk discard is never gated
+because it commits nothing. Each approved item takes the identical path a
+one-at-a-time approve would, audit trail and all; the batch is a shortcut for the
+input, not a different route for the effect. The list itself is triaged urgent
+first, then by soonest deadline, and anything past its `ttl` is swept to expired.
 
 The listeners still missing are the networked ones — a Gmail poller, a Fireflies
 webhook, a Slack Events route — so those events still arrive by `samaritan
@@ -127,6 +139,11 @@ Three properties are enforced structurally rather than by convention:
   the `value` threshold, to review before it can auto-complete. Unlike money these
   are overridable per-type, so a capability can take responsibility for one it
   knows is safe — but silence is never taken as safe.
+- **A batch cannot commit what a single approve would not.** Batch-approve applies
+  one response to many items, but a committing response (`execute`/`guided`) only
+  lands on items that clear the same money/irreversible/value gate; the rest are
+  held back for individual review. The same three checks guard the shortcut as
+  guard the one-at-a-time path, so bulk buys speed, never a lower bar.
 - **Nothing has no fallback.** An adapter that is missing, or that cannot do the
   mode it was asked for, degrades to `guided.fallback`, which renders the action
   as copy-ready text. The work still gets done, by hand.
@@ -226,7 +243,7 @@ example `SAMARITAN_NOTION_PM_OS_WORKSPACE`.
 ## Tests
 
 ```bash
-pnpm test        # 480 tests
+pnpm test        # 502 tests
 pnpm typecheck
 ```
 

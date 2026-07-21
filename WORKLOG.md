@@ -711,3 +711,46 @@ and the supervision that turns a crash into a restart worth recovering from.
   Money is a bright line the OS draws for everyone; "how much" and "how undo-able"
   are judgments that vary by capability, so the OS sets the default and lets the
   author bend it — never silence.
+
+---
+
+## 2026-07-21 — Action Center triage v1: batch-approve, gated on commitment
+
+**Did:**
+- Built batch-approve for similar low-risk items (§12 step 23). One response
+  applied to many items in a call, with per-item outcomes (applied / skipped /
+  errors) so a partial batch is a 200 with the failures itemised, not a rejection.
+- Wrote `assessBatchRisk` as a pure gate: a *committing* response (`execute` /
+  `guided`) is allowed only on items clear of the §9 risk axis (money absolute,
+  irreversible and value overridable per-type); a non-committing response
+  (`discard`, `defer`) is never gated. It mirrors the engine's risk rules but not
+  its predicates — every batched item is already pending.
+- `ActionCenter.batchRespond` routes each applied item through the same
+  `respond()` a single approve uses, so lifecycle, execution and audit are
+  identical; `POST /api/actions/batch` exposes it; the Inbox gained an opt-in
+  "Select" mode that locks to one type and shows how many were held for review.
+- Made the list sort deadline-aware (soonest first under priority, no-deadline
+  last) — inert today since nothing sets `deadline`, correct the day a capability
+  does. Confirmed ttl auto-expiry and priority sort were already built.
+
+**State now:**
+- 502 tests (was 480): +11 batch-risk, +6 batchRespond, +3 API, +2 list-order.
+  Typecheck clean, `pnpm build:ui` clean, full suite green.
+- Verified live against a real daemon: ingested three low-risk wrap items and one
+  value-500 item, batched an approve — the three applied (audit shows
+  pending→approved→execute, the same path as a single approve), the value-500 one
+  skipped with `risk:value_threshold` and left untouched (audit shows only its
+  ingest). The gate holds on the wire, not just in the unit tests.
+
+**Next:**
+- The networked listeners (Gmail poll, Fireflies/Slack webhooks), which need
+  credentials and a network this environment does not have.
+- Populating `deadline` from capability content, so the new sort key does work.
+
+**Decisions:**
+- The gate is on what a response *commits*, not on the item — guard the effect,
+  like the money-lock, one level out. Non-committing responses batch freely.
+- A batch is confined to one `(capability, type)`: "similar" means a shared
+  response set and review surface, so one response id is meaningful across all.
+- Applied is the identical single-approve path — a shortcut for the input, never a
+  different path for the effect.

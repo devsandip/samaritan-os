@@ -448,6 +448,77 @@ code {
   font-weight: 600;
 }
 
+.list-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.select-toggle {
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--core);
+  cursor: pointer;
+  padding: 0;
+}
+
+.batch-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--core-soft);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.batch-count {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.irow {
+  display: flex;
+  align-items: stretch;
+}
+
+.irow > .item {
+  flex: 1;
+  min-width: 0;
+}
+
+.irow-check {
+  flex: 0 0 auto;
+  width: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid var(--line);
+  background: var(--list-bg);
+}
+
+.irow-check.disabled {
+  opacity: 0.4;
+}
+
+.irow-check input {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+
+.irow-check.disabled input {
+  cursor: not-allowed;
+}
+
 .item {
   display: block;
   width: 100%;

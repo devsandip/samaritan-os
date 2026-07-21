@@ -1,8 +1,8 @@
 # Samaritan — Journal Index
 
-Last refreshed: 2026-07-21 23:45
+Last refreshed: 2026-07-22 00:05
 
-Latest entry: [2026-07-21-2340-the-line-you-cannot-move](entries/2026-07-21-2340-the-line-you-cannot-move.md)
+Latest entry: [2026-07-21-2359-a-shortcut-not-a-lower-bar](entries/2026-07-21-2359-a-shortcut-not-a-lower-bar.md)
 
 Local-first personal agentic OS. The Action Center is a universal
 human-in-the-loop layer and a pluggable capability platform: one inbox for
@@ -123,6 +123,12 @@ items, ttl auto-expiry.
 
 ## Recent entries
 
+- [2026-07-21-2359-a-shortcut-not-a-lower-bar](entries/2026-07-21-2359-a-shortcut-not-a-lower-bar.md)
+  — Action Center triage v1: batch-approve for similar items, and the wariness
+  behind it — a batch gates on what the response *commits* (an approve is checked,
+  a discard never is), reuses §9's risk axis but not its predicates, and routes
+  each applied item through the identical single-approve path; verified live that
+  the low-stakes cleared and a high-value item was held untouched
 - [2026-07-21-2340-the-line-you-cannot-move](entries/2026-07-21-2340-the-line-you-cannot-move.md)
   — Policy Engine v1: reversibility and value join confidence, and the design
   question that mattered — what the OS makes absolute (money) versus a strong

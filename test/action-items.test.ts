@@ -189,6 +189,33 @@ describe("listActionItems", () => {
     expect(listActionItems(db).map((i) => i.priority)).toEqual(["urgent", "high", "low"]);
   });
 
+  it("within a priority, orders by soonest deadline, with no-deadline items last", () => {
+    const db = testStore();
+    createActionItem(db, testDraft({ dedupe_key: "none", priority: "normal", deadline: null }));
+    createActionItem(
+      db,
+      testDraft({ dedupe_key: "late", priority: "normal", deadline: "2026-12-31T00:00:00Z" }),
+    );
+    createActionItem(
+      db,
+      testDraft({ dedupe_key: "soon", priority: "normal", deadline: "2026-08-01T00:00:00Z" }),
+    );
+    expect(listActionItems(db).map((i) => i.dedupe_key)).toEqual(["soon", "late", "none"]);
+  });
+
+  it("keeps priority ahead of deadline: an urgent far item beats a normal near one", () => {
+    const db = testStore();
+    createActionItem(
+      db,
+      testDraft({ dedupe_key: "urgent-far", priority: "urgent", deadline: "2027-01-01T00:00:00Z" }),
+    );
+    createActionItem(
+      db,
+      testDraft({ dedupe_key: "normal-near", priority: "normal", deadline: "2026-08-01T00:00:00Z" }),
+    );
+    expect(listActionItems(db).map((i) => i.dedupe_key)).toEqual(["urgent-far", "normal-near"]);
+  });
+
   it("honours limit and offset", () => {
     const db = seeded();
     expect(listActionItems(db, { limit: 2 })).toHaveLength(2);

@@ -249,17 +249,20 @@ live — the chokidar vault watch you used in Beat 3, which fires an agent becau
 a file was written. The daemon is supervised by a launchd agent and, on the next
 boot, re-drives any work a crash interrupted mid-execution. Ask-Samaritan answers
 now: the sidebar box retrieves against the vault, journals and audit trail and
-cites every claim. What is still missing sits at the front: the networked
-listeners — a Gmail poller, a Fireflies webhook, a Slack route — so mail and
-meeting events still arrive by `emit-event` or the HTTP route. Everything on
-screen works.
+cites every claim. And the Inbox triages: it sorts urgent-first then by deadline,
+sweeps anything past its ttl to expired, and its "Select" mode clears a run of
+similar items in one approval — gated so the shortcut can only file what a single
+approve could, holding back anything money-locked, irreversible or high-value for
+its own look. What is still missing sits at the front: the networked listeners — a
+Gmail poller, a Fireflies webhook, a Slack route — so mail and meeting events
+still arrive by `emit-event` or the HTTP route. Everything on screen works.
 
 ---
 
 ## Before you present
 
 ```bash
-pnpm test        # 465 tests. test/agents.test.ts is this document, executable.
+pnpm test        # 502 tests. test/agents.test.ts is this document, executable.
 pnpm typecheck
 ```
 

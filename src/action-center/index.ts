@@ -7,7 +7,12 @@
  * `transition()`, so the audit trail is complete by construction.
  */
 import { log } from "../logger.js";
-import { evaluate, type PolicyConfig, type PolicyDecision } from "../policy/index.js";
+import {
+  DEFAULT_POLICY_CONFIG,
+  evaluate,
+  type PolicyConfig,
+  type PolicyDecision,
+} from "../policy/index.js";
 import type { CapabilityRegistry, LoadedType } from "../registry/index.js";
 import type { RoutingResolver } from "../routing/index.js";
 import type { Registry as ExecutionRegistry } from "../execution/registry.js";
@@ -32,6 +37,7 @@ import {
   type ExecutionMode,
 } from "../types/index.js";
 import { isWithinQuietHours, parseQuietHours, quietHoursEnd } from "../delivery/quiet-hours.js";
+import { assessBatchRisk, type BatchRisk } from "./risk.js";
 
 const logger = log("action-center");
 
@@ -50,6 +56,28 @@ export interface IngestRejected {
 export interface IngestResult {
   accepted: IngestAccepted[];
   rejected: IngestRejected[];
+}
+
+export interface BatchOutcome {
+  id: string;
+  /**
+   * `applied` — the response took effect; `skipped` — the batch risk gate held
+   * it back for individual review; `error` — the response could not be applied
+   * (unknown id, undeclared response, disallowed transition).
+   */
+  result: "applied" | "skipped" | "error";
+  /** The item's resulting status, when applied. */
+  status?: ActionItem["status"];
+  /** Why it was skipped or errored. */
+  reason?: string;
+  /** The risk rule that held it back, when skipped. */
+  rule?: string;
+}
+
+export interface BatchRespondResult {
+  applied: BatchOutcome[];
+  skipped: BatchOutcome[];
+  errors: BatchOutcome[];
 }
 
 export interface Delivery {
@@ -533,6 +561,86 @@ export class ActionCenter {
           ...(patch ? { patch } : {}),
         });
     }
+  }
+
+  /**
+   * POST /api/actions/batch. Applies one response to many similar items at once
+   * (TECH-SPEC §12 step 23).
+   *
+   * A *committing* response (one whose outcome executes or dispatches) is applied
+   * only to the items the batch risk gate (§9) calls low-risk; the rest come back
+   * as `skipped` with the rule that held them, to be reviewed on their own. A
+   * non-committing response (discard, defer) is applied to every item, since it
+   * commits nothing to the world. Each item is decided independently — one skip
+   * or failure never blocks the others — and every applied item still goes
+   * through `respond()`, so its lifecycle, execution and audit trail are
+   * identical to a one-at-a-time approve. Bulk is a shortcut for the input, never
+   * a different path for the effect.
+   */
+  async batchRespond(input: {
+    ids: string[];
+    response_id: string;
+    actor?: Actor;
+  }): Promise<BatchRespondResult> {
+    const applied: BatchOutcome[] = [];
+    const skipped: BatchOutcome[] = [];
+    const errors: BatchOutcome[] = [];
+
+    for (const id of input.ids) {
+      try {
+        const item = this.#require(id);
+        const gate = this.#batchGate(item, input.response_id);
+        if (gate && !gate.batchable) {
+          skipped.push({ id, result: "skipped", reason: gate.reason, rule: gate.rule });
+          continue;
+        }
+        const updated = await this.respond(id, {
+          response_id: input.response_id,
+          ...(input.actor ? { actor: input.actor } : {}),
+        });
+        applied.push({ id, result: "applied", status: updated.status });
+      } catch (err) {
+        const reason = err instanceof ActionCenterError ? err.message : String(err);
+        errors.push({ id, result: "error", reason });
+      }
+    }
+
+    logger.info(
+      {
+        response: input.response_id,
+        applied: applied.length,
+        skipped: skipped.length,
+        errors: errors.length,
+      },
+      "batch respond",
+    );
+    return { applied, skipped, errors };
+  }
+
+  /**
+   * The risk verdict for applying `responseId` to `item` in a batch, or
+   * `undefined` when the response is non-committing and so needs no gate. A
+   * response the manifest no longer declares is left ungated: `respond()` rejects
+   * it with the precise error, which surfaces as an `error` entry rather than a
+   * silent skip.
+   */
+  #batchGate(item: ActionItem, responseId: string): BatchRisk | undefined {
+    if (responseId === DISMISS_RESPONSE_ID) return undefined;
+    const type = this.deps.capabilities.getType(item.capability_id, item.type);
+    const response = type?.spec.responses.find((r) => r.id === responseId);
+    if (!response) return undefined;
+    if (response.outcome !== "execute" && response.outcome !== "guided") return undefined;
+
+    return assessBatchRisk({
+      ...(type?.spec.execution.action_type
+        ? { actionType: type.spec.execution.action_type }
+        : {}),
+      executionCapabilityId: item.execution.capability,
+      ...(item.context.reversibility ? { reversibility: item.context.reversibility } : {}),
+      ...(item.context.value !== undefined ? { value: item.context.value } : {}),
+      ...(type?.spec.policy ? { policy: type.spec.policy } : {}),
+      config: this.deps.policyConfig ?? DEFAULT_POLICY_CONFIG,
+    });
   }
 
   /** POST /api/actions/:id/confirm. Only valid from awaiting_confirmation (§5.1). */

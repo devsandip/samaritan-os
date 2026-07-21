@@ -197,3 +197,17 @@ export interface RecallStats {
   embedded: number;
   vector_index: boolean;
 }
+
+export interface BatchOutcome {
+  id: string;
+  result: "applied" | "skipped" | "error";
+  status?: ActionItemStatus;
+  reason?: string;
+  rule?: string;
+}
+
+export interface BatchResult {
+  applied: BatchOutcome[];
+  skipped: BatchOutcome[];
+  errors: BatchOutcome[];
+}

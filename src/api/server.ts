@@ -61,6 +61,12 @@ const RespondBody = z.object({
   actor: z.enum(["sandip", "system", "policy", "capability"]).default("sandip"),
 });
 
+const BatchBody = z.object({
+  ids: z.array(z.string().min(1)).min(1),
+  response_id: z.string().min(1),
+  actor: z.enum(["sandip", "system", "policy", "capability"]).default("sandip"),
+});
+
 const ConfirmBody = z.object({
   actor: z.enum(["sandip", "system"]).default("sandip"),
   note: z.string().optional(),
@@ -175,6 +181,16 @@ export function buildServer(app: App): FastifyInstance {
     const body = RespondBody.safeParse(request.body);
     if (!body.success) return reply.code(400).send(badRequest(body.error));
     return app.actionCenter.respond(request.params.id, body.data);
+  });
+
+  // Batch-approve for similar low-risk items (§12 step 23). A committing response
+  // is applied only to items the risk gate clears; the rest come back as
+  // `skipped`. Per-item outcomes, so a partial batch still returns 200 with the
+  // failures itemised rather than failing the whole request.
+  server.post("/api/actions/batch", async (request, reply) => {
+    const body = BatchBody.safeParse(request.body);
+    if (!body.success) return reply.code(400).send(badRequest(body.error));
+    return app.actionCenter.batchRespond(body.data);
   });
 
   server.post<{ Params: { id: string } }>("/api/actions/:id/confirm", async (request, reply) => {
