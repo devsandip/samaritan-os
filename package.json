@@ -22,6 +22,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "serve": "tsx src/cli/serve.ts",
+    "install-daemon": "tsx src/cli/install-daemon.ts",
     "emit": "tsx src/cli/emit.ts",
     "emit-event": "tsx src/cli/emit-event.ts"
   },
