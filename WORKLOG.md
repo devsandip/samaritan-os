@@ -386,3 +386,59 @@ a demo-ready Samaritan.
 **Next:**
 - The scheduler (§12 step 17). Six agents declare crons and nothing fires them,
   which is the only remaining gap that makes a sentence in the demo untrue.
+
+## 2026-07-21 — The scheduler: crons that fire, and a restart that catches up
+
+**Did:**
+- Built the scheduler (§12 step 17), the gap the last three entries all pointed
+  at. Two scheduled agents declared crons that no clock ever read; now the serve
+  process fires them on cadence.
+- Wrote a self-contained cron matcher (`src/scheduler/cron.ts`) instead of taking
+  `node-cron`, because the column that has held `next_fire_at` since migration 1,
+  §11's catch-up, and this codebase's injected-clock test bar all want a pure
+  `(schedule, date)` function the library does not expose. Logged in DECISIONS.md.
+- Built the `Scheduler` (`src/scheduler/index.ts`) around three properties: §8
+  ownership (a trigger Claude still fires is skipped), claim-before-fire (advance
+  `next_fire_at` before the run, so an overlap or a slow run cannot double-fire),
+  and §11 catch-up (a boot that finds `next_fire_at` in the past knows a run was
+  missed and applies the manifest's `catch_up` once).
+- Added `trigger.catch_up` to the manifest and made `weekly-digest` the worked
+  `run_once` example; validated `cron` as a real five-field expression at load.
+- Hosted it in the API server's `start()` alongside the sweeps — the daemon
+  skeleton §6 describes — and put `next_fire_at` on `GET /api/capabilities`, read
+  from the persisted trigger row so it shows whether or not a daemon is up.
+
+**State now:**
+- 367 tests (up from 330: 17 cron, 18 scheduler incl. two end-to-end through the
+  real Run Layer, 2 API), typecheck clean. Four commits on
+  `claude/continue-building-0uer2e`.
+- Verified against a live daemon: on boot the scheduler armed `subscription-watch`
+  to the next 08:00 and `weekly-digest` to the next Sunday 20:00; event and manual
+  capabilities stayed null. The demo sentence is now true.
+- Still not built: the launchd plist (so the daemon survives a reboot), the Event
+  Bus (step 18) so event-mode agents fire on real events, and Recall's query path
+  (step 22).
+
+**Next:**
+- The launchd plist and a `daemon` entrypoint, so step 16 is fully done and the
+  scheduler survives a reboot rather than living only as long as `pnpm serve`.
+- Then the Event Bus (step 18): `email-triage` and `newsletter-digest` are
+  event-mode agents with no events, the mirror of the gap just closed.
+- Recall's query path (step 22), still the last v0-shaped piece of the UI that is
+  a placeholder.
+
+**Decisions:**
+- Claim before firing, not after. Advancing `next_fire_at` before the run means a
+  crash mid-run loses that one slot; `catch_up: run_once` is the recovery for the
+  runs where that matters. The alternative (advance after) risks a double-fire on
+  an overlapping tick, and while ingest dedupes by `dedupe_key` so it would be
+  mostly harmless, "each slot fires at most once" is the cleaner contract.
+- A missed run coalesces to one. `next_fire_at` advances to the next occurrence
+  after *now*, not the next after the missed slot, so a daemon down for three days
+  fires a daily agent once on return, not three times.
+- `next_fire_at` on the API reads the persisted trigger row, not the live
+  Scheduler object. The Dashboard then shows what will fire even from a CLI
+  `createApp` that never starts a scheduler, and there is no second source of
+  truth to drift.
+- A disabled scheduled capability is armed forward without firing, so
+  re-enabling it does not trigger a catch-up for every slot it slept through.

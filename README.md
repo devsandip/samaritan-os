@@ -21,10 +21,16 @@ nothing is filed until Sandip approves it.
 | 12 Telegram delivery with quiet-hours queueing | Done |
 | 11 Inbox web UI | Done |
 | 13-15 Audit endpoint, emit CLI, end-to-end smoke | Done |
-| 16+ Daemon, scheduler, event bus, Recall (v1) | Not started |
+| 17 Scheduler: scheduled-mode agents fire on their cron, in-process, with catch-up | Done |
+| 16 Daemon: the serve process hosts the scheduler and sweeps | Partial (no launchd plist) |
+| 18+ Event bus, Recall query (v1) | Not started |
 
-v0 is functionally complete. Ask-Samaritan (RAG) is stubbed in the UI because
-`src/recall/` is not built yet.
+v0 is functionally complete. The scheduler runs inside the serve process:
+scheduled-mode agents (`weekly-digest`, `subscription-watch`) fire on their
+declared cron, and a run missed while the machine was asleep is caught up on the
+next boot per each manifest's `catch_up`. Ask-Samaritan (RAG) is still stubbed in
+the UI because `src/recall/` has no query path yet, and event-mode agents wait on
+the Event Bus (step 18).
 
 ## Quick start
 

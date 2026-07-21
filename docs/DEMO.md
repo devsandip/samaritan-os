@@ -182,9 +182,13 @@ pnpm run-capability standup-notes
 The report says what failed, the card goes red, and every other agent is
 unaffected. Then restore it or delete the folder.
 
-**"What is not built?"** Say it plainly: no daemon, so nothing fires on a
-schedule yet — the crons are declarations. No Event Bus, so event-mode agents
-run when you run them. Recall is indexed but not queryable, which is why the
+**"What is not built?"** Say it plainly. The scheduler is in: start the serve
+process and scheduled-mode agents fire on their cron — `weekly-digest` on Sunday
+at 20:00, `subscription-watch` daily at 08:00 — and a run missed while the Mac
+was asleep is caught up on the next boot. What is still missing: no launchd
+plist yet, so the daemon does not survive a reboot on its own; no Event Bus, so
+event-mode agents (`email-triage`, `newsletter-digest`) run when you run them,
+not when mail arrives; and Recall is indexed but not queryable, which is why the
 sidebar says so instead of pretending. Everything on screen works.
 
 ---
@@ -192,7 +196,7 @@ sidebar says so instead of pretending. Everything on screen works.
 ## Before you present
 
 ```bash
-pnpm test        # 330 tests. test/agents.test.ts is this document, executable.
+pnpm test        # 367 tests. test/agents.test.ts is this document, executable.
 pnpm typecheck
 ```
 
