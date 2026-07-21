@@ -1,8 +1,8 @@
 # Samaritan — Journal Index
 
-Last refreshed: 2026-07-22 02:15
+Last refreshed: 2026-07-22 03:35
 
-Latest entry: [2026-07-22-0210-the-door-not-the-errand](entries/2026-07-22-0210-the-door-not-the-errand.md)
+Latest entry: [2026-07-22-0330-and-then-the-errand](entries/2026-07-22-0330-and-then-the-errand.md)
 
 Local-first personal agentic OS. The Action Center is a universal
 human-in-the-loop layer and a pluggable capability platform: one inbox for
@@ -116,9 +116,11 @@ the last networked listener, a Slack Events route — so chat events still reach
 bus by `emit-event` or the HTTP route. Three listeners are built now: the vault
 watch, the Gmail poller (the first networked front end, off by default until a
 token is in the Keychain), and the Fireflies webhook (the first inbound one,
-signature-gated). Still open: a consumer for `meeting.transcribed` that pulls the
-transcript and extracts it, so the Fireflies notice becomes an Inbox item;
-Recall's structured SQL path over the mirror tables (so `retrieval_path` is always
+signature-gated) — and its notice is now answered: the `meeting-notes` capability
+subscribes to `meeting.transcribed`, fetches the transcript over Fireflies'
+GraphQL, and files each follow-up it extracted as a reviewed Inbox item (verified
+end to end against a live daemon and a local fixture). Still open: Recall's
+structured SQL path over the mirror tables (so `retrieval_path` is always
 `semantic`) and its near-real-time chokidar indexing, both left for later; no
 assisted execution adapters, which is why `email-triage` degrades to guided;
 Settings has a real routing table and no connections grid; and the Gmail
@@ -127,6 +129,14 @@ same encapsulated-plugin shape the Fireflies webhook just proved.
 
 ## Recent entries
 
+- [2026-07-22-0330-and-then-the-errand](entries/2026-07-22-0330-and-then-the-errand.md)
+  — the consumer that answers the transcript notice. Subscribing to
+  `meeting.transcribed` is just dropping a capability folder in (dispatch is
+  registry-driven), and the fetch I'd said I "couldn't verify here" verified end to
+  end once I stood up a local Fireflies endpoint and pointed the daemon at it with
+  `SAMARITAN_FIREFLIES_API_BASE`. Leans on Fireflies' own extraction, no model in
+  the daemon; one departure owned — the capability does its own I/O, because a
+  notice-only webhook leaves the fetch nowhere else to live.
 - [2026-07-22-0210-the-door-not-the-errand](entries/2026-07-22-0210-the-door-not-the-errand.md)
   — the Fireflies webhook: the bus's first *inbound* listener, reached into rather
   than reaching out, so the whole path is a request I can sign and curl — verified

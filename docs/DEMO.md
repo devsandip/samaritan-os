@@ -262,9 +262,11 @@ approve could, holding back anything money-locked, irreversible or high-value fo
 its own look. Two networked listeners are live: a Gmail poller that turns a real
 inbox into `email.received` events, and a Fireflies webhook that turns a
 transcript-ready callback into a `meeting.transcribed` event, both off by default
-so the demo stays offline. What is still missing sits at the front: the Slack
-Events route — so chat events still arrive by `emit-event` or the HTTP route — and
-a consumer for `meeting.transcribed` that pulls the transcript and extracts it.
+so the demo stays offline. The Fireflies notice is now answered: the
+`meeting-notes` capability subscribes to `meeting.transcribed`, fetches the
+transcript over Fireflies' GraphQL, and files each follow-up it extracted as a
+reviewed Inbox item. What is still missing sits at the front: the Slack Events
+route — so chat events still arrive by `emit-event` or the HTTP route.
 Everything on screen works.
 
 ---
@@ -272,7 +274,7 @@ Everything on screen works.
 ## Before you present
 
 ```bash
-pnpm test        # 550 tests. test/agents.test.ts is this document, executable.
+pnpm test        # 572 tests. test/agents.test.ts is this document, executable.
 pnpm typecheck
 ```
 

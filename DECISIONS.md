@@ -6,6 +6,55 @@ spec, so the spec stays the design record and this stays the build record.
 
 ---
 
+## 2026-07-21 — Meeting Notes: the consumer that answers the transcript notice
+
+**Context:** The Fireflies webhook publishes `meeting.transcribed` carrying only
+a meeting id — the notice, not the words (see the entry below). §12 step 18's
+loop was only half-built until something subscribed to that notice, pulled the
+transcript, and filed it. This is that consumer.
+
+**Decision 1 — the consumer is a capability, and it does its own I/O.** The bus
+dispatches to *capabilities*, not to arbitrary bus-subscribing listeners, so the
+subscriber is a capability (`meeting-notes`, `trigger.on: [meeting.transcribed]`)
+and the registry is the whole subscription — no daemon wiring. That capability
+fetches the transcript inside its `run()`. This departs from the tendency the
+Gmail path set, where the poller pre-fetches and the capability (`email-triage`)
+reads a data-carrying event and touches no network. The difference is forced by
+the webhook: a Fireflies callback does **not** carry the transcript, so the fetch
+is necessarily *downstream* of the event, and the webhook's own docstring already
+committed to "a capability that subscribes decides whether to pull the transcript
+and extract it." The purity is kept where it pays — the GraphQL query, the
+response normalisation and the map to review rows are pure and unit-tested; only
+the socket lives in a thin `fireflies-source.ts`, the Gmail split again.
+
+**Decision 2 — lean on Fireflies' own extraction; no LLM in the daemon.** The
+daemon is plain Node with no model, so `meeting-notes` does no language work: it
+reads Fireflies' own `summary.action_items` (grouped under bold assignee
+headings) and `summary.overview`, and normalises them into one task per follow-up
+plus a summary note. The manual `/meeting` capability still does richer,
+skill-driven extraction with a Claude model that already holds the transcript;
+the two coexist, event-driven and command-driven, both filing behind the same
+review gate. A transcript is a second-hand source a model read, so every item
+escalates unconditionally (§5.6), exactly as the manual path does.
+
+**Decision 3 — the API token is its own secret, and the endpoint is overridable.**
+The transcript fetch needs a Fireflies API token, kept as `fireflies:api` — a
+distinct Keychain account from the webhook signing secret `fireflies:webhook`, so
+the two credentials are never conflated. No token means the capability skips
+cleanly (the Gmail poller's idle shape), so the daemon runs without it.
+`SAMARITAN_FIREFLIES_API_BASE` overrides the GraphQL endpoint, which is how the
+whole loop — publish `meeting.transcribed` → dispatch → authenticated fetch →
+extract → filed Inbox items — was verified end-to-end against the *real* daemon
+and a local fixture, with no Fireflies account. It doubles as the self-hosting
+seam for anyone pointing at a proxy.
+
+**Cost / how to revert:** Two new pure files under `src/events/listeners/`
+(`fireflies-transcript.ts`, `fireflies-source.ts`) and one capability folder
+(`capabilities/meeting-notes/`). Deleting the folder unsubscribes it with no
+other change; the two `src/` files are imported only by the capability.
+
+---
+
 ## 2026-07-21 — The Fireflies webhook: the bus's first inbound listener
 
 **Context:** §12 step 18's remaining listeners were the inbound webhooks. Where
