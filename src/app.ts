@@ -10,13 +10,16 @@ import { join } from "node:path";
 import { loadConfig, repoRoot, type Config } from "./config/index.js";
 import { ActionCenter } from "./action-center/index.js";
 import { createDelivery, type Delivery } from "./delivery/index.js";
+import { EventBus } from "./events/index.js";
 import { registerV0Adapters } from "./execution/adapters/index.js";
 import { Registry as ExecutionRegistry } from "./execution/registry.js";
 import { log } from "./logger.js";
 import { CapabilityRegistry } from "./registry/index.js";
+import { runCapability } from "./run-layer/index.js";
 import { loadRoutingFile, RoutingResolver } from "./routing/index.js";
 import { openDatabase, type Db } from "./store/db.js";
 import { migrate } from "./store/migrate.js";
+import { nowIso } from "./types/index.js";
 
 const logger = log("app");
 
@@ -28,6 +31,7 @@ export interface App {
   routing: RoutingResolver;
   delivery: Delivery;
   actionCenter: ActionCenter;
+  eventBus: EventBus;
   close(): void;
 }
 
@@ -70,6 +74,24 @@ export function createApp(options: CreateAppOptions = {}): App {
     quietHours: config.delivery.quiet_hours,
   });
 
+  // The Event Bus fires event-mode capabilities through the same Run Layer a
+  // scheduled or manual run uses, so an event fire is one more path into one
+  // dispatcher, not a parallel one. It lives on the App (not just the daemon)
+  // because a webhook route calls straight into publish() at request time.
+  const eventBus = new EventBus({
+    db,
+    capabilities,
+    fire: async (capabilityId, event) => {
+      await runCapability(
+        { db, capabilities, actionCenter },
+        capabilityId,
+        {
+          trigger: { mode: "event", firedAt: event.occurred_at ?? nowIso(), payload: event.payload },
+        },
+      );
+    },
+  });
+
   return {
     config,
     db,
@@ -78,6 +100,7 @@ export function createApp(options: CreateAppOptions = {}): App {
     routing,
     delivery,
     actionCenter,
+    eventBus,
     close: () => db.close(),
   };
 }

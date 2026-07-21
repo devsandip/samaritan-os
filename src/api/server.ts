@@ -14,6 +14,7 @@ import { z } from "zod";
 import { ActionCenterError } from "../action-center/index.js";
 import { createApp, type App, type CreateAppOptions } from "../app.js";
 import { repoRoot } from "../config/index.js";
+import { SamaritanEvent } from "../events/types.js";
 import { log } from "../logger.js";
 import { RoutingLockedError, UnknownActionTypeError } from "../routing/index.js";
 import { runCapability } from "../run-layer/index.js";
@@ -260,6 +261,23 @@ export function buildServer(app: App): FastifyInstance {
       ...(body.data.inputs ? { inputs: body.data.inputs } : {}),
       force: body.data.force,
     });
+  });
+
+  // ---- Events --------------------------------------------------------------
+
+  /**
+   * Publishes one event onto the bus. This is what a listener posts to — a real
+   * `POST /webhooks/gmail` would normalise its body and call the same path — and
+   * what the demo and `samaritan emit-event` use to inject an event by hand.
+   *
+   * Always 202: a dropped duplicate (`deduped: true`) is a normal, successful
+   * outcome of publishing, not a client error, so the body reports what happened
+   * rather than the status code.
+   */
+  server.post("/api/events", async (request, reply) => {
+    const event = SamaritanEvent.safeParse(request.body);
+    if (!event.success) return reply.code(400).send(badRequest(event.error));
+    return reply.code(202).send(await app.eventBus.publish(event.data));
   });
 
   // ---- Routing -------------------------------------------------------------

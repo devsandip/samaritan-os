@@ -217,6 +217,80 @@ describe("GET /api/capabilities", () => {
   });
 });
 
+describe("POST /api/events", () => {
+  interface Publish {
+    deduped: boolean;
+    dispatched: string[];
+    matched: string[];
+  }
+
+  async function publish(event: unknown): Promise<{ status: number; body: Publish }> {
+    const response = await server.inject({ method: "POST", url: "/api/events", payload: event });
+    return { status: response.statusCode, body: response.json() as Publish };
+  }
+
+  function itemCount(capabilityId: string): number {
+    return (
+      app.db
+        .prepare<{ n: number }>("SELECT COUNT(*) AS n FROM action_items WHERE capability_id = ?")
+        .get(capabilityId)?.n ?? 0
+    );
+  }
+
+  const newsletter = {
+    type: "email.received",
+    id: "gmail:nl-1",
+    payload: {
+      id: "nl-1",
+      from: "@newsletters",
+      subject: "The weekly retrieval roundup",
+      body: "This week in retrieval and evals and sqlite. https://example.com/post",
+    },
+  };
+
+  it("routes a newsletter to both triage and the digest, and lands the digest's item", async () => {
+    const { status, body } = await publish(newsletter);
+
+    expect(status).toBe(202);
+    expect(body.deduped).toBe(false);
+    expect(body.dispatched.sort()).toEqual(["email-triage", "newsletter-digest"]);
+    // The digest maps every email to one reviewable item; it reached the store.
+    expect(itemCount("newsletter-digest")).toBe(1);
+  });
+
+  it("routes ordinary mail to triage only", async () => {
+    const { body } = await publish({
+      type: "email.received",
+      id: "gmail:work-1",
+      payload: { id: "work-1", from: "boss@work.com", subject: "Re: the plan", body: "thoughts?" },
+    });
+
+    expect(body.dispatched).toEqual(["email-triage"]);
+    expect(itemCount("newsletter-digest")).toBe(0);
+  });
+
+  it("drops a duplicate delivery of the same id without re-dispatching", async () => {
+    const first = await publish(newsletter);
+    expect(first.body.deduped).toBe(false);
+
+    const second = await publish(newsletter);
+    expect(second.status).toBe(202);
+    expect(second.body).toMatchObject({ deduped: true, dispatched: [] });
+    // Still one item, not two: the second delivery never ran the digest.
+    expect(itemCount("newsletter-digest")).toBe(1);
+  });
+
+  it("rejects a malformed event with the field that was wrong", async () => {
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/events",
+      payload: { id: "x", payload: {} }, // no type
+    });
+    expect(response.statusCode).toBe(400);
+    expect((response.json() as { error: { message: string } }).error.message).toContain("type");
+  });
+});
+
 describe("/healthz", () => {
   it("reports the loaded capabilities so a boot problem is visible", async () => {
     // Counted from the folder rather than hardcoded. The number is not the

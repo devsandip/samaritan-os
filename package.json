@@ -22,7 +22,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "serve": "tsx src/cli/serve.ts",
-    "emit": "tsx src/cli/emit.ts"
+    "emit": "tsx src/cli/emit.ts",
+    "emit-event": "tsx src/cli/emit-event.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.3",
