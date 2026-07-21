@@ -22,15 +22,22 @@ nothing is filed until Sandip approves it.
 | 11 Inbox web UI | Done |
 | 13-15 Audit endpoint, emit CLI, end-to-end smoke | Done |
 | 17 Scheduler: scheduled-mode agents fire on their cron, in-process, with catch-up | Done |
-| 16 Daemon: the serve process hosts the scheduler and sweeps | Partial (no launchd plist) |
-| 18+ Event bus, Recall query (v1) | Not started |
+| 18 Event Bus: event-mode agents fire on a published event, deduped by source id | Done (bus + chokidar vault-watch listener; Gmail/Fireflies/Slack pending) |
+| 16 Daemon: the serve process hosts the scheduler, the bus and the sweeps | Partial (no launchd plist) |
+| 22 Recall query (v1) | Not started |
 
-v0 is functionally complete. The scheduler runs inside the serve process:
-scheduled-mode agents (`weekly-digest`, `subscription-watch`) fire on their
-declared cron, and a run missed while the machine was asleep is caught up on the
-next boot per each manifest's `catch_up`. Ask-Samaritan (RAG) is still stubbed in
-the UI because `src/recall/` has no query path yet, and event-mode agents wait on
-the Event Bus (step 18).
+v0 is functionally complete. The serve process is the daemon: it hosts the
+scheduler, so scheduled-mode agents (`weekly-digest`, `subscription-watch`) fire
+on their declared cron with catch-up across a restart; and the Event Bus, so
+event-mode agents (`email-triage`, `newsletter-digest`) fire on an
+`email.received` event published to `POST /api/events`, deduped by source id and
+narrowed by each manifest's `trigger.filter`. The bus has its first real
+listener: a chokidar watch on the vault publishes `note.created` when a note
+lands, and `note-capture` answers one — drop a file into `Inbox/` and a review
+item appears, no curl. The listeners still missing are the networked ones — a
+Gmail poller, a Fireflies webhook, a Slack Events route — so those events still
+arrive by `samaritan emit-event` or the HTTP route. Ask-Samaritan (RAG) is still
+stubbed in the UI because `src/recall/` has no query path yet.
 
 ## Quick start
 

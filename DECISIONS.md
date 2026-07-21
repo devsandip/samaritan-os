@@ -6,6 +6,85 @@ spec, so the spec stays the design record and this stays the build record.
 
 ---
 
+## 2026-07-21 — The vault watch: one root now, a subscriber shipped with it
+
+**Context:** §2.2 and §12 step 18 name a `chokidar` filesystem watch on the vault
+and `~/Developer/*/journal`, normalising changes into `note.created` /
+`journal.updated` events. chokidar is already in §3's key-libraries list, so using
+it is not a deviation. Three under-specified points the build had to settle are.
+
+**The mapping is one rule, not two.** `fileChangeToEvent` (the pure core, split
+out the way the Scheduler's cron matcher was) reads a watched root's `kind` and
+emits `<kind>.created` on an add and `<kind>.updated` on a change. The vault is
+`kind: note`, so it yields the `note.created` the spec names; a journal root
+would be `kind: journal` and yield `journal.updated`. One rule produces both spec
+examples plus their natural siblings, and keeps the decision in a function tested
+without a disk — the source id is `file:<abs path>@<mtime>`, the "file path +
+mtime" §2.2 names as the dedup key, so a doubled event or a later reconcile
+re-reading a file fires once.
+
+**One root now: the vault, not `~/Developer/*/journal`.** chokidar 5 dropped glob
+support, so `*/journal/**/*.md` can no longer be a watch pattern — it would mean
+enumerating every `~/Developer/<repo>/journal` directory and watching each, a
+macOS-specific concern with no test surface in this environment. `WatchRoot[]` is
+built to take that second root the day it is wired; the vault watch alone is a
+complete, testable slice, so it ships and the journal root waits.
+
+**A publisher with no subscriber is the same dead text as a subscription with no
+publisher.** The scheduler and bus entries both turned on making a declaration
+real; a listener that emits `note.created` into a bus nothing listens to would be
+the same gap inverted. So the watch shipped with `note-capture`, a capability
+that answers `note.created` filtered to `Inbox/` and turns a captured note into a
+reviewable task candidate. Verified live: a file written to `vault/Inbox/`
+becomes a pending item; one written to `vault/Areas/` does not.
+
+**Known cost:** `seen_events` gains a row per vault write and is never pruned. At
+single-user scale that is a few thousand rows a year — fine — but §2.2 calls the
+seen-set "short-lived", so a pruning sweep (drop ids older than the longest
+redelivery window) is a future item, noted here so it is not forgotten.
+
+---
+
+## 2026-07-21 — Event Bus: a mechanical filter DSL, and dedup that claims before it dispatches
+
+**Context:** §4.1 gives `trigger.filter` as a free-form `Record<string, unknown>`
+and §2.2 requires source-level dedup, but neither pins down the filter's
+semantics or the dedup's ordering. Both are choices, recorded here.
+
+**The filter is three operators, not a predicate language.** `newsletter-digest`
+declares `filter: { from_in: ["@newsletters"] }`. Rather than reach for the
+expr-eval predicate engine the Policy Engine uses, `src/events/filter.ts` reads
+the key as `<field>_<op>` and supports exactly `_in`, `_contains`, and `_eq`
+(the default), ANDed together. A filter selects an event by shape; it is not a
+place for arithmetic or boolean logic, and keeping it mechanical means a manifest
+author can read a filter at a glance and it can never throw. It **fails closed**,
+the same rule as the Policy predicates (a filter naming a field the payload lacks
+does not match), so a capability is never fired on an event it could not have
+evaluated.
+
+The value `@newsletters` is a label, not a literal from-address; resolving it to
+real senders is the Gmail connector's job (not yet built). The matcher is honest
+about this — it compares `payload.from` to the literal — so a demo event carries
+`from: "@newsletters"` and a real one will carry whatever the connector tags.
+
+**Dedup claims before it dispatches.** `publish()` records the event id with
+`INSERT OR IGNORE` and only dispatches if the insert won (`changes === 1`). This
+is the Scheduler's claim-before-fire again: the id is marked seen before the run
+starts, so two concurrent deliveries of the same source id (an overlapping
+webhook and poll) cannot both get through. The symmetric cost is the same too —
+a crash between the claim and the dispatch loses that one event — and acceptable
+for the same reason: firing the capability (and its eventual model call) twice is
+the outcome the dedup exists to prevent, so "at most once" beats "at least once"
+here. Ingest's `dedupe_key` is a second net under it, collapsing a double-dispatch
+to one item even if one ever slips through.
+
+**Not a deviation, an addition:** `trigger.catch_up` (scheduler) and this filter
+DSL are both under-specified points the spec left to the build, filled in the
+direction the rest of the system already leans — fail-closed, claim-first,
+mechanical over clever.
+
+---
+
 ## 2026-07-21 — Scheduler: a self-contained cron matcher, not `node-cron`
 
 **Spec says:** §2.2, §3 and §12 step 17 name `node-cron` for the in-process

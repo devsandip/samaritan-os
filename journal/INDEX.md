@@ -1,8 +1,8 @@
 # Samaritan — Journal Index
 
-Last refreshed: 2026-07-21 11:35
+Last refreshed: 2026-07-21 17:10
 
-Latest entry: [2026-07-21-1130-crons-that-fire](entries/2026-07-21-1130-crons-that-fire.md)
+Latest entry: [2026-07-21-1705-the-first-knock](entries/2026-07-21-1705-the-first-knock.md)
 
 Local-first personal agentic OS. The Action Center is a universal
 human-in-the-loop layer and a pluggable capability platform: one inbox for
@@ -54,30 +54,48 @@ voided attempt.
 Notion is live end to end. Telegram is written, tested and parked, disabled by
 default.
 
-367 tests, typecheck clean, everything merged and pushed. `docs/DEMO.md` is the
+389 tests, typecheck clean, everything merged and pushed. `docs/DEMO.md` is the
 runbook and `test/agents.test.ts` is that runbook made executable, so a stale
 demo step fails the suite before it fails in a room.
 
-The scheduler is built. The serve process hosts it, and scheduled-mode agents
-fire on their declared cron: `weekly-digest` on Sunday at 20:00,
-`subscription-watch` daily at 08:00. `next_fire_at` is persisted and shown on the
-Dashboard, and a run missed while the machine slept is caught up on the next boot
-per each manifest's `catch_up`. Verified against a live daemon rather than only
-in tests. It computes the next fire itself rather than delegating to node-cron,
-for the column, the catch-up and the deterministic tests that decision buys.
+Both clocks are built, and they are the same machine wearing two faces. The
+scheduler fires scheduled-mode agents on a cron — `weekly-digest` Sunday at
+20:00, `subscription-watch` daily at 08:00 — with `next_fire_at` persisted, shown
+on the Dashboard, and caught up on the next boot if the machine slept through it.
+The Event Bus fires event-mode agents on a published event: `POST /api/events`
+takes a `SamaritanEvent`, dedups it by source id, and dispatches to every
+subscriber whose `trigger.on` matches and whose `trigger.filter` passes, so one
+`email.received` reaches `email-triage` and `newsletter-digest` or just the first
+depending on who sent it. Both run through the same Run Layer, and both claim the
+trigger before firing so a double-delivery fires once. Verified against a live
+daemon, not only in tests.
+
+The bus has its first real listener now: a chokidar watch on the vault publishes
+`note.created` when a note lands, and `note-capture` answers one — write a file
+into `Inbox/` and a review item appears, with no curl. It shipped with a
+subscriber on purpose, because a publisher no one listens to is the same dead
+text as a subscription no one publishes. Verified live against a daemon: an Inbox
+write captured, an Areas write dispatched to nobody.
 
 What is not built, stated plainly because the demo depends on knowing the edge:
-no launchd plist, so the daemon lives only as long as `pnpm serve` and a reboot
-forgets it; no Event Bus, so event-mode agents (`email-triage`,
-`newsletter-digest`) have no events — the exact mirror of the gap the scheduler
-just closed; Recall is chunked, embedded and indexed but has no fusion step, no
-indexer job and no query surface; no assisted execution adapters, which is why
-`email-triage` degrades to guided; Settings has a real routing table and no
-connections grid; Policy is v0 plus the hardcoded money lock. The launchd plist
-is next, then the Event Bus.
+the networked listeners — a Gmail poll, a Fireflies or Slack webhook — so mail and
+meeting events still reach the bus by `emit-event` or the HTTP route; no launchd
+plist, so the daemon lives only as long as `pnpm serve` and a reboot forgets it;
+Recall is chunked, embedded and indexed but has no fusion step, no indexer job and
+no query surface; no assisted execution adapters, which is why `email-triage`
+degrades to guided; Settings has a real routing table and no connections grid;
+Policy is v0 plus the hardcoded money lock. Next is the launchd plist and the §11
+boot reconciliation, then Recall's query path.
 
 ## Recent entries
 
+- [2026-07-21-1705-the-first-knock](entries/2026-07-21-1705-the-first-knock.md)
+  — the vault watch: the bus's first real listener, a file drop that fires an
+  agent; the third time the same pure-core/thin-shell seam split cleanly, and why
+  a publisher needs a subscriber shipped with it
+- [2026-07-21-1420-the-other-clock](entries/2026-07-21-1420-the-other-clock.md)
+  — the Event Bus: the scheduler's shape again, firing on an event instead of an
+  hour; dedup by source id, a fail-closed filter DSL, both clocks now real
 - [2026-07-21-1130-crons-that-fire](entries/2026-07-21-1130-crons-that-fire.md)
   — the scheduler: a self-contained cron matcher over the `next_fire_at` column
   that was always waiting, claim-before-fire, and catch-up across a restart
@@ -110,7 +128,15 @@ is next, then the Event Bus.
 - Gating the highest-inference capabilities first is the right sequencing.
   `wrap` and `meeting` are where a wrong row does the most damage.
 - The manifest contract is holding. Adding the second capability required no
-  Action Center changes, which is the whole pluggability claim.
+  Action Center changes, which is the whole pluggability claim. It held a sixth
+  and seventh time: `note-capture` is a manifest and a `run()`, and the vault
+  watch reaches it without either knowing the other's name.
+- When a component has a decision and an effect, split them: the decision into a
+  pure function (no clock, no db, no disk) and the effect into a thin shell. Three
+  times now — the cron matcher, the event filter, the file→event mapper — the
+  pure half took almost all the tests and the shell shrank to nothing. The effect
+  is where integration errors hide, so keep it small; the decision is where logic
+  errors hide, so keep it testable without the world.
 - Strict validation earns its cost. Rejecting undeclared keys rather than
   stripping them has already turned two silent shape mismatches into loud ones.
 - Tests catch logic errors; only contact with the real system catches

@@ -1,0 +1,84 @@
+# Note Capture (TECH-SPEC §2.2 "Event Bus & listeners", §4.2).
+#
+# The subscriber that closes the loop the chokidar vault watch opens. The
+# listener publishes `note.created` when a file lands in the vault; this is the
+# first capability that answers one. Its filter narrows to the `Inbox/` folder —
+# the Obsidian quick-capture convention — so a passing thought jotted into the
+# vault becomes a reviewable item instead of rotting in a folder.
+#
+# It never files anything on its own: a capture always escalates
+# (`escalate_when: "true"`), because the OS can see that a note appeared but not
+# what it is. Approving stages a TickTick task through the same `pm-os.item.file`
+# adapter the anchor uses (guided, per DECISIONS), so the assisted loop's "did
+# you actually do it?" confirmation applies to a capture too.
+
+id: note-capture
+name: Note Capture
+description: >-
+  Turns a note dropped into your vault's Inbox/ into a reviewable task
+  candidate, so a quick capture gets processed instead of forgotten.
+version: 0.1.0
+owner: sandip
+enabled: true
+entrypoint: index.ts
+
+trigger:
+  mode: event
+  on: [note.created]
+  # folder is the note's parent, relative to the vault root. Equality keeps this
+  # to the top-level Inbox/, the quick-capture drop, not every note anywhere.
+  filter:
+    folder_eq: Inbox
+
+context:
+  inputs: []
+
+emits:
+  - type: note-capture-review
+    render:
+      layout: card
+      primary: title
+      secondary: detail
+      badges: [folder]
+
+    custom_attributes:
+      # The uniform PM-OS filing shape, so pm-os.item.file can route it. `kind`
+      # is fixed to "task": an Inbox capture is a thing to process, and a task is
+      # the shape it most often takes. The ones that are not, Sandip dismisses.
+      kind: string
+      title: string
+      detail: string
+      project: string
+      owner: string
+      due: string
+      evidence: string
+      # Capture-specific, so the card and a future filter can read them.
+      folder: string
+      captured_at: string
+
+    responses:
+      - { id: make_task, label: "Make a task", outcome: execute }
+      - { id: dismiss, label: "Dismiss", outcome: discard }
+      - { id: defer, label: "Later", outcome: defer, defer_for: 1d }
+
+    execution:
+      mode: automated
+      capability: pm-os.item.file
+
+    policy:
+      # A captured note always gets Sandip's eyes: the OS knows a note appeared,
+      # not what to do with it, so it never auto-files. escalate_when is checked
+      # before everything but the money-lock, so "true" always wins.
+      escalate_when: "true"
+
+    priority: normal
+    ttl: null
+
+requires_capabilities:
+  - pm-os.item.file
+
+delivery:
+  channels: [inbox]
+
+audit: true
+timeout_ms: 30000
