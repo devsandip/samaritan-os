@@ -135,6 +135,24 @@ export const ConfigSchema = z.object({
       context_chunks: z.number().int().min(1).max(40).default(8),
     })
     .prefault({}),
+
+  policy: z
+    .object({
+      /**
+       * §9 risk framework. The stakes above which an item is escalated to review
+       * by default rather than auto-completed, in the same unit capabilities
+       * report `context.value` in (dollars or dollar-equivalent). A per-type
+       * `value_threshold` in the manifest overrides this for that type.
+       */
+      value_threshold: z.number().min(0).default(100),
+      /**
+       * Whether an item marked `reversibility: "irreversible"` escalates by
+       * default. A per-type `allow_irreversible: true` opts one type out. This is
+       * the softer, broader default; the money-lock (§9) is separate and absolute.
+       */
+      escalate_irreversible: z.boolean().default(true),
+    })
+    .prefault({}),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
@@ -169,6 +187,14 @@ embeddings:
 #   security add-generic-password -s samaritan -a anthropic:default -w
 recall:
   synthesis: none
+
+# Risk defaults for the Policy Engine (§9). value_threshold is the stakes above
+# which an item is sent to review rather than auto-completed, in whatever unit
+# your capabilities report context.value in. escalate_irreversible sends anything
+# marked irreversible to review by default. Money is separate and never auto.
+policy:
+  value_threshold: 100
+  escalate_irreversible: true
 
 # Notion database ids for your own workspace. Find one in the database's URL:
 # notion.so/<workspace>/<32-hex-id>?v=... Leave blank to disable that target.
