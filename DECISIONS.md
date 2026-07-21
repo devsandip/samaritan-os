@@ -6,6 +6,46 @@ spec, so the spec stays the design record and this stays the build record.
 
 ---
 
+## 2026-07-21 — Scheduler: a self-contained cron matcher, not `node-cron`
+
+**Spec says:** §2.2, §3 and §12 step 17 name `node-cron` for the in-process
+scheduler.
+
+**What we did:** Wrote a five-field cron parser and next-fire calculator in
+`src/scheduler/cron.ts` (Vixie semantics, local time, day-of-month/day-of-week
+OR), and drive the scheduler off a persisted `next_fire_at` rather than a
+library timer.
+
+**Why:** three things the library cannot give, all of which the spec's own
+design already asks for.
+
+1. **`next_fire_at`.** The `triggers` table has had this column since migration
+   1 and nothing filled it. node-cron schedules an opaque callback and never
+   exposes when it will next run, so §8's staleness check ("a row that hasn't
+   pushed within its expected interval is greyed") and the Dashboard's "next
+   run in 3h" would have nothing to read. Computing it ourselves fills the
+   column that was always meant to hold it.
+2. **Catch-up across a restart (§11).** node-cron's timer dies with the process,
+   so a digest missed while the Mac slept is simply gone. A persisted next-fire
+   time turns "were we down when this was due?" into a comparison, which is the
+   entire mechanism behind `catch_up: run_once`.
+3. **Deterministic tests.** Every time-based component here injects its clock and
+   asserts exact behaviour. A matcher that is a pure function of `(schedule,
+   date)` fits that; an internal wall-clock timer does not. The matcher and the
+   scheduler have 35 cases between them, none of which sleep.
+
+**Cost / how to revert:** the matcher is one leaf module with no project imports,
+and the scheduler consumes it through three functions (`parseCron`, `matches`,
+`nextFireAfter`). Swapping in node-cron for the firing while keeping the matcher
+for `next_fire_at` is possible, but there is no reason to: the tick loop is a
+dozen lines and shares the sweep's proven interval pattern.
+
+**Knock-on:** `trigger.catch_up` (`skip` | `run_once`) added to the manifest,
+and the `cron` field now validates as a real five-field expression at load, so a
+malformed cron fails at registration rather than silently never firing.
+
+---
+
 ## 2026-07-19 — One action-item type per anchor capability, dispatched by `kind`
 
 **Spec says:** §12 step 10 names the types `wrap-item-review` and

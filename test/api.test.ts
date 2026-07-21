@@ -186,6 +186,37 @@ describe("the item routes", () => {
   });
 });
 
+describe("GET /api/capabilities", () => {
+  interface CapabilityView {
+    id: string;
+    next_fire_at: string | null;
+    last_run_status: string | null;
+  }
+
+  async function capabilities(): Promise<CapabilityView[]> {
+    const response = await server.inject({ method: "GET", url: "/api/capabilities" });
+    expect(response.statusCode).toBe(200);
+    return (response.json() as { capabilities: CapabilityView[] }).capabilities;
+  }
+
+  it("carries next_fire_at, null until the scheduler has armed a trigger", async () => {
+    const digest = (await capabilities()).find((c) => c.id === "weekly-digest");
+    expect(digest).toBeDefined();
+    // buildServer does not run the scheduler, so nothing has been armed yet.
+    expect(digest!.next_fire_at).toBeNull();
+  });
+
+  it("reflects the next_fire_at the scheduler persisted on the trigger row", async () => {
+    const when = new Date("2026-07-26T20:00:00.000Z").toISOString();
+    app.db
+      .prepare("UPDATE triggers SET next_fire_at = ? WHERE capability_id = 'weekly-digest'")
+      .run(when);
+
+    const digest = (await capabilities()).find((c) => c.id === "weekly-digest");
+    expect(digest!.next_fire_at).toBe(when);
+  });
+});
+
 describe("/healthz", () => {
   it("reports the loaded capabilities so a boot problem is visible", async () => {
     // Counted from the folder rather than hardcoded. The number is not the

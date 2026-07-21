@@ -1,8 +1,8 @@
 # Samaritan — Journal Index
 
-Last refreshed: 2026-07-21 08:43
+Last refreshed: 2026-07-21 11:35
 
-Latest entry: [2026-07-21-0815-the-brief-and-what-is-left](entries/2026-07-21-0815-the-brief-and-what-is-left.md)
+Latest entry: [2026-07-21-1130-crons-that-fire](entries/2026-07-21-1130-crons-that-fire.md)
 
 Local-first personal agentic OS. The Action Center is a universal
 human-in-the-loop layer and a pluggable capability platform: one inbox for
@@ -54,20 +54,33 @@ voided attempt.
 Notion is live end to end. Telegram is written, tested and parked, disabled by
 default.
 
-330 tests, typecheck clean, everything merged and pushed. `docs/DEMO.md` is the
+367 tests, typecheck clean, everything merged and pushed. `docs/DEMO.md` is the
 runbook and `test/agents.test.ts` is that runbook made executable, so a stale
 demo step fails the suite before it fails in a room.
 
+The scheduler is built. The serve process hosts it, and scheduled-mode agents
+fire on their declared cron: `weekly-digest` on Sunday at 20:00,
+`subscription-watch` daily at 08:00. `next_fire_at` is persisted and shown on the
+Dashboard, and a run missed while the machine slept is caught up on the next boot
+per each manifest's `catch_up`. Verified against a live daemon rather than only
+in tests. It computes the next fire itself rather than delegating to node-cron,
+for the column, the catch-up and the deterministic tests that decision buys.
+
 What is not built, stated plainly because the demo depends on knowing the edge:
-no daemon and no scheduler, so every declared cron is a declaration; no Event
-Bus, so event-mode agents have no events; Recall is chunked, embedded and
-indexed but has no fusion step, no indexer job and no query surface; no assisted
-execution adapters, which is why `email-triage` degrades to guided; Settings has
-a real routing table and no connections grid; Policy is v0 plus the hardcoded
-money lock. The scheduler is next.
+no launchd plist, so the daemon lives only as long as `pnpm serve` and a reboot
+forgets it; no Event Bus, so event-mode agents (`email-triage`,
+`newsletter-digest`) have no events — the exact mirror of the gap the scheduler
+just closed; Recall is chunked, embedded and indexed but has no fusion step, no
+indexer job and no query surface; no assisted execution adapters, which is why
+`email-triage` degrades to guided; Settings has a real routing table and no
+connections grid; Policy is v0 plus the hardcoded money lock. The launchd plist
+is next, then the Event Bus.
 
 ## Recent entries
 
+- [2026-07-21-1130-crons-that-fire](entries/2026-07-21-1130-crons-that-fire.md)
+  — the scheduler: a self-contained cron matcher over the `next_fire_at` column
+  that was always waiting, claim-before-fire, and catch-up across a restart
 - [2026-07-21-0815-the-brief-and-what-is-left](entries/2026-07-21-0815-the-brief-and-what-is-left.md)
   — the brief as I gave it, and the map of everything still missing: no
   scheduler, no Event Bus, Recall indexed but not queryable

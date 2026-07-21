@@ -17,6 +17,7 @@ import { repoRoot } from "../config/index.js";
 import { log } from "../logger.js";
 import { RoutingLockedError, UnknownActionTypeError } from "../routing/index.js";
 import { runCapability } from "../run-layer/index.js";
+import { Scheduler } from "../scheduler/index.js";
 import { MoneyLockViolation } from "../guardrails.js";
 import {
   getActionItem,
@@ -196,11 +197,24 @@ export function buildServer(app: App): FastifyInstance {
         .map((row) => [row.id, row]),
     );
 
+    // When the Scheduler fires is persisted on the trigger row, not held in the
+    // Scheduler object, so the Dashboard reads exactly what will fire — and
+    // reads it whether or not a daemon is currently up to run the Scheduler.
+    const nextFire = new Map(
+      app.db
+        .prepare<{ capability_id: string; next_fire_at: string | null }>(
+          "SELECT capability_id, next_fire_at FROM triggers",
+        )
+        .all()
+        .map((row) => [row.capability_id, row.next_fire_at]),
+    );
+
     return {
       capabilities: app.capabilities.all().map((c) => ({
         ...c.manifest,
         last_run_at: runs.get(c.manifest.id)?.last_run_at ?? null,
         last_run_status: runs.get(c.manifest.id)?.last_run_status ?? null,
+        next_fire_at: nextFire.get(c.manifest.id) ?? null,
         types: [...c.types.entries()].map(([type, loaded]) => ({
           type,
           declared_mode: loaded.spec.execution.mode,
@@ -281,10 +295,11 @@ export function buildServer(app: App): FastifyInstance {
 const SWEEP_INTERVAL_MS = 60_000;
 
 /**
- * Runs the time-based sweeps. v0 has no daemon (§12 step 14), so the API server
- * is the only long-lived process and therefore the only thing that can notice
- * that a ttl or a defer window has elapsed. Both were previously written and
- * never called, which is why a deferred item never came back.
+ * Runs the time-based sweeps. The API server process is the long-lived one, so
+ * it is the only thing that can notice that a ttl or a defer window has elapsed
+ * — the same reason it now also hosts the Scheduler (§12 step 17): one process,
+ * one event loop, the daemon skeleton §6 describes. Both sweeps were previously
+ * written and never called, which is why a deferred item never came back.
  *
  * Order matters: an item past both its ttl and its snooze should expire rather
  * than briefly reappear in the Inbox.
@@ -305,17 +320,35 @@ export async function start(options: CreateAppOptions = {}): Promise<FastifyInst
   const server = buildServer(app);
   const { host, port } = app.config.server;
 
+  // The Scheduler fires scheduled-mode capabilities on their cron by running
+  // them through the same Run Layer a manual "Run now" uses, so a cron fire and
+  // a hand fire are the same code path and the same audit trail (§12 step 17).
+  const scheduler = new Scheduler({
+    db: app.db,
+    fire: async (ctx) => {
+      await runCapability(app, ctx.capabilityId, {
+        trigger: { mode: "scheduled", firedAt: ctx.scheduledFor },
+      });
+    },
+  });
+
   // Both before listen(): Fastify refuses addHook once the instance is
   // listening, and unref() keeps the timer from holding the process open.
   const timer = setInterval(() => void sweep(app), SWEEP_INTERVAL_MS);
   timer.unref();
-  server.addHook("onClose", () => clearInterval(timer));
+  server.addHook("onClose", () => {
+    clearInterval(timer);
+    scheduler.stop();
+  });
 
   await server.listen({ host, port });
 
   // Once on boot, so anything that came due while the process was down is
   // handled immediately rather than up to a minute later.
   await sweep(app);
+  // reconcile() (catch-up, §11) then tick on the Scheduler's own interval. After
+  // listen, so the server is answering before any catch-up run starts.
+  await scheduler.start();
 
   logger.info({ url: `http://${host}:${port}` }, "samaritan api listening");
   return server;
