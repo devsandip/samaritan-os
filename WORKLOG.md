@@ -548,3 +548,63 @@ a demo-ready Samaritan.
   publisher, so the watch shipped with `note-capture` rather than alone.
 - `seen_events` grows one row per vault write and is not pruned. Fine at
   single-user scale; a pruning sweep is a noted future item.
+
+---
+
+## 2026-07-21 — Boot reconciliation, and the launchd plist that makes it matter
+
+Merged the Event Bus + vault-watch PR (#2), restarted the branch from the fresh
+main, then built the two pieces that finish the daemon: recovery from a crash,
+and the supervision that turns a crash into a restart worth recovering from.
+
+**Did:**
+- Closed the `approved` race. `execute()` writes `approved`, awaits the adapter,
+  then writes the outcome; a process that died in that await left the item
+  stranded in `approved` — not in the Inbox, not settled, nothing to move it.
+  `ActionCenter.reconcile()` now re-drives every `approved` item through
+  `execute()` on boot. Safe by construction: the dispatch key is derived, so a
+  settled attempt replays its recorded result (no second Notion row, no second
+  draft) and one that never settled runs once more.
+- `Registry.reconcileStalePending()` first fails the orphaned `pending` execution
+  rows the same crash left behind, so the re-drive opens a clean attempt rather
+  than stacking on one that claims to still be running.
+- Ran it before `listen()`, deliberately — the opposite of the ttl/resurface
+  sweeps. It treats every `approved` item and `pending` row as a crash remnant,
+  which is only true while nothing else dispatches; before the socket opens, with
+  scheduler and watcher still stopped, it is true by construction.
+- Built the launchd plist (rest of step 16). `pnpm install-daemon` writes an
+  agent with `RunAtLoad` + `KeepAlive`, so the daemon starts at login and
+  restarts if it exits — the restart reconcile() cleans up after. Same
+  pure-core/thin-shell split as the scheduler and the watch: `renderPlist()` is
+  pure text tested without disk; the CLI resolves this machine's real paths and
+  writes `~/Library/LaunchAgents/`. `--print` previews anywhere; non-macOS
+  refuses rather than writing a plist that cannot load.
+- Verified live. Stranded an item in `approved` in a throwaway store, started the
+  real daemon, and it was `awaiting_confirmation` before `/healthz` answered —
+  true trail (`approved -> awaiting_confirmation`, actor `system`), reconcile log
+  lines present. The server answers only after reconcile finishes, which is the
+  entire point of running it before listen.
+
+**State now:**
+- 420 tests (was 409): +5 `reconcile` (the three crash cases, the no-op on
+  non-approved items, the re-drive count), +6 `plist` (structure, argv order, env
+  order, XML escaping). Typecheck clean.
+- Step 16 is done: one process hosts the scheduler, the bus, the sweeps and now
+  boot reconciliation, and a launchd plist supervises it. §11's `approved` race
+  is closed.
+
+**Next:**
+- Recall's query path (step 22) — the last placeholder still in the UI.
+- Policy Engine v1 (step 19).
+- The networked listeners (Gmail poll, Fireflies/Slack webhooks), which need
+  credentials and a network this environment does not have.
+
+**Decisions:**
+- reconcile() runs before listen(), the opposite of the sweeps, so every
+  `approved`/`pending` row it sees is a genuine crash remnant, not live work a
+  request is in the middle of.
+- No 5-min staleness threshold at boot: nothing is dispatching, so every
+  `pending` row is orphaned; a threshold would only miss a fresh orphan after a
+  fast restart.
+- The plist points at `dist/cli/serve.js` — this repo's built daemon entry, what
+  `pnpm start` runs — not the spec's illustrative `dist/daemon.js`.

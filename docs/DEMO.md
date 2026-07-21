@@ -227,19 +227,20 @@ scheduled-mode agents on their cron, catching up a run missed while the Mac was
 asleep. The Event Bus fires event-mode agents on a published event, deduped by
 source id and narrowed by each manifest's filter, and its first real listener is
 live — the chokidar vault watch you used in Beat 3, which fires an agent because
-a file was written. What is still missing sits at the two ends. At the front: the
-networked listeners — a Gmail poller, a Fireflies webhook, a Slack route — so
-mail and meeting events still arrive by `emit-event` or the HTTP route; and no
-launchd plist, so the daemon does not survive a reboot. At the back: Recall is
-indexed but not queryable, which is why the sidebar says so instead of
-pretending. Everything on screen works.
+a file was written. The daemon is supervised by a launchd agent and, on the next
+boot, re-drives any work a crash interrupted mid-execution. What is still missing
+sits at the two ends. At the front: the networked listeners — a Gmail poller, a
+Fireflies webhook, a Slack route — so mail and meeting events still arrive by
+`emit-event` or the HTTP route. At the back: Recall is indexed but not queryable,
+which is why the sidebar says so instead of pretending. Everything on screen
+works.
 
 ---
 
 ## Before you present
 
 ```bash
-pnpm test        # 409 tests. test/agents.test.ts is this document, executable.
+pnpm test        # 420 tests. test/agents.test.ts is this document, executable.
 pnpm typecheck
 ```
 

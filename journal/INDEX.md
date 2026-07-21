@@ -1,8 +1,8 @@
 # Samaritan — Journal Index
 
-Last refreshed: 2026-07-21 17:10
+Last refreshed: 2026-07-21 19:50
 
-Latest entry: [2026-07-21-1705-the-first-knock](entries/2026-07-21-1705-the-first-knock.md)
+Latest entry: [2026-07-21-1945-the-restart-it-recovers-from](entries/2026-07-21-1945-the-restart-it-recovers-from.md)
 
 Local-first personal agentic OS. The Action Center is a universal
 human-in-the-loop layer and a pluggable capability platform: one inbox for
@@ -77,18 +77,33 @@ subscriber on purpose, because a publisher no one listens to is the same dead
 text as a subscription no one publishes. Verified live against a daemon: an Inbox
 write captured, an Areas write dispatched to nobody.
 
+The daemon now survives its own restarts. On boot, before the socket opens, a
+reconciliation pass re-drives any item a crash left in `approved` — the one frame
+where the OS is mid-handoff, invisible to the Inbox and unread by anything
+downstream — and the re-drive is safe because the derived dispatch key replays a
+settled attempt instead of repeating it. It runs before `listen()` on purpose:
+after the socket opens an `approved` item might be live work a request owns, not a
+remnant. And `pnpm install-daemon` writes a launchd agent (`RunAtLoad` +
+`KeepAlive`) so the process starts at login and comes back after a reboot, which
+is the restart the reconciliation is there to clean up after. Verified by staging
+the disaster: an item frozen in `approved` was recovered to awaiting_confirmation
+before `/healthz` answered.
+
 What is not built, stated plainly because the demo depends on knowing the edge:
 the networked listeners — a Gmail poll, a Fireflies or Slack webhook — so mail and
-meeting events still reach the bus by `emit-event` or the HTTP route; no launchd
-plist, so the daemon lives only as long as `pnpm serve` and a reboot forgets it;
-Recall is chunked, embedded and indexed but has no fusion step, no indexer job and
-no query surface; no assisted execution adapters, which is why `email-triage`
-degrades to guided; Settings has a real routing table and no connections grid;
-Policy is v0 plus the hardcoded money lock. Next is the launchd plist and the §11
-boot reconciliation, then Recall's query path.
+meeting events still reach the bus by `emit-event` or the HTTP route; Recall is
+chunked, embedded and indexed but has no fusion step, no indexer job and no query
+surface; no assisted execution adapters, which is why `email-triage` degrades to
+guided; Settings has a real routing table and no connections grid; Policy is v0
+plus the hardcoded money lock. Next is Recall's query path — the last placeholder
+still in the UI — and Policy Engine v1.
 
 ## Recent entries
 
+- [2026-07-21-1945-the-restart-it-recovers-from](entries/2026-07-21-1945-the-restart-it-recovers-from.md)
+  — boot reconciliation and the launchd plist: the `approved` race closed by
+  re-driving a stranded item on boot, why it must run before `listen()`, the
+  fourth clean split of the same seam, and verifying recovery by staging a crash
 - [2026-07-21-1705-the-first-knock](entries/2026-07-21-1705-the-first-knock.md)
   — the vault watch: the bus's first real listener, a file drop that fires an
   agent; the third time the same pure-core/thin-shell seam split cleanly, and why
@@ -132,11 +147,20 @@ boot reconciliation, then Recall's query path.
   and seventh time: `note-capture` is a manifest and a `run()`, and the vault
   watch reaches it without either knowing the other's name.
 - When a component has a decision and an effect, split them: the decision into a
-  pure function (no clock, no db, no disk) and the effect into a thin shell. Three
-  times now — the cron matcher, the event filter, the file→event mapper — the
-  pure half took almost all the tests and the shell shrank to nothing. The effect
-  is where integration errors hide, so keep it small; the decision is where logic
-  errors hide, so keep it testable without the world.
+  pure function (no clock, no db, no disk) and the effect into a thin shell. Four
+  times now — the cron matcher, the event filter, the file→event mapper, the plist
+  renderer — the pure half took almost all the tests and the shell shrank to
+  nothing. The effect is where integration errors hide, so keep it small; the
+  decision is where logic errors hide, so keep it testable without the world. It
+  is no longer a discovery; it is the first move.
+- Correctness under concurrency is about *where* you act, not only what you do.
+  Three components now claim an exclusive moment before touching shared state: the
+  scheduler claims a trigger row before it fires, the bus claims an event id
+  before it dispatches, and boot reconciliation claims the whole quiet before
+  `listen()` so every `approved` item it re-drives is a genuine crash remnant and
+  not live work a request owns. The move is to make the dangerous assumption true
+  by construction — by acting where nothing else can be moving — rather than to
+  guard against the race after the fact.
 - Strict validation earns its cost. Rejecting undeclared keys rather than
   stripping them has already turned two silent shape mismatches into loud ones.
 - Tests catch logic errors; only contact with the real system catches

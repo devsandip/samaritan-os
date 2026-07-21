@@ -23,7 +23,7 @@ nothing is filed until Sandip approves it.
 | 13-15 Audit endpoint, emit CLI, end-to-end smoke | Done |
 | 17 Scheduler: scheduled-mode agents fire on their cron, in-process, with catch-up | Done |
 | 18 Event Bus: event-mode agents fire on a published event, deduped by source id | Done (bus + chokidar vault-watch listener; Gmail/Fireflies/Slack pending) |
-| 16 Daemon: the serve process hosts the scheduler, the bus and the sweeps | Partial (no launchd plist) |
+| 16 Daemon: one process hosts the scheduler, bus and sweeps; boot reconciliation (§11); launchd plist | Done |
 | 22 Recall query (v1) | Not started |
 
 v0 is functionally complete. The serve process is the daemon: it hosts the
@@ -34,10 +34,20 @@ event-mode agents (`email-triage`, `newsletter-digest`) fire on an
 narrowed by each manifest's `trigger.filter`. The bus has its first real
 listener: a chokidar watch on the vault publishes `note.created` when a note
 lands, and `note-capture` answers one — drop a file into `Inbox/` and a review
-item appears, no curl. The listeners still missing are the networked ones — a
-Gmail poller, a Fireflies webhook, a Slack Events route — so those events still
-arrive by `samaritan emit-event` or the HTTP route. Ask-Samaritan (RAG) is still
-stubbed in the UI because `src/recall/` has no query path yet.
+item appears, no curl.
+
+The daemon recovers from its own restarts. On boot, before it accepts a request,
+it re-drives any item a crash left mid-execution — an `approved` item is the one
+frame the OS is dispatching, so a process death there would otherwise strand it
+invisibly — and the re-drive is safe because the idempotency key that guards a
+retry guards a restart. `pnpm install-daemon` writes a launchd agent
+(`RunAtLoad` + `KeepAlive`) so the process starts at login and comes back after a
+reboot, which is the restart the reconciliation cleans up after.
+
+The listeners still missing are the networked ones — a Gmail poller, a Fireflies
+webhook, a Slack Events route — so those events still arrive by `samaritan
+emit-event` or the HTTP route. Ask-Samaritan (RAG) is still stubbed in the UI
+because `src/recall/` has no query path yet.
 
 ## Quick start
 
@@ -189,7 +199,7 @@ example `SAMARITAN_NOTION_PM_OS_WORKSPACE`.
 ## Tests
 
 ```bash
-pnpm test        # 119 tests
+pnpm test        # 420 tests
 pnpm typecheck
 ```
 

@@ -6,6 +6,56 @@ spec, so the spec stays the design record and this stays the build record.
 
 ---
 
+## 2026-07-21 — Boot reconciliation runs before the socket opens, and fails every pending row
+
+**Context:** §11 (and §12 step 16's daemon) calls for a reconciliation pass on
+boot: (1) any `approved` item with no matching `executions` row is resubmitted
+under its idempotency key; (2) any `executions` row stuck `pending` past a 5-min
+staleness threshold is treated as failed-and-retried; (3) missed scheduled
+triggers are logged and skipped, with a `catch_up` opt-in. Part (3) is the
+Scheduler's own catch-up, already built. Parts (1) and (2) are this entry, and
+two of the spec's details are settled differently than written.
+
+**Reconcile runs *before* `listen()`, not after — the opposite of the sweeps.**
+The ttl/resurface sweeps run after the server is listening, deliberately, so it
+answers requests before any catch-up starts. Boot reconciliation cannot: it
+re-drives `approved` items through `execute()` and treats every `pending`
+execution row as a dead attempt, and both are only sound while nothing else
+dispatches. Once the socket is open a `respond()` can be mid-`execute()`, with a
+live `approved` item and a genuinely in-flight `pending` row, and reconcile would
+mistake that live work for a crash remnant. Running it before the socket opens —
+scheduler and watcher still stopped — makes "every such row is a remnant" true by
+construction, the same claim-a-quiescent-moment logic the scheduler uses. The
+cost is a little startup latency bounded by the number of interrupted items,
+which at single-user scale is ~0.
+
+**No 5-min staleness threshold: at boot, every `pending` row is orphaned.** The
+spec's threshold makes sense only if the pass can run while executions are
+legitimately in flight — then a young `pending` row might be alive. Run strictly
+at boot, before the socket opens, nothing is dispatching, so a threshold could
+only *miss* a fresh orphan after a fast launchd restart (the crash was 3 seconds
+ago, not 5 minutes). So `reconcileStalePending()` fails every `pending` row
+outright. The threshold is the thing to reach for if this ever also runs
+periodically on a live daemon; it does not today.
+
+**Residual double-execution window, unchanged from the spec.** Re-driving is safe
+because a settled attempt (`succeeded`/`staged`) replays under the same derived
+dispatch key. The one gap is a crash *after* a provider committed but *before*
+the registry recorded it: the row is still `pending`, so the re-drive runs the
+adapter again. This is inherent to at-least-once and is what the spec means by
+"failed-and-retried"; the adapter's own check-or-create (§7) is the backstop. Not
+a deviation, noted so it is not mistaken for one.
+
+**The plist points at `dist/cli/serve.js`, not the spec's `dist/daemon.js`.** §6's
+plist illustrates the entry as `dist/daemon.js`. This repo's built daemon entry
+is `dist/cli/serve.js` — `serve.ts`'s `start()` is already the whole daemon
+(scheduler + Event Bus + vault watch + sweeps + API in one process, §6's
+monolith), and `pnpm start` runs exactly that. `install-daemon` also points node
+at `process.execPath` (the node in hand) rather than hardcoding
+`/usr/local/bin/node`, so the agent runs the same runtime that generated it.
+
+---
+
 ## 2026-07-21 — The vault watch: one root now, a subscriber shipped with it
 
 **Context:** §2.2 and §12 step 18 name a `chokidar` filesystem watch on the vault
