@@ -25,7 +25,8 @@
     "install-daemon": "tsx src/cli/install-daemon.ts",
     "index": "tsx src/cli/index-recall.ts",
     "emit": "tsx src/cli/emit.ts",
-    "emit-event": "tsx src/cli/emit-event.ts"
+    "emit-event": "tsx src/cli/emit-event.ts",
+    "poll-gmail": "tsx src/cli/poll-gmail.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.3",

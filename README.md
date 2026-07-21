@@ -22,7 +22,7 @@ nothing is filed until Sandip approves it.
 | 11 Inbox web UI | Done |
 | 13-15 Audit endpoint, emit CLI, end-to-end smoke | Done |
 | 17 Scheduler: scheduled-mode agents fire on their cron, in-process, with catch-up | Done |
-| 18 Event Bus: event-mode agents fire on a published event, deduped by source id | Done (bus + chokidar vault-watch listener; Gmail/Fireflies/Slack pending) |
+| 18 Event Bus: event-mode agents fire on a published event, deduped by source id | Done (bus + vault-watch + Gmail poller; Fireflies/Slack pending) |
 | 16 Daemon: one process hosts the scheduler, bus and sweeps; boot reconciliation (§11); launchd plist | Done |
 | 22 Recall query: hybrid retrieval (vector + BM25 → RRF), cited, with an indexer and the Ask box | Done |
 | 19 Policy Engine v1: confidence + reversibility + value rules, per-type overrides, money-lock (§9) | Done |
@@ -73,8 +73,18 @@ one-at-a-time approve would, audit trail and all; the batch is a shortcut for th
 input, not a different route for the effect. The list itself is triaged urgent
 first, then by soonest deadline, and anything past its `ttl` is swept to expired.
 
-The listeners still missing are the networked ones — a Gmail poller, a Fireflies
-webhook, a Slack Events route — so those events still arrive by `samaritan
+The bus has a networked listener now: a Gmail poller. When it is enabled and a
+token is in the Keychain, the daemon polls for new mail, maps each message to the
+same `email.received` event a hand `emit-event` posts, and `email-triage` and
+`newsletter-digest` answer it — so a real inbox reaches the Action Center with
+nothing typed. It stays a pure-core/thin-shell like the vault watch: the mapping
+is a pure function, the Gmail REST call is an injected source, and the checkpoint
+that lets a restart resume is an optimisation over the bus's own dedup, never the
+thing that keeps a message from being filed twice. The grant is read + compose
+only (§9); Samaritan never sends.
+
+The listeners still missing are the inbound webhooks — a Fireflies webhook and a
+Slack Events route — so meeting and chat events still arrive by `samaritan
 emit-event` or the HTTP route.
 
 ## Quick start
@@ -237,13 +247,25 @@ them fails loudly rather than silently appearing to succeed. TickTick is
 guided-only in v0 (no OAuth flow yet), so tasks stage for confirmation instead of
 being created.
 
+The Gmail listener reads the same way. Turn it on in `config.yaml`'s `gmail`
+block and add a bearer token (read + compose scope — never send):
+
+```bash
+security add-generic-password -s samaritan -a gmail:default -w
+```
+
+Without it the poller stays idle and the daemon starts regardless; a token that
+has expired surfaces as a 401 "reauthorise" rather than a silent stall (the
+refresh-token flow is v0 future work). `pnpm poll-gmail` runs one poll by hand to
+confirm it works.
+
 Any secret can be overridden by an environment variable for a single run, for
-example `SAMARITAN_NOTION_PM_OS_WORKSPACE`.
+example `SAMARITAN_NOTION_PM_OS_WORKSPACE` or `SAMARITAN_GMAIL_DEFAULT`.
 
 ## Tests
 
 ```bash
-pnpm test        # 502 tests
+pnpm test        # 533 tests
 pnpm typecheck
 ```
 

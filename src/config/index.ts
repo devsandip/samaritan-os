@@ -153,6 +153,27 @@ export const ConfigSchema = z.object({
       escalate_irreversible: z.boolean().default(true),
     })
     .prefault({}),
+
+  gmail: z
+    .object({
+      /**
+       * §2.2 Gmail listener. Off by default: the poller stays idle even with a
+       * token until this is set, so adding the credential does not silently start
+       * pulling mail. §9 scopes the grant to read + compose, never send; the
+       * token is the Keychain secret `gmail:<account>`.
+       */
+      enabled: z.boolean().default(false),
+      account: z.string().default("default"),
+      /** The Gmail search each poll runs, before its time bound. */
+      query: z.string().default("in:inbox"),
+      /** Poll cadence; floored at 10s so a typo cannot hammer the API. */
+      poll_interval_ms: z.number().int().min(10_000).default(60_000),
+      /** Initial backfill window when there is no checkpoint yet. */
+      backfill_days: z.number().int().min(1).max(90).default(1),
+      /** Cap on messages pulled per poll. */
+      max_per_poll: z.number().int().min(1).max(100).default(25),
+    })
+    .prefault({}),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
@@ -195,6 +216,18 @@ recall:
 policy:
   value_threshold: 100
   escalate_irreversible: true
+
+# Gmail listener (§2.2). Off by default. Turn it on and add a bearer token with:
+#   security add-generic-password -s samaritan -a gmail:default -w
+# The grant is read + compose only (§9) — Samaritan never sends. Each poll runs
+# the "query" against your mailbox and posts new mail to the Action Center, where
+# it is reviewed like anything else.
+gmail:
+  enabled: false
+  account: default
+  query: "in:inbox"
+  poll_interval_ms: 60000
+  backfill_days: 1
 
 # Notion database ids for your own workspace. Find one in the database's URL:
 # notion.so/<workspace>/<32-hex-id>?v=... Leave blank to disable that target.

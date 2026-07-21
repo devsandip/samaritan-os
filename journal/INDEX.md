@@ -1,8 +1,8 @@
 # Samaritan — Journal Index
 
-Last refreshed: 2026-07-22 00:05
+Last refreshed: 2026-07-22 01:25
 
-Latest entry: [2026-07-21-2359-a-shortcut-not-a-lower-bar](entries/2026-07-21-2359-a-shortcut-not-a-lower-bar.md)
+Latest entry: [2026-07-22-0120-the-first-wire-to-the-outside](entries/2026-07-22-0120-the-first-wire-to-the-outside.md)
 
 Local-first personal agentic OS. The Action Center is a universal
 human-in-the-loop layer and a pluggable capability platform: one inbox for
@@ -112,17 +112,27 @@ it did in v0. Verified live against the real config loader, not only the injecte
 unit tests.
 
 What is not built, stated plainly because the demo depends on knowing the edge:
-the networked listeners — a Gmail poll, a Fireflies or Slack webhook — so mail and
-meeting events still reach the bus by `emit-event` or the HTTP route; Recall's
-structured SQL path over the mirror tables (so `retrieval_path` is always
-`semantic`) and its near-real-time chokidar indexing, both left for later; no
-assisted execution adapters, which is why `email-triage` degrades to guided;
-Settings has a real routing table and no connections grid. Next is Action Center
-triage (step 23): priority/deadline sorting, batch-approve for similar low-risk
-items, ttl auto-expiry.
+the inbound networked listeners — a Fireflies and a Slack webhook — so meeting and
+chat events still reach the bus by `emit-event` or the HTTP route. The Gmail poller
+is built now, the bus's first networked front end, off by default until a token is
+in the Keychain. Still open: Recall's structured SQL path over the mirror tables
+(so `retrieval_path` is always `semantic`) and its near-real-time chokidar
+indexing, both left for later; no assisted execution adapters, which is why
+`email-triage` degrades to guided; Settings has a real routing table and no
+connections grid; and the Gmail refresh-token flow, so a token outlives its hour.
+Next are the two inbound webhooks, both fully curl-verifiable where the Gmail poll
+is not.
 
 ## Recent entries
 
+- [2026-07-22-0120-the-first-wire-to-the-outside](entries/2026-07-22-0120-the-first-wire-to-the-outside.md)
+  — the Gmail poller: the Event Bus's first networked listener, so a real inbox
+  becomes `email.received` for the two capabilities already waiting on it. Same
+  pure-core/thin-shell as the vault watch; the insight was that the checkpoint is
+  an optimisation over the bus dedup, not the safety mechanism, so it shipped
+  in-memory first. Verified live against the real Gmail API — a genuine 401 from a
+  bad token, isolated so the daemon stayed healthy; only the valid-token 200 is
+  left to faith
 - [2026-07-21-2359-a-shortcut-not-a-lower-bar](entries/2026-07-21-2359-a-shortcut-not-a-lower-bar.md)
   — Action Center triage v1: batch-approve for similar items, and the wariness
   behind it — a batch gates on what the response *commits* (an approve is checked,

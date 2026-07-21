@@ -754,3 +754,48 @@ and the supervision that turns a crash into a restart worth recovering from.
   response set and review surface, so one response id is meaningful across all.
 - Applied is the identical single-approve path — a shortcut for the input, never a
   different path for the effect.
+
+## 2026-07-21 — The Gmail listener: the Event Bus's first networked front end
+
+Picked up the §12 gap I named last time — the networked listeners — and built
+the first one. Gmail, because its event already had somewhere to land:
+`email-triage` and `newsletter-digest` both subscribe to `email.received`, so a
+real inbox finishes a path the capabilities had been waiting on.
+
+**What I built:**
+- `gmailMessageToEvent` (pure): a normalised Gmail message → the exact
+  `email.received` payload the two capabilities read, id `gmail:<id>`, `From`
+  split into address + display name, body/permalink/received_at filled.
+- `GmailPoller`: the loop against an injected `GmailSource` — idle when
+  unconfigured, one poll at start then on an interval, per-message failure
+  isolated, high-water checkpoint that never advances past a failure.
+- `createGmailSource` + `normalizeRawMessage`: the real Gmail REST source (list
+  then get-per-message), body preferring text/plain over stripped html over the
+  snippet, `after:`/`newer_than:` query building — all tested against an injected
+  `fetch`, only the socket unmockable.
+- Migration 7 `poll_state` + `StoreCheckpoint`: durable resume across a restart.
+- Wired the poller into the daemon beside the vault watch; `samaritan poll-gmail`
+  for a one-shot manual poll and the live setup check.
+
+**State now:**
+- 533 tests (was 502): +11 mapper, +8 poller (incl. one end-to-end through the
+  real bus to a real Inbox item), +8 source, +4 checkpoint. Typecheck clean,
+  full suite green.
+- Verified live against the *real* Gmail API: a daemon with the listener enabled
+  and a token present started the poller, the source hit `googleapis.com`, a bad
+  token returned 401 and surfaced as "reauthorise", and the failed poll was
+  isolated — the daemon stayed healthy and answering. A valid-token 200 is the
+  one branch a sandbox can't reach; the injected-`fetch` test covers it.
+
+**Next:**
+- The remaining networked listeners: a Fireflies webhook and a Slack Events
+  route, both inbound (fully curl-verifiable, unlike the Gmail poll's outbound).
+- The refresh-token flow, so a Gmail token outlives its hour.
+
+**Decisions:**
+- Same pure-core/thin-shell split as the vault watch: decisions in a pure
+  function, network behind an injected seam.
+- The checkpoint is an optimisation over the bus dedup, not the correctness
+  mechanism — losing it costs a refetch, never a double-file.
+- A failed publish holds the mark back, so a rejected message is retried.
+- v0 carries a bearer token; a 401 says "reauthorise"; the refresh flow waits.

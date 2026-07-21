@@ -14,8 +14,11 @@ import { z } from "zod";
 import { ActionCenterError } from "../action-center/index.js";
 import { createApp, type App, type CreateAppOptions } from "../app.js";
 import { repoRoot } from "../config/index.js";
+import { GmailPoller } from "../events/listeners/gmail-poll.js";
+import { createGmailSource } from "../events/listeners/gmail-source.js";
 import { VaultWatcher } from "../events/listeners/vault-watch.js";
 import { SamaritanEvent } from "../events/types.js";
+import { StoreCheckpoint } from "../store/poll-state.js";
 import { log } from "../logger.js";
 import { RoutingLockedError, UnknownActionTypeError } from "../routing/index.js";
 import { runCapability } from "../run-layer/index.js";
@@ -419,6 +422,27 @@ export async function start(options: CreateAppOptions = {}): Promise<FastifyInst
     publish: (event) => app.eventBus.publish(event),
   });
 
+  // The Gmail poller is the bus's first *networked* listener (§12 step 18). It
+  // publishes onto the same bus the watch and emit-event do, so email-triage and
+  // newsletter-digest cannot tell a real inbox from a hand-emitted event. It is
+  // idle unless config turns it on *and* a token is in the Keychain — createGmail
+  // Source returns undefined otherwise — so the daemon starts either way. Its
+  // checkpoint is store-backed, so a restart resumes rather than refetching.
+  const gmail = app.config.gmail;
+  const gmailPoller = new GmailPoller({
+    source: gmail.enabled
+      ? createGmailSource({
+          account: gmail.account,
+          query: gmail.query,
+          backfillDays: gmail.backfill_days,
+          maxPerPoll: gmail.max_per_poll,
+        })
+      : undefined,
+    publish: (event) => app.eventBus.publish(event),
+    checkpoint: new StoreCheckpoint(app.db, "gmail"),
+    intervalMs: gmail.poll_interval_ms,
+  });
+
   // Both before listen(): Fastify refuses addHook once the instance is
   // listening, and unref() keeps the timers from holding the process open.
   const timer = setInterval(() => void sweep(app), SWEEP_INTERVAL_MS);
@@ -430,6 +454,7 @@ export async function start(options: CreateAppOptions = {}): Promise<FastifyInst
     clearInterval(reindexTimer);
     scheduler.stop();
     await watcher.stop();
+    gmailPoller.stop();
   });
 
   // Boot reconciliation (§11) runs before the socket opens, deliberately. It
@@ -451,6 +476,9 @@ export async function start(options: CreateAppOptions = {}): Promise<FastifyInst
   await scheduler.start();
   // After the scheduler, so a note written during boot catch-up still fires.
   await watcher.start();
+  // The Gmail poller last: its first poll runs at start(), so the socket and the
+  // in-process listeners are already up when the first mail arrives on the bus.
+  await gmailPoller.start();
 
   // Recall refreshes its index once now, in the background: the first run
   // downloads the local model and embeds the vault, which must not block the
