@@ -272,3 +272,80 @@ Append-only session archive. Newest at the bottom.
   failed to load, raising a red banner for a `node_modules` or a scratch folder.
 - The card renderer drew its container from the unfiltered field count and then
   dropped blanks inside it, leaving an empty box on most wrap notes.
+
+## 2026-07-21 (morning) — The brief as given, and the map of what is not built
+
+**The brief (verbatim intent, kept because the artifacts should record what was
+asked, not only what was done):**
+
+What I wanted to achieve:
+1. Agents posting stuff to the Inbox.
+2. Agents created for that purpose.
+3. A demo of: adding/registering an agent, an agent posting to the Inbox, me
+   acting on it.
+
+The job I set:
+1. Figure out what those agents need to be.
+2. Figure out how to populate the Inbox with items from those agents on day one,
+   so there is a full Inbox to demo.
+3. Figure out how agents are added, discovered and plugged into Samaritan.
+
+Added mid-build: a tool that turns a Claude scheduled task into an agent that
+runs on Samaritan. Drop in the instructions, get an agent that is ready.
+
+Constraints: comprehensive build plan first, split into chunks of roughly 200
+lines or less, build each chunk and merge, compact after each merge. End state:
+a demo-ready Samaritan.
+
+**Did:**
+- Answered all three questions in `docs/features/demo-agents.md`, after finding
+  that all three depended on the same missing piece: there was no Run Layer.
+- Built it, plus the run CLI and route, the scaffolder, four agents, the seed,
+  the Dashboard telemetry, the importer and the runbook. Twelve commits, merged
+  and pushed.
+- Wrote `docs/DEMO.md` and `test/agents.test.ts`, which is the same runbook in
+  executable form.
+
+**State now:**
+- 330 tests, typecheck clean. Main is at `6da6b89`.
+- `d580d5c` (WORKLOG plus the journal entry for that work) is still unmerged.
+  The main working tree has uncommitted work from another session, including an
+  edit to `journal/INDEX.md` that collides with mine. Mechanical to resolve, but
+  it is someone else's uncommitted work, so it waits.
+
+**Not built, by area (this is the useful list now):**
+- *Scheduler and daemon (§12 steps 16, 17).* Nothing fires on a cadence. Six
+  agents declare crons; every one is a declaration. No launchd plist, no
+  scheduler-sync adapter for tasks still tagged in Claude's scheduler.
+- *Event Bus and listeners (step 18).* No Fireflies webhook, Gmail poller, Slack
+  Events, or chokidar watch. `newsletter-digest` and `email-triage` are
+  event-mode agents with no events.
+- *Recall v1 (step 22).* Chunker, embedder and sqlite-vec index store exist. No
+  RRF fusion, no indexer job, no query API. Ask Samaritan is a placeholder and
+  `ctx.memory.recall` throws an explanatory error rather than answering.
+- *Assisted execution adapters (step 20).* No `gmail.draft.create`, no calendar
+  tentative-hold. `email-triage` degrades to guided at load, correctly and
+  visibly, which means the demo's assisted beat is the assisted state machine
+  over a guided adapter.
+- *Connections grid in Settings (step 24).* Routing is real and editable; the
+  per-integration connection status is a comment saying v0 has none.
+- *Policy Engine v1 (step 19).* Predicates plus a confidence threshold, plus the
+  hardcoded money lock. No reversibility or value rules, no per-type overrides.
+- *Triage (step 23).* The ttl sweep works. Priority and deadline sorting and
+  batch-approve for similar low-risk items do not exist.
+- *Remaining v1 capabilities (step 21).* calendar-from-screenshot and job-search
+  were named in the spec and are not built.
+
+**Known bugs carried, not fixed:**
+- The `failed` re-ingest bug (spawned as `task_cf07a5a2`).
+- The `approved` race, which needs the startup reconciliation sweep first.
+- No "Remind me" affordance (UI-SPEC §4.8 rule 2).
+- A held event is invisible to an already-open detail pane.
+- `dailyNotePath()` in `src/execution/adapters/obsidian.ts` uses the UTC date, so
+  a note written after local midnight lands in the previous day's daily note
+  (spawned as `task_e3781b7c`).
+
+**Next:**
+- Resolve the `journal/INDEX.md` collision and merge `d580d5c`.
+- Then the scheduler (§12 step 17). It is not the most interesting thing left,
+  but it is the one whose absence makes a sentence in the demo untrue.

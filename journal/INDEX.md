@@ -1,8 +1,8 @@
 # Samaritan — Journal Index
 
-Last refreshed: 2026-07-21 02:15
+Last refreshed: 2026-07-21 08:15
 
-Latest entry: [2026-07-21-0215-agents-can-finally-run](entries/2026-07-21-0215-agents-can-finally-run.md)
+Latest entry: [2026-07-21-0815-the-brief-and-what-is-left](entries/2026-07-21-0815-the-brief-and-what-is-left.md)
 
 Local-first personal agentic OS. The Action Center is a universal
 human-in-the-loop layer and a pluggable capability platform: one inbox for
@@ -44,32 +44,33 @@ prebuild), Fastify, zod contracts with types inferred from the schemas, and a
 React SPA served from the same origin. The Inbox renders items by dispatching on
 `render.layout`, so no UI code knows the name of any capability.
 
+The lifecycle gaps v0 left open are closed: defer and resurface, a universal
+dismiss, multi-status filtering, and the re-ingest fixes for `deferred` and then
+`awaiting_confirmation`, both of which had been sitting on the wrong side of the
+settled partition. The idempotency key now carries a dispatch generation, so a
+reopened item dispatches a genuinely different version rather than replaying a
+voided attempt.
+
 Notion is live end to end. Telegram is written, tested and parked, disabled by
-default. Recall is not started, so Ask-Samaritan is a placeholder in the UI.
+default.
 
-The lifecycle gaps that v0 left open are now closed and merged. Main is at
-`eb40f95` and pushed: defer and resurface so a snooze is no longer a one-way
-door, a universal dismiss for items whose capability was unloaded, multi-status
-filtering on `GET /api/actions`, tilde expansion in config path defaults, and
-the re-ingest fix that keeps a snooze through a supersede. 183 tests. Both
-feature branches are resolved, one deleted and one now identical to main.
+330 tests, typecheck clean, twelve commits merged and pushed. `docs/DEMO.md` is
+the runbook and `test/agents.test.ts` is that runbook made executable, so a
+stale demo step fails the suite before it fails in a room.
 
-The daemon runs that code as of this morning, which is also when migration 3
-first reached the live store. Until the restart it was thirteen hours behind
-main and the `defer_until` column did not exist, so the defer work had never
-executed against real data despite being written, tested and merged. The
-database is empty of action items, so the sweep has still not run with real
-rows in it.
-
-Since then, `awaiting_confirmation` turned out to have the same misclassification
-`deferred` did. A re-ingest against a dispatched item rolled it back to
-`pending`, destroyed the deep link, and stranded it, because `confirm` and
-`reopen` answer only that one status. It holds now, and the idempotency key
-carries a dispatch generation so a reopened item can dispatch a genuinely
-different version instead of replaying the voided attempt. 201 tests.
+What is not built, stated plainly because the demo depends on knowing the edge:
+no daemon and no scheduler, so every declared cron is a declaration; no Event
+Bus, so event-mode agents have no events; Recall is chunked, embedded and
+indexed but has no fusion step, no indexer job and no query surface; no assisted
+execution adapters, which is why `email-triage` degrades to guided; Settings has
+a real routing table and no connections grid; Policy is v0 plus the hardcoded
+money lock. The scheduler is next.
 
 ## Recent entries
 
+- [2026-07-21-0815-the-brief-and-what-is-left](entries/2026-07-21-0815-the-brief-and-what-is-left.md)
+  — the brief as I gave it, and the map of everything still missing: no
+  scheduler, no Event Bus, Recall indexed but not queryable
 - [2026-07-21-0215-agents-can-finally-run](entries/2026-07-21-0215-agents-can-finally-run.md)
   — there was no Run Layer, so no agent could actually run; six agents, a seed,
   an importer, and a screen that was promising the opposite of what the money
