@@ -196,6 +196,25 @@ The listeners still missing are the networked ones — a Gmail poller, a Firefli
 webhook — so those events still arrive by `emit-event` or the HTTP route. The
 filesystem one is real.
 
+### Ask it something
+
+The sidebar box on the left is Ask-Samaritan. Fill the index first — a one-time
+bootstrap the daemon then keeps current — and ask:
+
+```bash
+pnpm index    # walks the vault, journals and audit trail (first run downloads the model)
+```
+
+Type a question into the box — *"why did we pick node:sqlite?"* — and the answer
+opens in the main pane. It is not a web search: it retrieved passages from the
+demo vault and the decision trail, fused a vector and a keyword ranking, and every
+line carries a citation back to the note it came from. Click one open. Nothing
+left the machine to answer it — retrieval is always local, and synthesis is off by
+default, so the answer is the cited passages themselves rather than a paraphrase.
+
+> The Inbox is what Samaritan wants you to look at. Recall is how you ask it what
+> it already knows.
+
 ---
 
 ## Questions you will get
@@ -227,19 +246,20 @@ scheduled-mode agents on their cron, catching up a run missed while the Mac was
 asleep. The Event Bus fires event-mode agents on a published event, deduped by
 source id and narrowed by each manifest's filter, and its first real listener is
 live — the chokidar vault watch you used in Beat 3, which fires an agent because
-a file was written. What is still missing sits at the two ends. At the front: the
-networked listeners — a Gmail poller, a Fireflies webhook, a Slack route — so
-mail and meeting events still arrive by `emit-event` or the HTTP route; and no
-launchd plist, so the daemon does not survive a reboot. At the back: Recall is
-indexed but not queryable, which is why the sidebar says so instead of
-pretending. Everything on screen works.
+a file was written. The daemon is supervised by a launchd agent and, on the next
+boot, re-drives any work a crash interrupted mid-execution. Ask-Samaritan answers
+now: the sidebar box retrieves against the vault, journals and audit trail and
+cites every claim. What is still missing sits at the front: the networked
+listeners — a Gmail poller, a Fireflies webhook, a Slack route — so mail and
+meeting events still arrive by `emit-event` or the HTTP route. Everything on
+screen works.
 
 ---
 
 ## Before you present
 
 ```bash
-pnpm test        # 409 tests. test/agents.test.ts is this document, executable.
+pnpm test        # 465 tests. test/agents.test.ts is this document, executable.
 pnpm typecheck
 ```
 

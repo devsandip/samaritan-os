@@ -84,6 +84,11 @@ const RoutingBody = z.object({
   mode: ExecutionMode.optional(),
 });
 
+const RecallQueryBody = z.object({
+  question: z.string().min(1).max(2000),
+  max_citations: z.coerce.number().int().min(1).max(40).optional(),
+});
+
 function badRequest(error: z.ZodError) {
   return {
     error: {
@@ -281,6 +286,25 @@ export function buildServer(app: App): FastifyInstance {
     return reply.code(202).send(await app.eventBus.publish(event.data));
   });
 
+  // ---- Recall --------------------------------------------------------------
+
+  /**
+   * Ask-Samaritan (§5.5, §7). Retrieves cited passages from the vault, journals
+   * and audit trail and — when synthesis is enabled — writes an answer over them.
+   * A miss is a 200 with no citations and a plain "couldn't find it", not a 404:
+   * the question was well-formed, the index just held no answer for it.
+   */
+  server.post("/api/recall/query", async (request, reply) => {
+    const body = RecallQueryBody.safeParse(request.body);
+    if (!body.success) return reply.code(400).send(badRequest(body.error));
+    return app.recall.query(
+      body.data.question,
+      body.data.max_citations ? { maxCitations: body.data.max_citations } : {},
+    );
+  });
+
+  server.get("/api/recall/stats", async () => app.recall.stats());
+
   // ---- Routing -------------------------------------------------------------
 
   server.get("/api/routing", async () => ({ routing: app.routing.list() }));
@@ -334,6 +358,25 @@ async function sweep(app: App): Promise<void> {
   }
 }
 
+/** How often the daemon refreshes the Recall index while it is up (§7). */
+const RECALL_REINDEX_INTERVAL_MS = 15 * 60_000;
+
+/**
+ * Refreshes the Recall index in the background (§7). Idempotent by content hash,
+ * so a tick that finds nothing changed is a walk and a few hashes. Guarded like
+ * the sweep: an indexing failure logs and waits for the next tick rather than
+ * taking the daemon down. Runs after listen() — the local model downloads on
+ * first use, and that must never delay the socket.
+ */
+async function backgroundReindex(app: App): Promise<void> {
+  try {
+    const tally = await app.recall.reindex();
+    if (tally.indexed || tally.removed) logger.info(tally, "recall reindexed");
+  } catch (err) {
+    logger.error({ err: String(err) }, "recall reindex failed");
+  }
+}
+
 export async function start(options: CreateAppOptions = {}): Promise<FastifyInstance> {
   const app = createApp(options);
   const server = buildServer(app);
@@ -361,25 +404,42 @@ export async function start(options: CreateAppOptions = {}): Promise<FastifyInst
   });
 
   // Both before listen(): Fastify refuses addHook once the instance is
-  // listening, and unref() keeps the timer from holding the process open.
+  // listening, and unref() keeps the timers from holding the process open.
   const timer = setInterval(() => void sweep(app), SWEEP_INTERVAL_MS);
   timer.unref();
+  const reindexTimer = setInterval(() => void backgroundReindex(app), RECALL_REINDEX_INTERVAL_MS);
+  reindexTimer.unref();
   server.addHook("onClose", async () => {
     clearInterval(timer);
+    clearInterval(reindexTimer);
     scheduler.stop();
     await watcher.stop();
   });
+
+  // Boot reconciliation (§11) runs before the socket opens, deliberately. It
+  // re-drives items a crash stranded in `approved` mid-execution, and that
+  // recovery is only sound while nothing else dispatches: once listen() accepts
+  // a request, a respond() could be inside execute() with its own `approved`
+  // item and `pending` execution row, and reconcile() would mistake that live
+  // work for a crash remnant. Before listen — scheduler and watcher still
+  // stopped — every such row is a genuine remnant, which is what it assumes.
+  await app.actionCenter.reconcile();
 
   await server.listen({ host, port });
 
   // Once on boot, so anything that came due while the process was down is
   // handled immediately rather than up to a minute later.
   await sweep(app);
-  // reconcile() (catch-up, §11) then tick on the Scheduler's own interval. After
+  // The Scheduler's own catch-up (§11 case 3) then ticks on its interval. After
   // listen, so the server is answering before any catch-up run starts.
   await scheduler.start();
   // After the scheduler, so a note written during boot catch-up still fires.
   await watcher.start();
+
+  // Recall refreshes its index once now, in the background: the first run
+  // downloads the local model and embeds the vault, which must not block the
+  // socket. The interval timer above keeps it current from here.
+  void backgroundReindex(app);
 
   logger.info({ url: `http://${host}:${port}` }, "samaritan api listening");
   return server;

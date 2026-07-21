@@ -14,6 +14,8 @@ import type {
   Health,
   LoadProblem,
   Priority,
+  RecallAnswer,
+  RecallStats,
   RoutingEntry,
   RunReport,
 } from "./types";
@@ -148,6 +150,17 @@ export const api = {
     request<{ reloaded: string[]; problems: LoadProblem[] }>("/api/capabilities/reload", {
       method: "POST",
     }),
+
+  /** Ask-Samaritan (§5.5). Retrieves and cites; a miss is a 200 with no citations. */
+  recall: (question: string, maxCitations?: number) =>
+    request<RecallAnswer>("/api/recall/query", {
+      method: "POST",
+      body: JSON.stringify(
+        maxCitations ? { question, max_citations: maxCitations } : { question },
+      ),
+    }),
+
+  recallStats: () => request<RecallStats>("/api/recall/stats"),
 
   routing: () => request<{ routing: RoutingEntry[] }>("/api/routing").then((r) => r.routing),
 

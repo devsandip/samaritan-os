@@ -6,6 +6,120 @@ spec, so the spec stays the design record and this stays the build record.
 
 ---
 
+## 2026-07-21 — Recall query v1: the semantic path only, extractive by default
+
+**Context:** §12 step 22 is Recall v1 — "sqlite-vec + chunker + hybrid retrieval
+pipeline (§7)". The chunker, embedder and index stores already existed; this
+entry is the retrieval → synthesis → API → UI path built on top, and where it
+departs from §7's full sketch.
+
+**`retrieval_path` is always `"semantic"`; the structured SQL path is not built.**
+§7 classifies a question and may run a structured path (parameterised queries over
+`notion_decisions`, `ticktick_tasks`, …) and/or the semantic RAG path, labelling
+the answer `structured` / `semantic` / `hybrid`. The mirror tables exist but no
+poller fills them, and NL-to-templates is its own step, so only the semantic path
+runs. Labelling an answer `hybrid` would name a path that never executed, so the
+service returns `semantic` unconditionally. When the structured path lands, the
+label starts telling the truth again — it is not faked in the meantime.
+
+**Synthesis defaults to `none` (extractive), and that is a privacy default, not a
+quality one.** §7 step 4 synthesises an answer with an LLM. Doing so sends the
+retrieved slices of the vault, journals and audit trail to a third party, which
+§9 says is a conscious choice. So `recall.synthesis` defaults to `none`: retrieval
+and citation still happen, and the "answer" is the passages themselves, laid out
+and cited — nothing leaves the machine. `anthropic` is opt-in and, with no key,
+degrades back to `none` rather than erroring. Both paths pass through one
+`validateCitations` guardrail that strips any citation whose ref was not actually
+retrieved — the check that keeps a synthesised answer from inventing a source.
+
+**RRF fuses on rank, not score.** The semantic path runs a vector kNN and a BM25
+keyword search over the same chunks, and their scores share no scale (a cosine
+similarity vs an FTS5 rank). Reciprocal Rank Fusion throws the scores away and
+fuses on rank position, so a passage both retrievers agree on outranks a lone
+strong hit, and neither retriever needs to know the other's units. `k = 60`, the
+value from the RRF paper.
+
+**The index is filled by a job, and kept fresh by the daemon.** There is no
+push-on-write indexing yet; `samaritan index` (`pnpm index`) walks the vault,
+journals and audit trail, and the daemon runs the same reindex once on boot and
+every 15 minutes after `listen()`. It is idempotent by content hash, so a re-run
+only touches what changed, and deletion is by absence — a source the walk no
+longer turns up is pruned. §7's near-real-time chokidar indexing is a later step;
+a 15-minute reconcile is the pragmatic stand-in and matches the poller cadence §7
+already uses for the networked sources.
+
+**Citation `kind` uses the `SourceKind` taxonomy, not §5.5's enum.** §5.5 sketches
+`kind` as `notion_row | obsidian_file | ticktick_task | audit_event |
+calendar_event`. The index was built around `obsidian | journal | action_item |
+audit` (`index-store.ts`), which is the taxonomy actually indexed, so citations
+carry those values. The `ref` still follows §5.5 — a file path (+ `#heading`) or
+the source's own id.
+
+**sqlite-vec must load through `createRequire`, or it silently never loads.** This
+one is a bug the live daemon caught and the tests hid. `index-store.ts` loaded the
+extension with a bare `require("sqlite-vec")`, but the project is `"type":
+"module"` — there is no ambient `require` in ESM. vitest happens to provide one, so
+the extension loaded in tests and `vector_index` read `true`; the real daemon (and
+`pnpm index`) threw "require is not defined", caught it, and fell back to the JS
+scan every time. The scan returns correct results, so nothing failed — the native
+index the extension exists for was just dead. `createRequire(import.meta.url)` is
+the ESM-correct load and works under tsx, `node dist/` and vitest alike. This is
+the "tests catch logic errors; only the real system catches integration errors"
+hypothesis paying out again — the assertion was about a column, the defect was in
+what production actually ran.
+
+---
+
+## 2026-07-21 — Boot reconciliation runs before the socket opens, and fails every pending row
+
+**Context:** §11 (and §12 step 16's daemon) calls for a reconciliation pass on
+boot: (1) any `approved` item with no matching `executions` row is resubmitted
+under its idempotency key; (2) any `executions` row stuck `pending` past a 5-min
+staleness threshold is treated as failed-and-retried; (3) missed scheduled
+triggers are logged and skipped, with a `catch_up` opt-in. Part (3) is the
+Scheduler's own catch-up, already built. Parts (1) and (2) are this entry, and
+two of the spec's details are settled differently than written.
+
+**Reconcile runs *before* `listen()`, not after — the opposite of the sweeps.**
+The ttl/resurface sweeps run after the server is listening, deliberately, so it
+answers requests before any catch-up starts. Boot reconciliation cannot: it
+re-drives `approved` items through `execute()` and treats every `pending`
+execution row as a dead attempt, and both are only sound while nothing else
+dispatches. Once the socket is open a `respond()` can be mid-`execute()`, with a
+live `approved` item and a genuinely in-flight `pending` row, and reconcile would
+mistake that live work for a crash remnant. Running it before the socket opens —
+scheduler and watcher still stopped — makes "every such row is a remnant" true by
+construction, the same claim-a-quiescent-moment logic the scheduler uses. The
+cost is a little startup latency bounded by the number of interrupted items,
+which at single-user scale is ~0.
+
+**No 5-min staleness threshold: at boot, every `pending` row is orphaned.** The
+spec's threshold makes sense only if the pass can run while executions are
+legitimately in flight — then a young `pending` row might be alive. Run strictly
+at boot, before the socket opens, nothing is dispatching, so a threshold could
+only *miss* a fresh orphan after a fast launchd restart (the crash was 3 seconds
+ago, not 5 minutes). So `reconcileStalePending()` fails every `pending` row
+outright. The threshold is the thing to reach for if this ever also runs
+periodically on a live daemon; it does not today.
+
+**Residual double-execution window, unchanged from the spec.** Re-driving is safe
+because a settled attempt (`succeeded`/`staged`) replays under the same derived
+dispatch key. The one gap is a crash *after* a provider committed but *before*
+the registry recorded it: the row is still `pending`, so the re-drive runs the
+adapter again. This is inherent to at-least-once and is what the spec means by
+"failed-and-retried"; the adapter's own check-or-create (§7) is the backstop. Not
+a deviation, noted so it is not mistaken for one.
+
+**The plist points at `dist/cli/serve.js`, not the spec's `dist/daemon.js`.** §6's
+plist illustrates the entry as `dist/daemon.js`. This repo's built daemon entry
+is `dist/cli/serve.js` — `serve.ts`'s `start()` is already the whole daemon
+(scheduler + Event Bus + vault watch + sweeps + API in one process, §6's
+monolith), and `pnpm start` runs exactly that. `install-daemon` also points node
+at `process.execPath` (the node in hand) rather than hardcoding
+`/usr/local/bin/node`, so the agent runs the same runtime that generated it.
+
+---
+
 ## 2026-07-21 — The vault watch: one root now, a subscriber shipped with it
 
 **Context:** §2.2 and §12 step 18 name a `chokidar` filesystem watch on the vault

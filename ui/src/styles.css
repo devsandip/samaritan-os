@@ -137,14 +137,36 @@ code {
 .side .spacer {
   flex: 1;
 }
-.recall {
+.ask {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.ask-label {
+  color: #8b93a4;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0 2px;
+}
+.ask-input {
+  width: 100%;
+  box-sizing: border-box;
   background: #1f2637;
   border: 1px solid #2a3145;
   border-radius: 9px;
   padding: 9px 11px;
-  color: #8b93a4;
-  font-size: 12.5px;
-  line-height: 1.45;
+  color: #e7ebf2;
+  font-size: 13px;
+}
+.ask-input::placeholder {
+  color: #6b7385;
+}
+.ask-input:focus {
+  outline: none;
+  border-color: var(--core);
+  background: #232a3d;
 }
 .side small {
   color: #6b7385;
@@ -1238,4 +1260,75 @@ input.fi {
     padding: 18px 16px;
     max-height: none;
   }
+}
+
+/* ---- Ask-Samaritan result page ------------------------------------------ */
+
+.ask-view {
+  max-width: 760px;
+}
+.answer {
+  margin-top: 20px;
+}
+.answer-q {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 12px;
+}
+.answer-body {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px 18px;
+  white-space: pre-wrap;
+  line-height: 1.6;
+  font-size: 14px;
+  color: var(--ink);
+}
+.sources {
+  margin-top: 22px;
+}
+.sources-h {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.source {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--core);
+  border-radius: 9px;
+  padding: 10px 13px;
+  margin-bottom: 8px;
+}
+.source-head {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+.source-kind {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 600;
+  color: var(--core);
+  background: var(--core-soft);
+  border-radius: 5px;
+  padding: 1px 7px;
+}
+.source-ref {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: var(--muted);
+  word-break: break-all;
+}
+.source-excerpt {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--ink);
+  line-height: 1.5;
 }

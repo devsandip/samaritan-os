@@ -23,8 +23,8 @@ nothing is filed until Sandip approves it.
 | 13-15 Audit endpoint, emit CLI, end-to-end smoke | Done |
 | 17 Scheduler: scheduled-mode agents fire on their cron, in-process, with catch-up | Done |
 | 18 Event Bus: event-mode agents fire on a published event, deduped by source id | Done (bus + chokidar vault-watch listener; Gmail/Fireflies/Slack pending) |
-| 16 Daemon: the serve process hosts the scheduler, the bus and the sweeps | Partial (no launchd plist) |
-| 22 Recall query (v1) | Not started |
+| 16 Daemon: one process hosts the scheduler, bus and sweeps; boot reconciliation (§11); launchd plist | Done |
+| 22 Recall query: hybrid retrieval (vector + BM25 → RRF), cited, with an indexer and the Ask box | Done |
 
 v0 is functionally complete. The serve process is the daemon: it hosts the
 scheduler, so scheduled-mode agents (`weekly-digest`, `subscription-watch`) fire
@@ -34,10 +34,27 @@ event-mode agents (`email-triage`, `newsletter-digest`) fire on an
 narrowed by each manifest's `trigger.filter`. The bus has its first real
 listener: a chokidar watch on the vault publishes `note.created` when a note
 lands, and `note-capture` answers one — drop a file into `Inbox/` and a review
-item appears, no curl. The listeners still missing are the networked ones — a
-Gmail poller, a Fireflies webhook, a Slack Events route — so those events still
-arrive by `samaritan emit-event` or the HTTP route. Ask-Samaritan (RAG) is still
-stubbed in the UI because `src/recall/` has no query path yet.
+item appears, no curl.
+
+The daemon recovers from its own restarts. On boot, before it accepts a request,
+it re-drives any item a crash left mid-execution — an `approved` item is the one
+frame the OS is dispatching, so a process death there would otherwise strand it
+invisibly — and the re-drive is safe because the idempotency key that guards a
+retry guards a restart. `pnpm install-daemon` writes a launchd agent
+(`RunAtLoad` + `KeepAlive`) so the process starts at login and comes back after a
+reboot, which is the restart the reconciliation cleans up after.
+
+Ask-Samaritan answers now. The sidebar box is a real search: a question is
+embedded locally, retrieved against the vault, journals and audit trail by a
+vector kNN and a BM25 keyword search fused with Reciprocal Rank Fusion, and
+answered with every claim cited back to the note it came from. Retrieval never
+leaves the machine; whether the answer is prose over the passages or the passages
+themselves is the `recall.synthesis` setting, which defaults to off. `pnpm index`
+fills the index, and the daemon keeps it current on a 15-minute reconcile.
+
+The listeners still missing are the networked ones — a Gmail poller, a Fireflies
+webhook, a Slack Events route — so those events still arrive by `samaritan
+emit-event` or the HTTP route.
 
 ## Quick start
 
@@ -48,8 +65,13 @@ DECISIONS.md) and pnpm.
 pnpm install
 pnpm migrate      # creates ~/.samaritan/samaritan.db and ~/.samaritan/config.yaml
 pnpm build:ui     # builds the Inbox SPA into ui/dist
+pnpm index        # fills the Recall index (first run downloads the embed model)
 pnpm serve        # http://127.0.0.1:4173, serves the API and the SPA
 ```
+
+`pnpm index` walks the vault, journals and audit trail into the Recall index so
+Ask-Samaritan has something to answer from; it is idempotent, and the daemon
+re-runs it on a schedule, so it is a one-time bootstrap rather than a chore.
 
 `pnpm -C ui dev` runs the UI on `localhost:5173` with `/api` proxied, if you
 want hot reload while working on the frontend.
@@ -123,9 +145,10 @@ src/
   routing/        abstract action type -> provider, account, mode
   execution/      the registry and its adapters
   action-center/  ingest, lifecycle, execute, confirm
+  recall/         Ask-Samaritan: chunk, embed, index, fuse, retrieve, synthesise
   delivery/       Telegram, quiet hours
   api/            Fastify server
-  cli/            migrate, serve, emit
+  cli/            migrate, serve, emit, index
 capabilities/     wrap, meeting
 plugin/           the 8 Claude skills, vendored (this is what runs today)
 docs/             design suite
@@ -189,7 +212,7 @@ example `SAMARITAN_NOTION_PM_OS_WORKSPACE`.
 ## Tests
 
 ```bash
-pnpm test        # 119 tests
+pnpm test        # 465 tests
 pnpm typecheck
 ```
 

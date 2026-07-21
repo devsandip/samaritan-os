@@ -17,6 +17,9 @@ import { log } from "./logger.js";
 import { CapabilityRegistry } from "./registry/index.js";
 import { runCapability } from "./run-layer/index.js";
 import { loadRoutingFile, RoutingResolver } from "./routing/index.js";
+import type { Embedder } from "./recall/embed.js";
+import { RecallService } from "./recall/service.js";
+import type { Synthesizer } from "./recall/synthesize.js";
 import { openDatabase, type Db } from "./store/db.js";
 import { migrate } from "./store/migrate.js";
 import { nowIso } from "./types/index.js";
@@ -32,6 +35,7 @@ export interface App {
   delivery: Delivery;
   actionCenter: ActionCenter;
   eventBus: EventBus;
+  recall: RecallService;
   close(): void;
 }
 
@@ -39,6 +43,12 @@ export interface CreateAppOptions {
   dbPath?: string;
   capabilitiesDir?: string;
   routingPath?: string;
+  /**
+   * Test seam: inject a deterministic embedder/synthesiser so Recall queries run
+   * without the model download or a network call. Production leaves this unset
+   * and the service resolves both from config.
+   */
+  recall?: { embedder?: Embedder; synthesizer?: Synthesizer };
 }
 
 export function createApp(options: CreateAppOptions = {}): App {
@@ -92,6 +102,16 @@ export function createApp(options: CreateAppOptions = {}): App {
     },
   });
 
+  // Recall answers questions over the vault, journals and audit trail. The
+  // embedder and synthesiser resolve from config, but both are injectable so a
+  // test drives real queries without a model download or a network call.
+  const recall = new RecallService({
+    db,
+    config,
+    ...(options.recall?.embedder ? { embedder: options.recall.embedder } : {}),
+    ...(options.recall?.synthesizer ? { synthesizer: options.recall.synthesizer } : {}),
+  });
+
   return {
     config,
     db,
@@ -101,6 +121,7 @@ export function createApp(options: CreateAppOptions = {}): App {
     delivery,
     actionCenter,
     eventBus,
+    recall,
     close: () => db.close(),
   };
 }

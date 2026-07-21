@@ -173,3 +173,27 @@ export interface Health {
   capabilities: number;
   problems: number;
 }
+
+export type RetrievalPath = "structured" | "semantic" | "hybrid";
+
+/** One cited source behind a Recall answer (§5.5). */
+export interface RecallCitation {
+  /** Where it came from: obsidian, journal, audit, action_item. */
+  kind: string;
+  /** A file path (+ #heading) or the source's own id. */
+  ref: string;
+  excerpt?: string;
+}
+
+export interface RecallAnswer {
+  answer: string;
+  citations: RecallCitation[];
+  retrieval_path: RetrievalPath;
+}
+
+export interface RecallStats {
+  sources: number;
+  chunks: number;
+  embedded: number;
+  vector_index: boolean;
+}
