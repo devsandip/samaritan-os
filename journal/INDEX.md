@@ -1,6 +1,6 @@
 # Samaritan — Journal Index
 
-Last refreshed: 2026-07-21 08:15
+Last refreshed: 2026-07-21 08:43
 
 Latest entry: [2026-07-21-0815-the-brief-and-what-is-left](entries/2026-07-21-0815-the-brief-and-what-is-left.md)
 
@@ -54,9 +54,10 @@ voided attempt.
 Notion is live end to end. Telegram is written, tested and parked, disabled by
 default.
 
-330 tests, typecheck clean, twelve commits merged and pushed. `docs/DEMO.md` is
-the runbook and `test/agents.test.ts` is that runbook made executable, so a
-stale demo step fails the suite before it fails in a room.
+330 tests, typecheck clean, fourteen commits merged and pushed, main at
+`3fe9615`. `docs/DEMO.md` is the runbook and `test/agents.test.ts` is that
+runbook made executable, so a stale demo step fails the suite before it fails in
+a room.
 
 What is not built, stated plainly because the demo depends on knowing the edge:
 no daemon and no scheduler, so every declared cron is a declaration; no Event

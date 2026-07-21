@@ -349,3 +349,40 @@ a demo-ready Samaritan.
 - Resolve the `journal/INDEX.md` collision and merge `d580d5c`.
 - Then the scheduler (§12 step 17). It is not the most interesting thing left,
   but it is the one whose absence makes a sentence in the demo untrue.
+
+## 2026-07-21 (08:43) — Merged the session notes, and unblocked them without touching someone else's work
+
+**Did:**
+- Merged `d580d5c` and `3fe9615` into main and pushed. `main` and `origin/main`
+  are both at `3fe9615`.
+- Unblocked the fast-forward the narrow way. Backed up all five of the other
+  session's files first, then stashed only `journal/INDEX.md`, which was the one
+  file in the way. `docs/PRFAQ.md`, `docs/README.md` and both untracked files
+  were never touched, since these commits do not go near them.
+- Re-applied the other session's INDEX contribution by hand onto the rewritten
+  INDEX: their `2026-07-20-1330` bullet, verbatim, slotted between the two
+  07-21 entries and `1055`. Their header edit was superseded by mine, which is
+  newer.
+- Wrote `resume/RESUME_2026-07-21-0815.md` and bumped the pointer, then
+  superseded it with the 08:43 file once the merge landed.
+
+**State now:**
+- Main at `3fe9615`, pushed. 330 tests, typecheck clean. The merge was
+  docs-only.
+- The main working tree is back to the exact five-file shape it was found in.
+  The other session's work is still uncommitted, and two of those files are
+  untracked, so they are one bad `clean` away from gone.
+- `stash@{0}` is still there. Its content is now fully represented in the
+  working tree, so it is redundant, but it holds someone else's work and was not
+  mine to drop.
+
+**Decisions:**
+- Stash one file rather than all five. `git checkout --` on their INDEX would
+  have been simpler and would have discarded their edit; the stash keeps it
+  recoverable, and the backup keeps it recoverable twice.
+- Do not commit the other session's files, even the untracked ones that look
+  finished. Flagged instead.
+
+**Next:**
+- The scheduler (§12 step 17). Six agents declare crons and nothing fires them,
+  which is the only remaining gap that makes a sentence in the demo untrue.
