@@ -160,8 +160,9 @@ export async function run(context: RunContext): Promise<RunResult> {
         source: { kind: "subscription", id: `${sub.vendor}:${renewsOn}` },
         provenance: ["schedule.daily", "subscription-watch.run", "policy.money_lock"],
         why_flagged: "money never moves automatically, whatever the capability thinks",
-        // §4.2's vocabulary. Not confidence and not value: this is in front of
-        // him because of what kind of action it is, full stop.
+        // §4.2's vocabulary. trigger_reason is action_type, not value or
+        // confidence: this is in front of him because of what kind of action it
+        // is — the money-lock — full stop. The stakes are recorded below.
         trigger_reason: "action_type",
         confidence,
         decision_needed: `Let ${sub.vendor} renew, or cancel it?`,
@@ -171,6 +172,13 @@ export async function run(context: RunContext): Promise<RunResult> {
         execution_surface: "you, by hand",
         outcome_preview:
           "Nothing is charged or cancelled by Samaritan. Approving hands you the steps.",
+        // The renewal's risk profile (§9), recorded as data even though the
+        // money-lock is what escalates it: a charge is hard to reverse once it
+        // lands, and it is worth `amount`. These two would escalate it on their
+        // own if it were not already money-locked — defense in depth, not the
+        // operative rule.
+        reversibility: "hard",
+        value: sub.amount,
       },
       custom: {
         vendor: sub.vendor,

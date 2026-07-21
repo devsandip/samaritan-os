@@ -82,6 +82,10 @@ export function createApp(options: CreateAppOptions = {}): App {
     routing,
     delivery,
     quietHours: config.delivery.quiet_hours,
+    policyConfig: {
+      valueThreshold: config.policy.value_threshold,
+      escalateIrreversible: config.policy.escalate_irreversible,
+    },
   });
 
   // The Event Bus fires event-mode capabilities through the same Run Layer a
