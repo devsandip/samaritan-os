@@ -251,4 +251,25 @@ CREATE TABLE recall_sources (
 CREATE INDEX idx_recall_sources_kind ON recall_sources(source_kind);
 `,
   },
+  {
+    version: 6,
+    name: "seen_events",
+    sql: `
+-- The Event Bus's source-level dedup (§2.2, §12 step 18). A message can arrive
+-- via both a webhook and a poller, so every SamaritanEvent carries a stable
+-- source id (a Gmail message id, a file path + mtime), and the bus records it
+-- here before dispatching. A second delivery of the same id finds the row
+-- already present and is dropped, so an overlapping webhook and poll fire the
+-- target capability only once.
+--
+-- The id is the whole dedup key. Listeners namespace it (e.g. "gmail:<msgid>",
+-- "file:<path>@<mtime>") so two sources cannot collide on a bare integer.
+CREATE TABLE seen_events (
+  id TEXT PRIMARY KEY,
+  event_type TEXT NOT NULL,
+  seen_at TEXT NOT NULL
+);
+CREATE INDEX idx_seen_events_seen_at ON seen_events(seen_at);
+`,
+  },
 ];
