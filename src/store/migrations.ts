@@ -272,4 +272,21 @@ CREATE TABLE seen_events (
 CREATE INDEX idx_seen_events_seen_at ON seen_events(seen_at);
 `,
   },
+  {
+    version: 7,
+    name: "poll_state",
+    sql: `
+-- Listener checkpoints (§2.2, §12 step 18). A poller records how far it has read
+-- so a restart resumes instead of refetching its whole backfill window. Keyed by
+-- listener; the cursor is the high-water mark (a Gmail internalDate, epoch ms as
+-- text). This is an optimisation over the seen_events dedup, never a correctness
+-- dependency: losing it costs a refetch, which the dedup then absorbs, so a
+-- message is still filed once.
+CREATE TABLE poll_state (
+  listener TEXT PRIMARY KEY,
+  cursor TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+`,
+  },
 ];
