@@ -15,11 +15,19 @@
  * works without a native extension is worth more than one that refuses to start.
  */
 import { createHash } from "node:crypto";
+import { createRequire } from "node:module";
 import type { Db } from "../store/db.js";
 import { log } from "../logger.js";
 import { fromBlob, toBlob } from "./embed.js";
 
 const logger = log("recall.index");
+
+// The project is ESM ("type": "module"), so there is no ambient `require`. Under
+// vitest one happens to exist, which is how the sqlite-vec load looked fine in
+// tests while silently throwing "require is not defined" in the real daemon and
+// falling back to a scan. createRequire is the ESM-correct way to load a CommonJS
+// native addon, and works the same under tsx, node dist/, and vitest.
+const require = createRequire(import.meta.url);
 
 export type SourceKind = "obsidian" | "journal" | "action_item" | "audit";
 
@@ -69,7 +77,6 @@ export function loadVectorExtension(db: Db): boolean {
     // load below fails in a way that looks like a missing binary.
     const raw = db.raw as unknown as { enableLoadExtension(on: boolean): void };
     raw.enableLoadExtension(true);
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const sqliteVec = require("sqlite-vec") as { load(db: unknown): void };
     sqliteVec.load(db.raw);
     db.prepare("SELECT vec_version()").get();
