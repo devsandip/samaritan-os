@@ -370,12 +370,21 @@ export async function start(options: CreateAppOptions = {}): Promise<FastifyInst
     await watcher.stop();
   });
 
+  // Boot reconciliation (§11) runs before the socket opens, deliberately. It
+  // re-drives items a crash stranded in `approved` mid-execution, and that
+  // recovery is only sound while nothing else dispatches: once listen() accepts
+  // a request, a respond() could be inside execute() with its own `approved`
+  // item and `pending` execution row, and reconcile() would mistake that live
+  // work for a crash remnant. Before listen — scheduler and watcher still
+  // stopped — every such row is a genuine remnant, which is what it assumes.
+  await app.actionCenter.reconcile();
+
   await server.listen({ host, port });
 
   // Once on boot, so anything that came due while the process was down is
   // handled immediately rather than up to a minute later.
   await sweep(app);
-  // reconcile() (catch-up, §11) then tick on the Scheduler's own interval. After
+  // The Scheduler's own catch-up (§11 case 3) then ticks on its interval. After
   // listen, so the server is answering before any catch-up run starts.
   await scheduler.start();
   // After the scheduler, so a note written during boot catch-up still fires.
