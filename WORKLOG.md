@@ -608,3 +608,58 @@ and the supervision that turns a crash into a restart worth recovering from.
   fast restart.
 - The plist points at `dist/cli/serve.js` — this repo's built daemon entry, what
   `pnpm start` runs — not the spec's illustrative `dist/daemon.js`.
+
+---
+
+## 2026-07-21 — Recall query v1: Ask-Samaritan answers, and the vector index that never loaded
+
+**Did:**
+- Built the retrieval → synthesis → API → UI path on top of the chunker, embedder
+  and index stores that already existed (step 22). Seven green chunks, each tests
+  and typecheck before commit.
+- RRF fusion (`fuse.ts`), pure: a vector kNN and a BM25 keyword search over the
+  same chunks fuse on rank, not score, so a passage both retrievers agree on wins
+  and neither has to know the other's scale.
+- The retrieval path (`retrieve.ts`): embed the question, dual-search, fuse,
+  hydrate into cited passages. Degrades on every axis — no vectors leaves keyword
+  search carrying it, an all-stopword question leaves the vector search, empty
+  index returns nothing.
+- Synthesis (`synthesize.ts`) with one guardrail: `none` (default, extractive,
+  nothing leaves the machine) and `anthropic` (opt-in prose), both through
+  `validateCitations`, which strips any citation whose ref was not retrieved.
+- The indexer (`indexer.ts`) + `pnpm index`: walks the vault, journals and audit
+  trail, idempotent by content hash, deletion by absence. The daemon reindexes on
+  boot and every 15 min, reusing the query embedder so the model loads once.
+- The API (`POST /api/recall/query`, `GET /api/recall/stats`) and the UI: the
+  sidebar placeholder is a real search now, navigating to an addressable `/ask`
+  page that renders the answer with its cited sources.
+- Verified live over a real socket against a demo vault. The queries came back
+  cited to the right notes — and the run surfaced a bug 465 green tests hid.
+
+**State now:**
+- 465 tests (was 420): +48 across fuse, retrieve, synthesize, service, indexer,
+  audit and the API route. Typecheck clean, `pnpm build:ui` clean.
+- Recall is queryable end to end. Step 22 is done. The last placeholder in the UI
+  is gone.
+- The embedding model download (HuggingFace) is blocked by this environment's
+  proxy, so the real local embedder is the one piece not exercised here; the whole
+  path was verified live with the deterministic hash embedder swapped in, which
+  proves everything except the model bytes themselves.
+
+**Next:**
+- Policy Engine v1 (step 19).
+- The networked listeners (Gmail poll, Fireflies/Slack webhooks), which need
+  credentials and a network this environment does not have.
+- Recall's structured SQL path and near-real-time chokidar indexing, both §7
+  steps left for later.
+
+**Decisions:**
+- `retrieval_path` is always `"semantic"`: the structured SQL path is not built,
+  and labelling an answer `hybrid` would name a path that never ran.
+- Synthesis defaults to `none` — a privacy default (§9), not a quality one; the
+  extractive answer is the cited passages themselves.
+- sqlite-vec was loaded with a bare `require()`, which only exists under vitest.
+  In the real ESM daemon it threw "require is not defined" and fell back to the JS
+  scan every time — the native index never loaded in production. Fixed with
+  `createRequire(import.meta.url)`. Found by a live query, not a test: the scan
+  returns correct results, so nothing failed; the index was just dead.

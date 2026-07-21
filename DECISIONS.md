@@ -6,6 +6,70 @@ spec, so the spec stays the design record and this stays the build record.
 
 ---
 
+## 2026-07-21 — Recall query v1: the semantic path only, extractive by default
+
+**Context:** §12 step 22 is Recall v1 — "sqlite-vec + chunker + hybrid retrieval
+pipeline (§7)". The chunker, embedder and index stores already existed; this
+entry is the retrieval → synthesis → API → UI path built on top, and where it
+departs from §7's full sketch.
+
+**`retrieval_path` is always `"semantic"`; the structured SQL path is not built.**
+§7 classifies a question and may run a structured path (parameterised queries over
+`notion_decisions`, `ticktick_tasks`, …) and/or the semantic RAG path, labelling
+the answer `structured` / `semantic` / `hybrid`. The mirror tables exist but no
+poller fills them, and NL-to-templates is its own step, so only the semantic path
+runs. Labelling an answer `hybrid` would name a path that never executed, so the
+service returns `semantic` unconditionally. When the structured path lands, the
+label starts telling the truth again — it is not faked in the meantime.
+
+**Synthesis defaults to `none` (extractive), and that is a privacy default, not a
+quality one.** §7 step 4 synthesises an answer with an LLM. Doing so sends the
+retrieved slices of the vault, journals and audit trail to a third party, which
+§9 says is a conscious choice. So `recall.synthesis` defaults to `none`: retrieval
+and citation still happen, and the "answer" is the passages themselves, laid out
+and cited — nothing leaves the machine. `anthropic` is opt-in and, with no key,
+degrades back to `none` rather than erroring. Both paths pass through one
+`validateCitations` guardrail that strips any citation whose ref was not actually
+retrieved — the check that keeps a synthesised answer from inventing a source.
+
+**RRF fuses on rank, not score.** The semantic path runs a vector kNN and a BM25
+keyword search over the same chunks, and their scores share no scale (a cosine
+similarity vs an FTS5 rank). Reciprocal Rank Fusion throws the scores away and
+fuses on rank position, so a passage both retrievers agree on outranks a lone
+strong hit, and neither retriever needs to know the other's units. `k = 60`, the
+value from the RRF paper.
+
+**The index is filled by a job, and kept fresh by the daemon.** There is no
+push-on-write indexing yet; `samaritan index` (`pnpm index`) walks the vault,
+journals and audit trail, and the daemon runs the same reindex once on boot and
+every 15 minutes after `listen()`. It is idempotent by content hash, so a re-run
+only touches what changed, and deletion is by absence — a source the walk no
+longer turns up is pruned. §7's near-real-time chokidar indexing is a later step;
+a 15-minute reconcile is the pragmatic stand-in and matches the poller cadence §7
+already uses for the networked sources.
+
+**Citation `kind` uses the `SourceKind` taxonomy, not §5.5's enum.** §5.5 sketches
+`kind` as `notion_row | obsidian_file | ticktick_task | audit_event |
+calendar_event`. The index was built around `obsidian | journal | action_item |
+audit` (`index-store.ts`), which is the taxonomy actually indexed, so citations
+carry those values. The `ref` still follows §5.5 — a file path (+ `#heading`) or
+the source's own id.
+
+**sqlite-vec must load through `createRequire`, or it silently never loads.** This
+one is a bug the live daemon caught and the tests hid. `index-store.ts` loaded the
+extension with a bare `require("sqlite-vec")`, but the project is `"type":
+"module"` — there is no ambient `require` in ESM. vitest happens to provide one, so
+the extension loaded in tests and `vector_index` read `true`; the real daemon (and
+`pnpm index`) threw "require is not defined", caught it, and fell back to the JS
+scan every time. The scan returns correct results, so nothing failed — the native
+index the extension exists for was just dead. `createRequire(import.meta.url)` is
+the ESM-correct load and works under tsx, `node dist/` and vitest alike. This is
+the "tests catch logic errors; only the real system catches integration errors"
+hypothesis paying out again — the assertion was about a column, the defect was in
+what production actually ran.
+
+---
+
 ## 2026-07-21 — Boot reconciliation runs before the socket opens, and fails every pending row
 
 **Context:** §11 (and §12 step 16's daemon) calls for a reconciliation pass on

@@ -1,8 +1,8 @@
 # Samaritan — Journal Index
 
-Last refreshed: 2026-07-21 19:50
+Last refreshed: 2026-07-21 22:35
 
-Latest entry: [2026-07-21-1945-the-restart-it-recovers-from](entries/2026-07-21-1945-the-restart-it-recovers-from.md)
+Latest entry: [2026-07-21-2230-the-index-that-never-loaded](entries/2026-07-21-2230-the-index-that-never-loaded.md)
 
 Local-first personal agentic OS. The Action Center is a universal
 human-in-the-loop layer and a pluggable capability platform: one inbox for
@@ -54,7 +54,7 @@ voided attempt.
 Notion is live end to end. Telegram is written, tested and parked, disabled by
 default.
 
-389 tests, typecheck clean, everything merged and pushed. `docs/DEMO.md` is the
+465 tests, typecheck clean, everything merged and pushed. `docs/DEMO.md` is the
 runbook and `test/agents.test.ts` is that runbook made executable, so a stale
 demo step fails the suite before it fails in a room.
 
@@ -89,17 +89,34 @@ is the restart the reconciliation is there to clean up after. Verified by stagin
 the disaster: an item frozen in `approved` was recovered to awaiting_confirmation
 before `/healthz` answered.
 
+Ask-Samaritan answers now, and the last placeholder in the UI is gone. A question
+is embedded locally, retrieved by a vector kNN and a BM25 keyword search over the
+same chunks, fused with Reciprocal Rank Fusion, and returned as cited passages —
+every claim tied to the note it came from. Synthesis into prose is opt-in and off
+by default, a privacy choice (§9), so the answer never leaves the machine unless
+Sandip turns it on. `samaritan index` fills the index and the daemon keeps it
+current on a 15-minute reconcile. Verified live over a real socket — and the live
+run caught what the suite could not: sqlite-vec was loaded with a bare `require`
+that only exists under vitest, so the native vector index had never once loaded in
+the real daemon, silently scanning instead. Correct answers the whole time, dead
+index behind them. `createRequire` fixed it; distrusting a correct answer found it.
+
 What is not built, stated plainly because the demo depends on knowing the edge:
 the networked listeners — a Gmail poll, a Fireflies or Slack webhook — so mail and
-meeting events still reach the bus by `emit-event` or the HTTP route; Recall is
-chunked, embedded and indexed but has no fusion step, no indexer job and no query
-surface; no assisted execution adapters, which is why `email-triage` degrades to
-guided; Settings has a real routing table and no connections grid; Policy is v0
-plus the hardcoded money lock. Next is Recall's query path — the last placeholder
-still in the UI — and Policy Engine v1.
+meeting events still reach the bus by `emit-event` or the HTTP route; Recall's
+structured SQL path over the mirror tables (so `retrieval_path` is always
+`semantic`) and its near-real-time chokidar indexing, both left for later; no
+assisted execution adapters, which is why `email-triage` degrades to guided;
+Settings has a real routing table and no connections grid; Policy is v0 plus the
+hardcoded money lock. Next is Policy Engine v1.
 
 ## Recent entries
 
+- [2026-07-21-2230-the-index-that-never-loaded](entries/2026-07-21-2230-the-index-that-never-loaded.md)
+  — Recall query v1: the Ask-Samaritan box answers, RRF fusing a vector and a
+  keyword search, synthesis off by default for privacy — and the live run finding
+  that sqlite-vec never loaded in the real daemon behind a green suite and correct
+  answers, the "distrust success" refinement of an old lesson
 - [2026-07-21-1945-the-restart-it-recovers-from](entries/2026-07-21-1945-the-restart-it-recovers-from.md)
   — boot reconciliation and the launchd plist: the `approved` race closed by
   re-driving a stranded item on boot, why it must run before `listen()`, the
@@ -166,8 +183,15 @@ still in the UI — and Policy Engine v1.
 - Tests catch logic errors; only contact with the real system catches
   integration errors. A green suite is not evidence that something works. The
   same applies one level in: a test I write asserts what I already believe, so
-  it passes for the same reason the bug exists. Twice now the assertion was
-  about a database column while the defect was in what the user reads.
+  it passes for the same reason the bug exists. Three times now the assertion
+  held in a world slightly kinder than production — twice about a database column
+  while the defect was in what the user reads, and once about `vector_index:
+  true`, which passed only because vitest supplies a `require` the ESM daemon
+  lacks, so the native index the test "confirmed" had never loaded outside a
+  test. The refinement: it is not enough to run it live, because the live run
+  returned a correct answer while the fast path it was supposedly using sat dead.
+  Distrust *success* — read the logs of the thing that worked and ask what it
+  quietly decided to do instead of what you told it.
 - Review that is told to refute, and made to reproduce rather than argue, finds
   things I do not. It reversed a recommendation of mine and then found a defect
   in the fix I had already verified and committed. Both corrections arrived as
