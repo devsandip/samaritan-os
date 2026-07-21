@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { Scheduler, type FireContext } from "../src/scheduler/index.js";
+import { runCapability } from "../src/run-layer/index.js";
 import { openDatabase, type Db } from "../src/store/db.js";
 import { migrate } from "../src/store/migrate.js";
+import { harness, type Harness } from "./helpers.js";
 
 /** Local-time Date, so an expected `next_fire_at` is just `at(...).toISOString()`. */
 function at(y: number, month1: number, day: number, hour = 0, min = 0): Date {
@@ -269,5 +271,74 @@ describe("Scheduler lifecycle", () => {
     expect(rows).toEqual([
       { capability_id: "mine", cron: "0 8 * * *", next_fire_at: at(2026, 7, 22, 8, 0).toISOString() },
     ]);
+  });
+});
+
+/**
+ * The unit tests above inject `fire`. These run the real thing: the Scheduler
+ * wired to the real Run Layer, firing a real capability from the real roster,
+ * so the seam between "a slot came due" and "an item landed in the Inbox" is
+ * covered end to end. `weekly-digest` is the one that fires cleanly with no
+ * inputs — it writes an honest empty-week digest and auto-completes.
+ */
+describe("Scheduler end to end", () => {
+  function wireRealFire(h: Harness): Scheduler {
+    return new Scheduler({
+      db: h.db,
+      fire: async (ctx) => {
+        await runCapability(
+          { db: h.db, capabilities: h.capabilities, actionCenter: h.actionCenter },
+          ctx.capabilityId,
+          { trigger: { mode: "scheduled", firedAt: ctx.scheduledFor } },
+        );
+      },
+    });
+  }
+
+  function statusOf(h: Harness, capabilityId: string): { count: number; lastStatus: string | null } {
+    const count = h.db
+      .prepare<{ n: number }>("SELECT COUNT(*) AS n FROM action_items WHERE capability_id = ?")
+      .get(capabilityId);
+    const cap = h.db
+      .prepare<{ last_run_status: string | null }>(
+        "SELECT last_run_status FROM capabilities WHERE id = ?",
+      )
+      .get(capabilityId);
+    return { count: count?.n ?? 0, lastStatus: cap?.last_run_status ?? null };
+  }
+
+  it("fires a due weekly-digest through the Run Layer and lands an item", async () => {
+    const h = harness();
+    // The real registry already seeded the trigger row from the manifest; make
+    // its slot due.
+    h.db
+      .prepare("UPDATE triggers SET next_fire_at = ? WHERE capability_id = 'weekly-digest'")
+      .run(at(2026, 7, 19, 20, 0).toISOString());
+
+    await wireRealFire(h).tick(at(2026, 7, 21, 12, 0));
+
+    const { count, lastStatus } = statusOf(h, "weekly-digest");
+    expect(count).toBe(1);
+    expect(lastStatus).toBe("ok");
+
+    // Advanced to the next Sunday 20:00, not left in the past.
+    const next = nextFireAt(h.db, "weekly-digest");
+    expect(next).not.toBeNull();
+    const nextDate = new Date(next!);
+    expect(nextDate.getTime()).toBeGreaterThan(at(2026, 7, 21, 12, 0).getTime());
+    expect(nextDate.getDay()).toBe(0);
+    expect(nextDate.getHours()).toBe(20);
+  });
+
+  it("replays the digest on reconcile because its manifest opts into run_once", async () => {
+    const h = harness();
+    h.db
+      .prepare("UPDATE triggers SET next_fire_at = ? WHERE capability_id = 'weekly-digest'")
+      .run(at(2026, 7, 12, 20, 0).toISOString()); // a Sunday two weeks back, missed
+
+    await wireRealFire(h).reconcile(at(2026, 7, 21, 12, 0));
+
+    // run_once (set on the real manifest) replays exactly one catch-up run.
+    expect(statusOf(h, "weekly-digest")).toEqual({ count: 1, lastStatus: "ok" });
   });
 });

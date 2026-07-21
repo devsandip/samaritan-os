@@ -31,6 +31,12 @@ entrypoint: index.ts
 trigger:
   mode: scheduled
   cron: "0 20 * * 0"
+  # If the Mac was asleep at 20:00 on Sunday, the week still happened and the
+  # digest still wants writing. run_once replays exactly one catch-up on the
+  # next boot (§11); the default skip would drop the week on the floor. The
+  # daily reminders in the roster stay on skip -- a missed 8am nudge is stale by
+  # the time you see it, a missed weekly summary is not.
+  catch_up: run_once
 
 context:
   # Nothing resolves `requires` yet (§5.2). Until the Run Layer injects them,
