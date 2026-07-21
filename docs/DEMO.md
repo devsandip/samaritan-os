@@ -156,6 +156,30 @@ whose output now waits in the Inbox instead of committing itself.
 Needs `ANTHROPIC_API_KEY` to actually run, so decide beforehand whether you are
 demoing the conversion or the execution.
 
+### Agents that fire on their own
+
+Two clocks drive the roster without you clicking anything. Scheduled agents fire
+on a cron — `weekly-digest` on Sunday at 20:00, `subscription-watch` daily at
+08:00 — and the Dashboard shows each one's next fire. Event agents fire on
+something happening. Show the second one, because it is the one you can trigger
+on demand:
+
+```bash
+echo '{"type":"email.received","id":"gmail:1","payload":{"from":"@newsletters","subject":"weekly roundup","body":"retrieval, evals, sqlite"}}' \
+  | pnpm emit-event --api
+```
+
+One event, published to the bus. It reaches **both** `email-triage` (no filter)
+and `newsletter-digest` (`from_in: ["@newsletters"]`), and the digest's item is
+in the Inbox. Send the same id again — it is dropped, not re-run, because a real
+message can arrive by both a webhook and a poll and should fire once. Send one
+`from` an ordinary address and only triage takes it: the filter is what makes two
+agents on the same event type do different things.
+
+The listeners that would publish these events for real — a Gmail poller, a
+Fireflies webhook — are the next thing to build; today the event arrives by this
+command or the HTTP route, and everything after it is the real path.
+
 ---
 
 ## Questions you will get
@@ -182,21 +206,22 @@ pnpm run-capability standup-notes
 The report says what failed, the card goes red, and every other agent is
 unaffected. Then restore it or delete the folder.
 
-**"What is not built?"** Say it plainly. The scheduler is in: start the serve
-process and scheduled-mode agents fire on their cron — `weekly-digest` on Sunday
-at 20:00, `subscription-watch` daily at 08:00 — and a run missed while the Mac
-was asleep is caught up on the next boot. What is still missing: no launchd
-plist yet, so the daemon does not survive a reboot on its own; no Event Bus, so
-event-mode agents (`email-triage`, `newsletter-digest`) run when you run them,
-not when mail arrives; and Recall is indexed but not queryable, which is why the
-sidebar says so instead of pretending. Everything on screen works.
+**"What is not built?"** Say it plainly. Both clocks are in. The scheduler fires
+scheduled-mode agents on their cron, catching up a run missed while the Mac was
+asleep. The Event Bus fires event-mode agents on a published event, deduped by
+source id and narrowed by each manifest's filter. What is still missing sits at
+the two ends. At the front: no real listeners yet — a Gmail poller, a Fireflies
+webhook, a chokidar watch — so events arrive by `emit-event` or the HTTP route,
+not on their own; and no launchd plist, so the daemon does not survive a reboot.
+At the back: Recall is indexed but not queryable, which is why the sidebar says
+so instead of pretending. Everything on screen works.
 
 ---
 
 ## Before you present
 
 ```bash
-pnpm test        # 367 tests. test/agents.test.ts is this document, executable.
+pnpm test        # 389 tests. test/agents.test.ts is this document, executable.
 pnpm typecheck
 ```
 

@@ -442,3 +442,58 @@ a demo-ready Samaritan.
   truth to drift.
 - A disabled scheduled capability is armed forward without firing, so
   re-enabling it does not trigger a catch-up for every slot it slept through.
+
+## 2026-07-21 — Merged the scheduler, then built the other clock: the Event Bus
+
+**Did:**
+- Merged PR #1 (the scheduler) to main, then restarted the branch from the merged
+  main to keep the follow-up as a fresh change rather than stacking on merged
+  history.
+- Built the Event Bus (§12 step 18), the counterpart to the scheduler: where the
+  scheduler fires on a clock, the bus fires on something happening. `email-triage`
+  and `newsletter-digest` had event triggers nothing delivered an event for.
+- `src/events/filter.ts`: a small mechanical `trigger.filter` DSL (`_in`,
+  `_contains`, `_eq`, ANDed, fail-closed), so `newsletter-digest`'s
+  `from_in: ["@newsletters"]` narrows the same `email.received` `email-triage`
+  takes unfiltered.
+- `src/events/index.ts`: `EventBus.publish()` — dedup by source id via
+  `INSERT OR IGNORE` (claim-before-dispatch, migration 6 `seen_events`), then run
+  every matching enabled event-mode capability through the Run Layer, isolating
+  one subscriber's failure from the rest.
+- Wired the bus into `createApp` (a webhook route needs `publish()` at request
+  time), added `POST /api/events` and `samaritan emit-event`, so an event reaches
+  the agents before any real listener exists.
+
+**State now:**
+- 389 tests (up from 367: 8 filter, 10 bus, 4 API route), typecheck clean. Three
+  commits on `claude/continue-building-0uer2e`, restarted from the merged main.
+- Verified against a live daemon: a newsletter event dispatched to both event
+  agents and landed one `newsletter-digest` item; the same id again deduped with
+  no second run; ordinary mail routed to `email-triage` alone.
+- Both clocks now real. What the bus lacks is real listeners (Gmail poller,
+  Fireflies webhook, chokidar watch); events arrive by the route/CLI, not on
+  their own.
+
+**Next:**
+- A real listener — the chokidar filesystem watch is the most testable in this
+  environment (watch the vault / journals → `note.created` / `journal.updated`),
+  and needs no API key or network.
+- The launchd plist, so the daemon survives a reboot (the rest of step 16).
+- Recall's query path (step 22), still the last placeholder in the UI.
+
+**Decisions:**
+- The filter is a mechanical three-operator DSL, not the expr-eval predicate
+  engine. A filter selects an event by shape; it should read at a glance and
+  never throw. Fails closed like the policy predicates: a filter naming a missing
+  field does not match.
+- Dedup claims before it dispatches, the scheduler's shape again. Marking the id
+  seen before the run means two concurrent deliveries cannot both fire; the
+  symmetric cost (a crash between claim and dispatch loses that event) is
+  acceptable because "at most once" is what the dedup is for, and ingest's
+  `dedupe_key` is a second net under it.
+- The bus lives on the App, not just the daemon. A webhook route calls straight
+  into `publish()`, so the bus has to be reachable wherever the app is, the way
+  `actionCenter` is — the listeners are the daemon-only part, and they are not
+  built yet.
+- Restarted the branch from merged main rather than stacking. A merged PR is
+  finished; the Event Bus is a new change and will be its own PR.

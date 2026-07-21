@@ -1,8 +1,8 @@
 # Samaritan — Journal Index
 
-Last refreshed: 2026-07-21 11:35
+Last refreshed: 2026-07-21 14:25
 
-Latest entry: [2026-07-21-1130-crons-that-fire](entries/2026-07-21-1130-crons-that-fire.md)
+Latest entry: [2026-07-21-1420-the-other-clock](entries/2026-07-21-1420-the-other-clock.md)
 
 Local-first personal agentic OS. The Action Center is a universal
 human-in-the-loop layer and a pluggable capability platform: one inbox for
@@ -54,30 +54,37 @@ voided attempt.
 Notion is live end to end. Telegram is written, tested and parked, disabled by
 default.
 
-367 tests, typecheck clean, everything merged and pushed. `docs/DEMO.md` is the
+389 tests, typecheck clean, everything merged and pushed. `docs/DEMO.md` is the
 runbook and `test/agents.test.ts` is that runbook made executable, so a stale
 demo step fails the suite before it fails in a room.
 
-The scheduler is built. The serve process hosts it, and scheduled-mode agents
-fire on their declared cron: `weekly-digest` on Sunday at 20:00,
-`subscription-watch` daily at 08:00. `next_fire_at` is persisted and shown on the
-Dashboard, and a run missed while the machine slept is caught up on the next boot
-per each manifest's `catch_up`. Verified against a live daemon rather than only
-in tests. It computes the next fire itself rather than delegating to node-cron,
-for the column, the catch-up and the deterministic tests that decision buys.
+Both clocks are built, and they are the same machine wearing two faces. The
+scheduler fires scheduled-mode agents on a cron — `weekly-digest` Sunday at
+20:00, `subscription-watch` daily at 08:00 — with `next_fire_at` persisted, shown
+on the Dashboard, and caught up on the next boot if the machine slept through it.
+The Event Bus fires event-mode agents on a published event: `POST /api/events`
+takes a `SamaritanEvent`, dedups it by source id, and dispatches to every
+subscriber whose `trigger.on` matches and whose `trigger.filter` passes, so one
+`email.received` reaches `email-triage` and `newsletter-digest` or just the first
+depending on who sent it. Both run through the same Run Layer, and both claim the
+trigger before firing so a double-delivery fires once. Verified against a live
+daemon, not only in tests.
 
 What is not built, stated plainly because the demo depends on knowing the edge:
-no launchd plist, so the daemon lives only as long as `pnpm serve` and a reboot
-forgets it; no Event Bus, so event-mode agents (`email-triage`,
-`newsletter-digest`) have no events — the exact mirror of the gap the scheduler
-just closed; Recall is chunked, embedded and indexed but has no fusion step, no
-indexer job and no query surface; no assisted execution adapters, which is why
-`email-triage` degrades to guided; Settings has a real routing table and no
-connections grid; Policy is v0 plus the hardcoded money lock. The launchd plist
-is next, then the Event Bus.
+no real listeners, so events reach the bus by `emit-event` or the HTTP route, not
+a Gmail poll or a Fireflies webhook of their own; no launchd plist, so the daemon
+lives only as long as `pnpm serve` and a reboot forgets it; Recall is chunked,
+embedded and indexed but has no fusion step, no indexer job and no query surface;
+no assisted execution adapters, which is why `email-triage` degrades to guided;
+Settings has a real routing table and no connections grid; Policy is v0 plus the
+hardcoded money lock. A listener is next — the chokidar vault watch, the one
+testable without a network — then the launchd plist.
 
 ## Recent entries
 
+- [2026-07-21-1420-the-other-clock](entries/2026-07-21-1420-the-other-clock.md)
+  — the Event Bus: the scheduler's shape again, firing on an event instead of an
+  hour; dedup by source id, a fail-closed filter DSL, both clocks now real
 - [2026-07-21-1130-crons-that-fire](entries/2026-07-21-1130-crons-that-fire.md)
   — the scheduler: a self-contained cron matcher over the `next_fire_at` column
   that was always waiting, claim-before-fire, and catch-up across a restart

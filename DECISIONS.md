@@ -6,6 +6,46 @@ spec, so the spec stays the design record and this stays the build record.
 
 ---
 
+## 2026-07-21 — Event Bus: a mechanical filter DSL, and dedup that claims before it dispatches
+
+**Context:** §4.1 gives `trigger.filter` as a free-form `Record<string, unknown>`
+and §2.2 requires source-level dedup, but neither pins down the filter's
+semantics or the dedup's ordering. Both are choices, recorded here.
+
+**The filter is three operators, not a predicate language.** `newsletter-digest`
+declares `filter: { from_in: ["@newsletters"] }`. Rather than reach for the
+expr-eval predicate engine the Policy Engine uses, `src/events/filter.ts` reads
+the key as `<field>_<op>` and supports exactly `_in`, `_contains`, and `_eq`
+(the default), ANDed together. A filter selects an event by shape; it is not a
+place for arithmetic or boolean logic, and keeping it mechanical means a manifest
+author can read a filter at a glance and it can never throw. It **fails closed**,
+the same rule as the Policy predicates (a filter naming a field the payload lacks
+does not match), so a capability is never fired on an event it could not have
+evaluated.
+
+The value `@newsletters` is a label, not a literal from-address; resolving it to
+real senders is the Gmail connector's job (not yet built). The matcher is honest
+about this — it compares `payload.from` to the literal — so a demo event carries
+`from: "@newsletters"` and a real one will carry whatever the connector tags.
+
+**Dedup claims before it dispatches.** `publish()` records the event id with
+`INSERT OR IGNORE` and only dispatches if the insert won (`changes === 1`). This
+is the Scheduler's claim-before-fire again: the id is marked seen before the run
+starts, so two concurrent deliveries of the same source id (an overlapping
+webhook and poll) cannot both get through. The symmetric cost is the same too —
+a crash between the claim and the dispatch loses that one event — and acceptable
+for the same reason: firing the capability (and its eventual model call) twice is
+the outcome the dedup exists to prevent, so "at most once" beats "at least once"
+here. Ingest's `dedupe_key` is a second net under it, collapsing a double-dispatch
+to one item even if one ever slips through.
+
+**Not a deviation, an addition:** `trigger.catch_up` (scheduler) and this filter
+DSL are both under-specified points the spec left to the build, filled in the
+direction the rest of the system already leans — fail-closed, claim-first,
+mechanical over clever.
+
+---
+
 ## 2026-07-21 — Scheduler: a self-contained cron matcher, not `node-cron`
 
 **Spec says:** §2.2, §3 and §12 step 17 name `node-cron` for the in-process
