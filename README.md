@@ -22,7 +22,7 @@ nothing is filed until Sandip approves it.
 | 11 Inbox web UI | Done |
 | 13-15 Audit endpoint, emit CLI, end-to-end smoke | Done |
 | 17 Scheduler: scheduled-mode agents fire on their cron, in-process, with catch-up | Done |
-| 18 Event Bus: event-mode agents fire on a published event, deduped by source id | Done (bus + vault-watch + Gmail poller; Fireflies/Slack pending) |
+| 18 Event Bus: event-mode agents fire on a published event, deduped by source id | Done (bus + vault-watch + Gmail poller + Fireflies webhook; Slack pending) |
 | 16 Daemon: one process hosts the scheduler, bus and sweeps; boot reconciliation (§11); launchd plist | Done |
 | 22 Recall query: hybrid retrieval (vector + BM25 → RRF), cited, with an indexer and the Ask box | Done |
 | 19 Policy Engine v1: confidence + reversibility + value rules, per-type overrides, money-lock (§9) | Done |
@@ -83,9 +83,19 @@ that lets a restart resume is an optimisation over the bus's own dedup, never th
 thing that keeps a message from being filed twice. The grant is read + compose
 only (§9); Samaritan never sends.
 
-The listeners still missing are the inbound webhooks — a Fireflies webhook and a
-Slack Events route — so meeting and chat events still arrive by `samaritan
-emit-event` or the HTTP route.
+The bus also has its first *inbound* listener: a Fireflies webhook. Where the
+Gmail poller reaches out on a timer, this is reached into — Fireflies posts to
+`POST /api/webhooks/fireflies` when a meeting transcript is ready, and the route
+verifies the request is authentic (a constant-time HMAC over the exact bytes,
+which is why it reads the raw body in an encapsulated plugin that leaves every
+other route on the default parser) and publishes a `meeting.transcribed` event.
+The event carries the meeting id, not the transcript: the webhook only announces
+readiness, so it is the notice, and wiring a consumer that pulls the transcript
+and extracts it is the follow-up. Off by default; with a signing secret set, an
+unsigned request is refused.
+
+The listener still missing is the Slack Events route, so chat events still arrive
+by `samaritan emit-event` or the `POST /api/events` route.
 
 ## Quick start
 
@@ -259,13 +269,25 @@ has expired surfaces as a 401 "reauthorise" rather than a silent stall (the
 refresh-token flow is v0 future work). `pnpm poll-gmail` runs one poll by hand to
 confirm it works.
 
+The Fireflies webhook takes a signing secret rather than a token — enable it in
+the `fireflies` block and add:
+
+```bash
+security add-generic-password -s samaritan -a fireflies:webhook -w
+```
+
+Point your Fireflies integration at `POST /api/webhooks/fireflies`. With the
+secret set, a request whose HMAC signature does not match is rejected; without it
+the route accepts unverified, which is fine only on loopback and never behind a
+tunnel (§9).
+
 Any secret can be overridden by an environment variable for a single run, for
 example `SAMARITAN_NOTION_PM_OS_WORKSPACE` or `SAMARITAN_GMAIL_DEFAULT`.
 
 ## Tests
 
 ```bash
-pnpm test        # 533 tests
+pnpm test        # 550 tests
 pnpm typecheck
 ```
 

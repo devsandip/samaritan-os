@@ -1,8 +1,8 @@
 # Samaritan — Journal Index
 
-Last refreshed: 2026-07-22 01:25
+Last refreshed: 2026-07-22 02:15
 
-Latest entry: [2026-07-22-0120-the-first-wire-to-the-outside](entries/2026-07-22-0120-the-first-wire-to-the-outside.md)
+Latest entry: [2026-07-22-0210-the-door-not-the-errand](entries/2026-07-22-0210-the-door-not-the-errand.md)
 
 Local-first personal agentic OS. The Action Center is a universal
 human-in-the-loop layer and a pluggable capability platform: one inbox for
@@ -112,19 +112,30 @@ it did in v0. Verified live against the real config loader, not only the injecte
 unit tests.
 
 What is not built, stated plainly because the demo depends on knowing the edge:
-the inbound networked listeners — a Fireflies and a Slack webhook — so meeting and
-chat events still reach the bus by `emit-event` or the HTTP route. The Gmail poller
-is built now, the bus's first networked front end, off by default until a token is
-in the Keychain. Still open: Recall's structured SQL path over the mirror tables
-(so `retrieval_path` is always `semantic`) and its near-real-time chokidar
-indexing, both left for later; no assisted execution adapters, which is why
-`email-triage` degrades to guided; Settings has a real routing table and no
-connections grid; and the Gmail refresh-token flow, so a token outlives its hour.
-Next are the two inbound webhooks, both fully curl-verifiable where the Gmail poll
-is not.
+the last networked listener, a Slack Events route — so chat events still reach the
+bus by `emit-event` or the HTTP route. Three listeners are built now: the vault
+watch, the Gmail poller (the first networked front end, off by default until a
+token is in the Keychain), and the Fireflies webhook (the first inbound one,
+signature-gated). Still open: a consumer for `meeting.transcribed` that pulls the
+transcript and extracts it, so the Fireflies notice becomes an Inbox item;
+Recall's structured SQL path over the mirror tables (so `retrieval_path` is always
+`semantic`) and its near-real-time chokidar indexing, both left for later; no
+assisted execution adapters, which is why `email-triage` degrades to guided;
+Settings has a real routing table and no connections grid; and the Gmail
+refresh-token flow, so a token outlives its hour. Next is the Slack route, the
+same encapsulated-plugin shape the Fireflies webhook just proved.
 
 ## Recent entries
 
+- [2026-07-22-0210-the-door-not-the-errand](entries/2026-07-22-0210-the-door-not-the-errand.md)
+  — the Fireflies webhook: the bus's first *inbound* listener, reached into rather
+  than reaching out, so the whole path is a request I can sign and curl — verified
+  end to end live, no faith needed. The design turns: raw body via a per-plugin
+  content-type parser so signature verification changes nothing for the rest of
+  the API; signature required when a secret is set, unverified allowed on loopback
+  (§9); and the honest one — the event is a *notice* carrying the meeting id, not
+  the transcript, so it is inert-but-authenticated on the bus until a consumer that
+  fetches and extracts is built
 - [2026-07-22-0120-the-first-wire-to-the-outside](entries/2026-07-22-0120-the-first-wire-to-the-outside.md)
   — the Gmail poller: the Event Bus's first networked listener, so a real inbox
   becomes `email.received` for the two capabilities already waiting on it. Same

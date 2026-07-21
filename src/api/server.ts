@@ -19,6 +19,7 @@ import { createGmailSource } from "../events/listeners/gmail-source.js";
 import { VaultWatcher } from "../events/listeners/vault-watch.js";
 import { SamaritanEvent } from "../events/types.js";
 import { StoreCheckpoint } from "../store/poll-state.js";
+import { registerWebhooks } from "./webhooks.js";
 import { log } from "../logger.js";
 import { RoutingLockedError, UnknownActionTypeError } from "../routing/index.js";
 import { runCapability } from "../run-layer/index.js";
@@ -304,6 +305,11 @@ export function buildServer(app: App): FastifyInstance {
     if (!event.success) return reply.code(400).send(badRequest(event.error));
     return reply.code(202).send(await app.eventBus.publish(event.data));
   });
+
+  // Inbound webhooks (Fireflies today) live in their own encapsulated plugin so
+  // their raw-body parser — needed to verify a signature over the exact bytes —
+  // stays scoped to them and does not change how the rest of the API parses JSON.
+  registerWebhooks(server, app);
 
   // ---- Recall --------------------------------------------------------------
 
