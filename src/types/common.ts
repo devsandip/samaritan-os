@@ -11,6 +11,15 @@ import { z } from "zod";
 export const RunMode = z.enum(["scheduled", "event", "manual", "continuous"]);
 export type RunMode = z.infer<typeof RunMode>;
 
+/**
+ * What a scheduled trigger does about a fire it missed while the daemon was down
+ * (§11). `skip` (the default) logs the miss and waits for the next occurrence;
+ * `run_once` replays exactly one catch-up run, however many were missed, which
+ * is what a daily or weekly digest wants.
+ */
+export const CatchUpMode = z.enum(["skip", "run_once"]);
+export type CatchUpMode = z.infer<typeof CatchUpMode>;
+
 export const RenderLayout = z.enum(["card", "form", "document", "diff"]);
 export type RenderLayout = z.infer<typeof RenderLayout>;
 

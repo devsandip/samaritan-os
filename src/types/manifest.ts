@@ -9,6 +9,7 @@
 import { z } from "zod";
 import { CONTEXT_VARIABLE_NAMES } from "./action-item.js";
 import {
+  CatchUpMode,
   ExecutionCapabilityId,
   ExecutionMode,
   KebabId,
@@ -18,12 +19,28 @@ import {
   RunMode,
   isDuration,
 } from "./common.js";
+import { isValidCron } from "../scheduler/cron.js";
 
 export const TriggerSpec = z
   .object({
     mode: RunMode,
-    /** Required when mode is "scheduled". */
-    cron: z.string().min(1).optional(),
+    /**
+     * Required when mode is "scheduled". Validated as a real five-field cron at
+     * load, not just a non-empty string: a malformed cron that only failed when
+     * the scheduler tried to parse it would be a capability that silently never
+     * fires, discovered at 2am rather than at registration.
+     */
+    cron: z
+      .string()
+      .min(1)
+      .refine(isValidCron, "must be a valid five-field cron expression")
+      .optional(),
+    /**
+     * What to do about a scheduled run missed while the daemon was down (§11).
+     * Only meaningful for scheduled triggers; the scheduler treats an absent
+     * value as "skip".
+     */
+    catch_up: CatchUpMode.optional(),
     /** Required when mode is "event", e.g. ["email.received"]. */
     on: z.array(z.string().min(1)).optional(),
     filter: z.record(z.string(), z.unknown()).optional(),
@@ -45,6 +62,17 @@ export const TriggerSpec = z
     if (spec.mode === "scheduled") require("cron", "scheduled");
     if (spec.mode === "event") require("on", "event");
     if (spec.mode === "manual") require("command", "manual");
+
+    // catch_up governs a missed cron fire, so it means nothing without a cron.
+    // Rejecting it elsewhere keeps a manual capability from carrying a field that
+    // reads as configured and never does anything.
+    if (spec.catch_up !== undefined && spec.mode !== "scheduled") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["catch_up"],
+        message: `trigger.catch_up is only meaningful when trigger.mode is "scheduled"`,
+      });
+    }
   });
 export type TriggerSpec = z.infer<typeof TriggerSpec>;
 
