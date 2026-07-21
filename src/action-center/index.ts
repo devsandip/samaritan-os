@@ -7,7 +7,7 @@
  * `transition()`, so the audit trail is complete by construction.
  */
 import { log } from "../logger.js";
-import { evaluate, type PolicyDecision } from "../policy/index.js";
+import { evaluate, type PolicyConfig, type PolicyDecision } from "../policy/index.js";
 import type { CapabilityRegistry, LoadedType } from "../registry/index.js";
 import type { RoutingResolver } from "../routing/index.js";
 import type { Registry as ExecutionRegistry } from "../execution/registry.js";
@@ -68,6 +68,11 @@ export interface ActionCenterDeps {
    * (UI-SPEC §5.3). Omitted means no window and no adjustment.
    */
   quietHours?: string;
+  /**
+   * Global risk thresholds (config.policy) handed to the Policy Engine on ingest.
+   * Omitted falls back to the engine's built-in defaults (§9).
+   */
+  policyConfig?: PolicyConfig;
 }
 
 export class ActionCenterError extends Error {
@@ -198,6 +203,7 @@ export class ActionCenter {
     const decision = evaluate(draft, type.spec.policy, {
       executionCapabilityId: type.spec.execution.capability,
       ...(type.spec.execution.action_type ? { actionType: type.spec.execution.action_type } : {}),
+      ...(this.deps.policyConfig ? { policyConfig: this.deps.policyConfig } : {}),
     });
 
     // The `custom` payload doubles as the execution payload: a capability

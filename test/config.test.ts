@@ -25,6 +25,9 @@ describe("loadConfig", () => {
     // §7/§9: local embeddings are the default so raw text never leaves the machine.
     expect(cfg.embeddings.provider).toBe("local");
     expect(cfg.delivery.telegram.enabled).toBe(false);
+    // §9 risk defaults.
+    expect(cfg.policy.value_threshold).toBe(100);
+    expect(cfg.policy.escalate_irreversible).toBe(true);
   });
 
   it("resolves paths to absolute and defaults capabilities to the repo folder", () => {
@@ -63,6 +66,23 @@ describe("loadConfig", () => {
       expect(cfg.logging.level).toBe("debug");
       // Untouched sections still default.
       expect(cfg.server.host).toBe("127.0.0.1");
+    } finally {
+      writeFileSync(configPath(), original, "utf8");
+      loadConfig({ reload: true });
+    }
+  });
+
+  it("takes policy risk thresholds from the file, overriding the defaults", () => {
+    const original = readFileSync(configPath(), "utf8");
+    try {
+      writeFileSync(
+        configPath(),
+        "policy:\n  value_threshold: 500\n  escalate_irreversible: false\n",
+        "utf8",
+      );
+      const cfg = loadConfig({ reload: true });
+      expect(cfg.policy.value_threshold).toBe(500);
+      expect(cfg.policy.escalate_irreversible).toBe(false);
     } finally {
       writeFileSync(configPath(), original, "utf8");
       loadConfig({ reload: true });

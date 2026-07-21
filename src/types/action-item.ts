@@ -36,6 +36,19 @@ export const ActionItemContext = z.object({
   /** Where the action lands, e.g. "notion". */
   execution_surface: z.string().min(1),
   outcome_preview: z.string(),
+  /**
+   * How undoable the action is, when the capability can say (§5.6, §9 — the risk
+   * framework's reversibility dimension). Absent means unknown, which policy
+   * treats as reversible: the reversibility rule fires only on an explicit
+   * "irreversible", never on silence.
+   */
+  reversibility: z.enum(["reversible", "hard", "irreversible"]).optional(),
+  /**
+   * The magnitude of what is at stake, in a consistent unit the value threshold
+   * is calibrated to (dollars or dollar-equivalent). Absent means unknown, which
+   * policy treats as zero — the value rule fires only on a stated magnitude.
+   */
+  value: z.number().min(0).optional(),
 });
 export type ActionItemContext = z.infer<typeof ActionItemContext>;
 
@@ -95,6 +108,8 @@ export const CONTEXT_VARIABLE_NAMES = [
   "outcome_preview",
   "source_kind",
   "source_id",
+  "reversibility",
+  "value",
 ] as const;
 
 export type ContextVariableName = (typeof CONTEXT_VARIABLE_NAMES)[number];
@@ -112,6 +127,10 @@ export function contextVariables(context: ActionItemContext): Record<ContextVari
     outcome_preview: context.outcome_preview,
     source_kind: context.source.kind,
     source_id: context.source.id,
+    // Explicitly present even when undefined, so a predicate may reference them
+    // (allowedVariables reads the keys) and policy's own rules can read them.
+    reversibility: context.reversibility,
+    value: context.value,
   };
 }
 

@@ -22,11 +22,29 @@ export interface PolicyDecision {
   matched_rule: string;
 }
 
+export interface PolicyConfig {
+  /** Global stakes threshold; a per-type `value_threshold` overrides it (§9). */
+  valueThreshold: number;
+  /** Whether an item marked irreversible escalates by default (§9). */
+  escalateIrreversible: boolean;
+}
+
+/**
+ * The defaults that mirror config.yaml's `policy` block, so evaluate() stays
+ * callable without a config in a unit test. Production passes the real config.
+ */
+export const DEFAULT_POLICY_CONFIG: PolicyConfig = {
+  valueThreshold: 100,
+  escalateIrreversible: true,
+};
+
 export interface EvaluateOptions {
   /** The manifest's execution target, e.g. "notion.insight.create". */
   executionCapabilityId?: string;
   /** The abstract action type, when routing has already resolved one. */
   actionType?: string;
+  /** Global risk thresholds (config.policy). Defaulted when absent. */
+  policyConfig?: PolicyConfig;
 }
 
 /**
@@ -82,6 +100,25 @@ export function evaluate(
     };
   }
 
+  const cfg = opts.policyConfig ?? DEFAULT_POLICY_CONFIG;
+
+  // 2. Reversibility (§9). An irreversible action escalates by default: softer
+  // than the money-lock, which no manifest can touch, but stronger than a
+  // predicate — a type that knows its irreversible action is safe to run
+  // unattended opts out with allow_irreversible. Absent reversibility is silence,
+  // not a claim of safety, so the rule fires only on an explicit "irreversible".
+  if (
+    draft.context.reversibility === "irreversible" &&
+    cfg.escalateIrreversible &&
+    !policy?.allow_irreversible
+  ) {
+    return {
+      outcome: "escalate",
+      reason: "the action is irreversible, so it goes to review by default",
+      matched_rule: "risk:irreversible",
+    };
+  }
+
   const scope = variableScope(draft);
 
   // A predicate that cannot be evaluated fails closed. Escalating a low-risk
@@ -100,7 +137,7 @@ export function evaluate(
     }
   };
 
-  // 2. escalate_when.
+  // 3. escalate_when.
   if (policy?.escalate_when) {
     const result = test(policy.escalate_when, "escalate_when");
     if (typeof result !== "boolean") return result;
@@ -113,7 +150,7 @@ export function evaluate(
     }
   }
 
-  // 3. confidence_threshold.
+  // 4. confidence_threshold.
   if (policy?.confidence_threshold !== undefined) {
     const confidence = draft.context.confidence;
     if (confidence < policy.confidence_threshold) {
@@ -125,7 +162,20 @@ export function evaluate(
     }
   }
 
-  // 4. auto_complete_when.
+  // 5. Value (§9). Stakes at or above the threshold escalate, so a high-value
+  // item cannot be claimed by auto_complete_when below. A per-type value_threshold
+  // overrides the global default; an absent value is treated as zero.
+  const value = draft.context.value;
+  const threshold = policy?.value_threshold ?? cfg.valueThreshold;
+  if (value !== undefined && value >= threshold) {
+    return {
+      outcome: "escalate",
+      reason: `value ${value} is at or above the ${threshold} threshold`,
+      matched_rule: "risk:value_threshold",
+    };
+  }
+
+  // 6. auto_complete_when.
   if (policy?.auto_complete_when) {
     const result = test(policy.auto_complete_when, "auto_complete_when");
     if (typeof result !== "boolean") return result;
@@ -138,7 +188,7 @@ export function evaluate(
     }
   }
 
-  // 5. Default. Nothing claimed this item as safe, so a human sees it.
+  // 7. Default. Nothing claimed this item as safe, so a human sees it.
   return {
     outcome: "escalate",
     reason: "no policy rule matched; escalating by default",

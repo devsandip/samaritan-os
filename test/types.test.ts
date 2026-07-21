@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parse as parseYaml } from "yaml";
 import { CapabilityManifest, customAttributesSchema, findEmit } from "../src/types/manifest.js";
-import { ActionItemContext, DraftActionItem } from "../src/types/action-item.js";
+import { ActionItemContext, contextVariables, DraftActionItem } from "../src/types/action-item.js";
 import { isSettled, SETTLED_STATUSES, UNSETTLED_STATUSES } from "../src/types/common.js";
 import { isMoneyLocked, isMoneyLockedExecutionId } from "../src/guardrails.js";
 
@@ -256,6 +256,27 @@ describe("DraftActionItem", () => {
 
   it("rejects an unknown trigger_reason", () => {
     expect(ActionItemContext.safeParse({ ...context, trigger_reason: "vibes" }).success).toBe(false);
+  });
+
+  it("accepts reversibility and value, and rejects a bad enum or a negative value", () => {
+    expect(
+      ActionItemContext.safeParse({ ...context, reversibility: "irreversible", value: 540 }).success,
+    ).toBe(true);
+    expect(ActionItemContext.safeParse({ ...context, reversibility: "maybe" }).success).toBe(false);
+    expect(ActionItemContext.safeParse({ ...context, value: -1 }).success).toBe(false);
+  });
+
+  it("exposes reversibility and value to predicates, present even when absent", () => {
+    const bare = contextVariables(ActionItemContext.parse(context));
+    expect("reversibility" in bare).toBe(true);
+    expect("value" in bare).toBe(true);
+    expect(bare.reversibility).toBeUndefined();
+
+    const risky = contextVariables(
+      ActionItemContext.parse({ ...context, reversibility: "hard", value: 42 }),
+    );
+    expect(risky.reversibility).toBe("hard");
+    expect(risky.value).toBe(42);
   });
 
   it("rejects an empty dedupe_key, which would collapse every item onto one row", () => {
