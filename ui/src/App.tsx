@@ -18,11 +18,22 @@ import { Catalogue } from "./lib/manifest";
 import { useRoute } from "./lib/router";
 import { COMPLETED_STATUSES, INBOX_STATUSES } from "./lib/transitions";
 import { useAsync } from "./lib/useAsync";
+import { AskView } from "./views/Ask";
 import { CompletedView } from "./views/Completed";
 import { DashboardView } from "./views/Dashboard";
 import { DeferredView } from "./views/Deferred";
 import { InboxView } from "./views/Inbox";
 import { SettingsView } from "./views/Settings";
+
+/** The question lives in the route hash; decode defensively so a bad %-escape
+ * shows the raw text rather than throwing the whole shell. */
+function decodeHash(hash: string): string {
+  try {
+    return decodeURIComponent(hash);
+  } catch {
+    return hash;
+  }
+}
 
 interface ToastState {
   message: string;
@@ -75,6 +86,8 @@ export function App() {
     ? "daemon unreachable"
     : `${capabilityList.length} ${capabilityList.length === 1 ? "capability" : "capabilities"} loaded · ${problems.length} problem${problems.length === 1 ? "" : "s"} · local-first`;
 
+  const askQuery = route.view === "ask" ? decodeHash(route.hash) : "";
+
   return (
     <div className="app">
       <Sidebar
@@ -82,6 +95,7 @@ export function App() {
         inboxCount={inbox.data?.length}
         deferredCount={deferred.data?.length}
         statusLine={statusLine}
+        askQuery={askQuery}
       />
 
       <main className="main">
@@ -146,6 +160,8 @@ export function App() {
             onToast={showToast}
           />
         ) : null}
+
+        {route.view === "ask" ? <AskView question={askQuery} /> : null}
       </main>
 
       {toast ? <Toast key={toast.key} message={toast.message} variant={toast.variant} /> : null}

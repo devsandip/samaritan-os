@@ -5,12 +5,13 @@
  * fetched here: the numbers have to agree with the view that owns them, and two
  * fetchers would drift the moment one of them acted on an item.
  *
- * The Ask-Samaritan box is rendered as a disabled placeholder. The recall layer
- * (PRD §15) has no endpoint yet (`src/recall/` is empty), and a search box that
- * silently does nothing is worse than one that says it is not wired up.
+ * The Ask-Samaritan box is a real search now. Submitting navigates to `/ask`
+ * with the question in the hash, so the answer is an addressable page — a deep
+ * link from anywhere lands on the same result — and the answer itself renders in
+ * the main pane, which has the room the sidebar does not.
  */
-import type { ViewName } from "../lib/router";
-import { linkHandler } from "../lib/router";
+import { useEffect, useState, type FormEvent } from "react";
+import { linkHandler, navigate, type ViewName } from "../lib/router";
 
 interface NavItem {
   view: ViewName;
@@ -23,11 +24,14 @@ export function Sidebar({
   inboxCount,
   deferredCount,
   statusLine,
+  askQuery = "",
 }: {
   active: ViewName;
   inboxCount: number | undefined;
   deferredCount: number | undefined;
   statusLine: string;
+  /** The question currently on screen, so the box reflects a deep-linked ask. */
+  askQuery?: string;
 }) {
   const items: NavItem[] = [
     { view: "dashboard", label: "Dashboard" },
@@ -40,6 +44,17 @@ export function Sidebar({
     { view: "completed", label: "Completed" },
     { view: "settings", label: "Settings" },
   ];
+
+  const [draft, setDraft] = useState(askQuery);
+  // Keep the box in step when the route changes under it (back/forward, a deep
+  // link), without making it a controlled mirror of the URL on every keystroke.
+  useEffect(() => setDraft(askQuery), [askQuery]);
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    const question = draft.trim();
+    if (question) navigate(`/ask#${encodeURIComponent(question)}`);
+  };
 
   return (
     <aside className="side">
@@ -67,11 +82,20 @@ export function Sidebar({
 
       <div className="spacer" />
 
-      <div className="recall">
-        Ask Samaritan
-        <br />
-        <span style={{ opacity: 0.7 }}>Recall is not wired up yet.</span>
-      </div>
+      <form className="ask" onSubmit={submit} role="search">
+        <label className="ask-label" htmlFor="ask-input">
+          Ask Samaritan
+        </label>
+        <input
+          id="ask-input"
+          className="ask-input"
+          type="search"
+          placeholder="Ask about your notes…"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          aria-label="Ask Samaritan a question about your notes, journals and decisions"
+        />
+      </form>
 
       <small>{statusLine}</small>
     </aside>

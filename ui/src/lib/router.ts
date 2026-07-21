@@ -8,7 +8,7 @@
  */
 import { useCallback, useEffect, useState, type MouseEvent } from "react";
 
-export type ViewName = "dashboard" | "inbox" | "deferred" | "completed" | "settings";
+export type ViewName = "dashboard" | "inbox" | "deferred" | "completed" | "settings" | "ask";
 
 export interface Route {
   view: ViewName;
