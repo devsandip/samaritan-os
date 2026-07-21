@@ -14,6 +14,7 @@ import { z } from "zod";
 import { ActionCenterError } from "../action-center/index.js";
 import { createApp, type App, type CreateAppOptions } from "../app.js";
 import { repoRoot } from "../config/index.js";
+import { VaultWatcher } from "../events/listeners/vault-watch.js";
 import { SamaritanEvent } from "../events/types.js";
 import { log } from "../logger.js";
 import { RoutingLockedError, UnknownActionTypeError } from "../routing/index.js";
@@ -350,13 +351,23 @@ export async function start(options: CreateAppOptions = {}): Promise<FastifyInst
     },
   });
 
+  // The vault watch is the Event Bus's first real listener: a note written to
+  // the vault publishes onto the same bus a webhook or the `emit-event` CLI does
+  // (§12 step 18). It runs here for the same reason the Scheduler does — this is
+  // the one long-lived process, so it is the one that can hold a file watch open.
+  const watcher = new VaultWatcher({
+    roots: [{ dir: app.config.paths.vault, kind: "note", source: "vault" }],
+    publish: (event) => app.eventBus.publish(event),
+  });
+
   // Both before listen(): Fastify refuses addHook once the instance is
   // listening, and unref() keeps the timer from holding the process open.
   const timer = setInterval(() => void sweep(app), SWEEP_INTERVAL_MS);
   timer.unref();
-  server.addHook("onClose", () => {
+  server.addHook("onClose", async () => {
     clearInterval(timer);
     scheduler.stop();
+    await watcher.stop();
   });
 
   await server.listen({ host, port });
@@ -367,6 +378,8 @@ export async function start(options: CreateAppOptions = {}): Promise<FastifyInst
   // reconcile() (catch-up, §11) then tick on the Scheduler's own interval. After
   // listen, so the server is answering before any catch-up run starts.
   await scheduler.start();
+  // After the scheduler, so a note written during boot catch-up still fires.
+  await watcher.start();
 
   logger.info({ url: `http://${host}:${port}` }, "samaritan api listening");
   return server;
