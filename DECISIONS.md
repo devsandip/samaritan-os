@@ -6,6 +6,64 @@ spec, so the spec stays the design record and this stays the build record.
 
 ---
 
+## 2026-07-21 — Policy Engine v1: reversibility and value as overridable risk rules
+
+**Context:** §12 step 19 — "full confidence/reversibility/value rules, per-type
+overrides, hardcoded money-lock (§9)". The v0 engine had confidence and the money-
+lock; this adds the other two dimensions §5.6 names, and settles how absolute they
+are.
+
+**Reversibility and value are context, not custom attributes.** They could have
+lived in each capability's `custom` block and been read by convention, but that
+would make them capability-defined strings the OS reads by magic name. Putting
+them on `ActionItemContext` makes them OS-defined concepts: they join
+`CONTEXT_VARIABLE_NAMES`, so a capability cannot declare a custom attribute that
+shadows them, and they flow into the predicate scope like every other context
+field. The cost is a contract change, but it is backward-compatible (both
+optional) and it is the same call the project keeps making — a shared concept
+belongs in the shared shape.
+
+**Absent is silence, not a safety claim.** A missing `reversibility` is treated as
+reversible and a missing `value` as zero, so the two new rules fire only on a
+stated signal. This is what keeps the change backward-compatible in behavior as
+well as in schema: every existing item, which has neither, evaluates exactly as it
+did in v0. A rule that escalated on the *absence* of a signal would turn every
+silent capability into a flood of review items overnight.
+
+**The money-lock is absolute; reversibility and value are overridable.** This is
+the load-bearing distinction. §9 makes money non-negotiable — no manifest can
+touch it. Reversibility and value are strong defaults with an escape hatch: a type
+sets `allow_irreversible: true` or its own `value_threshold` to take
+responsibility for an action it knows is safe. The reasoning: money is a bright
+line the OS can draw for everyone, but "how much is too much" and "is this
+undo-able enough" are judgments that vary by capability, so the OS sets the
+default and lets the capability author, who knows the specific action, bend it —
+while never letting silence bend it.
+
+**Precedence: money → reversibility → escalate_when → confidence → value →
+auto_complete → default.** Both new rules sit *before* `auto_complete_when`, so a
+permissive `auto_complete_when: "true"` can't wave through an irreversible or
+high-value item — exactly the property the money-lock has, one level softer. The
+value rule sits after confidence so the reported `matched_rule` reads in
+increasing specificity, but since every escalate rule short-circuits, order among
+them changes only which reason is surfaced, never the outcome.
+
+**Global thresholds in config, passed into a pure engine.** `evaluate()` stays a
+pure function: the `policy` config block (`value_threshold`, `escalate_irreversible`)
+is threaded in through `EvaluateOptions.policyConfig`, defaulted to mirror the
+config when absent so a unit test needs no config. The Action Center reads the
+block and hands it to the engine at ingest. Verified live that a value-50 item
+escalates and a value-10 item auto-completes purely by the configured threshold.
+
+**Grounded in subscription-watch, not left as dead infrastructure.** Each renewal
+now records `reversibility: "hard"` and `value: <amount>` — honest data (a charge
+is hard to reverse and worth its amount). The money-lock is still the operative
+rule (trigger_reason stays `action_type`), so behavior is unchanged, but the
+stakes are first-class now and would escalate the item on their own if it were not
+already money-locked.
+
+---
+
 ## 2026-07-21 — Recall query v1: the semantic path only, extractive by default
 
 **Context:** §12 step 22 is Recall v1 — "sqlite-vec + chunker + hybrid retrieval

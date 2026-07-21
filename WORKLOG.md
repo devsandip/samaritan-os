@@ -663,3 +663,51 @@ and the supervision that turns a crash into a restart worth recovering from.
   scan every time — the native index never loaded in production. Fixed with
   `createRequire(import.meta.url)`. Found by a live query, not a test: the scan
   returns correct results, so nothing failed; the index was just dead.
+
+---
+
+## 2026-07-21 — Policy Engine v1: the risk framework grows two more dimensions
+
+**Did:**
+- Added reversibility and value to the risk framework (step 19), so the Policy
+  Engine weighs all three dimensions §5.6 names instead of just confidence.
+- Made them first-class context signals, not custom attributes: `reversibility`
+  ("reversible" | "hard" | "irreversible") and `value` (a non-negative magnitude)
+  on `ActionItemContext`, joined to `CONTEXT_VARIABLE_NAMES` so a capability can't
+  shadow them and predicates can read them.
+- A `policy` config block (`value_threshold`, `escalate_irreversible`) for the
+  global defaults, threaded into a still-pure `evaluate()` via `policyConfig`.
+- The two rules, in precedence money → reversibility → escalate_when → confidence
+  → value → auto_complete → default: both sit before `auto_complete_when`, so a
+  permissive policy can't wave through an irreversible or high-value item.
+- Per-type overrides (`allow_irreversible`, `value_threshold`) — the one
+  distinction from money, which is absolute and never overridable.
+- Wired config.policy into the Action Center at ingest, and grounded it in
+  subscription-watch (each renewal now records reversibility "hard" and value =
+  the amount).
+
+**State now:**
+- 480 tests (was 465): +2 types, +1 config, +9 policy, +3 ingest wiring. Typecheck
+  clean, full suite green.
+- Verified live against createApp + the real config loader: a value-50 newsletter
+  escalates (risk:value_threshold) and a value-10 one auto-completes, purely by
+  the configured threshold — the config → app → ingest → engine chain the unit
+  tests don't cover.
+- Policy is v1: confidence, reversibility and value, with per-type overrides and
+  the hardcoded money-lock. Step 19 is done.
+
+**Next:**
+- Triage in the Action Center (step 23): priority/deadline sorting, batch-approve
+  for similar low-risk items, ttl auto-expiry (some already exists).
+- The networked listeners (Gmail poll, Fireflies/Slack webhooks), which need
+  credentials and a network this environment does not have.
+
+**Decisions:**
+- reversibility and value are context, not custom attributes — OS-defined concepts
+  that can't be shadowed, not capability conventions read by magic name.
+- Absent is silence, not a safety claim: a missing signal never escalates, so
+  every existing item behaves exactly as it did in v0.
+- The money-lock is absolute; reversibility and value are overridable per-type.
+  Money is a bright line the OS draws for everyone; "how much" and "how undo-able"
+  are judgments that vary by capability, so the OS sets the default and lets the
+  author bend it — never silence.

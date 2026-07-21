@@ -25,6 +25,7 @@ nothing is filed until Sandip approves it.
 | 18 Event Bus: event-mode agents fire on a published event, deduped by source id | Done (bus + chokidar vault-watch listener; Gmail/Fireflies/Slack pending) |
 | 16 Daemon: one process hosts the scheduler, bus and sweeps; boot reconciliation (§11); launchd plist | Done |
 | 22 Recall query: hybrid retrieval (vector + BM25 → RRF), cited, with an indexer and the Ask box | Done |
+| 19 Policy Engine v1: confidence + reversibility + value rules, per-type overrides, money-lock (§9) | Done |
 
 v0 is functionally complete. The serve process is the daemon: it hosts the
 scheduler, so scheduled-mode agents (`weekly-digest`, `subscription-watch`) fire
@@ -51,6 +52,14 @@ answered with every claim cited back to the note it came from. Retrieval never
 leaves the machine; whether the answer is prose over the passages or the passages
 themselves is the `recall.synthesis` setting, which defaults to off. `pnpm index`
 fills the index, and the daemon keeps it current on a 15-minute reconcile.
+
+The Policy Engine now weighs all three risk dimensions, not just confidence. An
+action marked irreversible, or one whose stated `value` crosses a threshold,
+escalates to review before any `auto_complete_when` can wave it through — the same
+shape as the money-lock, one level softer, because these two are overridable
+per-type (`allow_irreversible`, `value_threshold`) where money never is. The
+global thresholds live in `config.yaml`'s `policy` block, so the line between
+"file it silently" and "ask me first" is Sandip's to set.
 
 The listeners still missing are the networked ones — a Gmail poller, a Fireflies
 webhook, a Slack Events route — so those events still arrive by `samaritan
@@ -113,6 +122,11 @@ Three properties are enforced structurally rather than by convention:
   must all agree: the Policy Engine (before any manifest rule, and not
   overridable), the routing lock, and the Execution Registry, which throws at
   load time if an adapter claims `automated` for a money-namespaced id.
+- **Irreversible and high-value actions escalate by default.** A softer echo of
+  the money-lock: the Policy Engine sends anything marked `irreversible`, or above
+  the `value` threshold, to review before it can auto-complete. Unlike money these
+  are overridable per-type, so a capability can take responsibility for one it
+  knows is safe — but silence is never taken as safe.
 - **Nothing has no fallback.** An adapter that is missing, or that cannot do the
   mode it was asked for, degrades to `guided.fallback`, which renders the action
   as copy-ready text. The work still gets done, by hand.
@@ -212,7 +226,7 @@ example `SAMARITAN_NOTION_PM_OS_WORKSPACE`.
 ## Tests
 
 ```bash
-pnpm test        # 465 tests
+pnpm test        # 480 tests
 pnpm typecheck
 ```
 

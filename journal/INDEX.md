@@ -1,8 +1,8 @@
 # Samaritan — Journal Index
 
-Last refreshed: 2026-07-21 22:35
+Last refreshed: 2026-07-21 23:45
 
-Latest entry: [2026-07-21-2230-the-index-that-never-loaded](entries/2026-07-21-2230-the-index-that-never-loaded.md)
+Latest entry: [2026-07-21-2340-the-line-you-cannot-move](entries/2026-07-21-2340-the-line-you-cannot-move.md)
 
 Local-first personal agentic OS. The Action Center is a universal
 human-in-the-loop layer and a pluggable capability platform: one inbox for
@@ -54,7 +54,7 @@ voided attempt.
 Notion is live end to end. Telegram is written, tested and parked, disabled by
 default.
 
-465 tests, typecheck clean, everything merged and pushed. `docs/DEMO.md` is the
+480 tests, typecheck clean, everything merged and pushed. `docs/DEMO.md` is the
 runbook and `test/agents.test.ts` is that runbook made executable, so a stale
 demo step fails the suite before it fails in a room.
 
@@ -101,17 +101,33 @@ that only exists under vitest, so the native vector index had never once loaded 
 the real daemon, silently scanning instead. Correct answers the whole time, dead
 index behind them. `createRequire` fixed it; distrusting a correct answer found it.
 
+The Policy Engine is v1 now. It weighs all three risk dimensions §5.6 names, not
+just confidence: an action marked irreversible, or one whose stated value crosses
+a threshold, escalates to review before any `auto_complete_when` can wave it
+through. Both are first-class context signals (a capability can't shadow them),
+and both are overridable per-type — the one distinction from the money-lock, which
+is absolute. The load-bearing choice was that absent means silence, not a safety
+claim: a missing signal never escalates, so every existing item behaves exactly as
+it did in v0. Verified live against the real config loader, not only the injected
+unit tests.
+
 What is not built, stated plainly because the demo depends on knowing the edge:
 the networked listeners — a Gmail poll, a Fireflies or Slack webhook — so mail and
 meeting events still reach the bus by `emit-event` or the HTTP route; Recall's
 structured SQL path over the mirror tables (so `retrieval_path` is always
 `semantic`) and its near-real-time chokidar indexing, both left for later; no
 assisted execution adapters, which is why `email-triage` degrades to guided;
-Settings has a real routing table and no connections grid; Policy is v0 plus the
-hardcoded money lock. Next is Policy Engine v1.
+Settings has a real routing table and no connections grid. Next is Action Center
+triage (step 23): priority/deadline sorting, batch-approve for similar low-risk
+items, ttl auto-expiry.
 
 ## Recent entries
 
+- [2026-07-21-2340-the-line-you-cannot-move](entries/2026-07-21-2340-the-line-you-cannot-move.md)
+  — Policy Engine v1: reversibility and value join confidence, and the design
+  question that mattered — what the OS makes absolute (money) versus a strong
+  default a capability can override, and why an absent signal must be read as
+  silence, never as a claim of safety
 - [2026-07-21-2230-the-index-that-never-loaded](entries/2026-07-21-2230-the-index-that-never-loaded.md)
   — Recall query v1: the Ask-Samaritan box answers, RRF fusing a vector and a
   keyword search, synthesis off by default for privacy — and the live run finding
@@ -180,6 +196,14 @@ hardcoded money lock. Next is Policy Engine v1.
   guard against the race after the fact.
 - Strict validation earns its cost. Rejecting undeclared keys rather than
   stripping them has already turned two silent shape mismatches into loud ones.
+- A safety default keyed on an *absent* signal is a trap. When policy grew rules
+  for reversibility and value, the safe reading of a missing field was the
+  permissive one — absence carries no information, so escalating on it would have
+  flooded the Inbox with every capability that never heard of the feature. You act
+  on what a component says, never on what it failed to say. The related design
+  line: make absolute only what the OS can judge for everyone (money); for what
+  varies by case, set a strong default and let the party who knows the specific
+  case override it — but never let silence override it.
 - Tests catch logic errors; only contact with the real system catches
   integration errors. A green suite is not evidence that something works. The
   same applies one level in: a test I write asserts what I already believe, so
