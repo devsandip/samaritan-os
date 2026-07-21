@@ -173,6 +173,79 @@ describe("evaluate (§5.6 precedence)", () => {
     });
   });
 
+  describe("risk framework (§9)", () => {
+    const permissive: PolicySpec = { auto_complete_when: "true" };
+
+    it("escalates an irreversible action by default, over a permissive policy", () => {
+      const d = evaluate(
+        draft({ context: testContext({ reversibility: "irreversible" }) }),
+        permissive,
+      );
+      expect(d.outcome).toBe("escalate");
+      expect(d.matched_rule).toBe("risk:irreversible");
+    });
+
+    it("lets a type opt out of the irreversibility rule with allow_irreversible", () => {
+      const d = evaluate(draft({ context: testContext({ reversibility: "irreversible" }) }), {
+        auto_complete_when: "true",
+        allow_irreversible: true,
+      });
+      expect(d.outcome).toBe("auto_complete");
+    });
+
+    it("respects escalate_irreversible: false in the config", () => {
+      const d = evaluate(
+        draft({ context: testContext({ reversibility: "irreversible" }) }),
+        permissive,
+        { policyConfig: { valueThreshold: 100, escalateIrreversible: false } },
+      );
+      expect(d.outcome).toBe("auto_complete");
+    });
+
+    it("does not escalate a merely hard-to-reverse action", () => {
+      const d = evaluate(draft({ context: testContext({ reversibility: "hard" }) }), permissive);
+      expect(d.outcome).toBe("auto_complete");
+    });
+
+    it("escalates value at or above the threshold, over a permissive policy", () => {
+      const d = evaluate(draft({ context: testContext({ value: 150 }) }), permissive);
+      expect(d.outcome).toBe("escalate");
+      expect(d.matched_rule).toBe("risk:value_threshold");
+    });
+
+    it("leaves value below the threshold free to auto-complete", () => {
+      const d = evaluate(draft({ context: testContext({ value: 50 }) }), permissive);
+      expect(d.outcome).toBe("auto_complete");
+    });
+
+    it("lets a per-type value_threshold override the global default, down and up", () => {
+      const low = evaluate(draft({ context: testContext({ value: 50 }) }), {
+        auto_complete_when: "true",
+        value_threshold: 20,
+      });
+      expect(low.outcome).toBe("escalate");
+
+      const high = evaluate(draft({ context: testContext({ value: 150 }) }), {
+        auto_complete_when: "true",
+        value_threshold: 500,
+      });
+      expect(high.outcome).toBe("auto_complete");
+    });
+
+    it("keeps the money-lock ahead of the risk rules", () => {
+      const d = evaluate(
+        draft({ context: testContext({ reversibility: "irreversible", value: 999 }) }),
+        permissive,
+        { actionType: "payment.make" },
+      );
+      expect(d.matched_rule).toBe("hardcoded:payment.make");
+    });
+
+    it("is a no-op when neither signal is present, preserving v0 behaviour", () => {
+      expect(evaluate(draft(), permissive).outcome).toBe("auto_complete");
+    });
+  });
+
   describe("failure handling", () => {
     it("escalates rather than auto-completing when a predicate cannot be evaluated", () => {
       const d = evaluate(draft(), { auto_complete_when: "score + 1" });

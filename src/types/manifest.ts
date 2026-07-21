@@ -119,6 +119,17 @@ export const PolicySpec = z.object({
   escalate_when: z.string().min(1).optional(),
   auto_complete_when: z.string().min(1).optional(),
   confidence_threshold: z.number().min(0).max(1).optional(),
+  /**
+   * Per-type override of the global `policy.value_threshold` (§9): the stakes at
+   * or above which this type's items escalate rather than auto-complete.
+   */
+  value_threshold: z.number().min(0).optional(),
+  /**
+   * Opt this type out of the default "irreversible escalates" rule (§9), for a
+   * type whose irreversible action is genuinely safe to auto-complete. The
+   * money-lock is never opted out of this way — it is absolute.
+   */
+  allow_irreversible: z.boolean().optional(),
 });
 export type PolicySpec = z.infer<typeof PolicySpec>;
 
