@@ -6,6 +6,59 @@ spec, so the spec stays the design record and this stays the build record.
 
 ---
 
+## 2026-07-21 — Action Center triage v1: batch-approve gated on what a batch commits
+
+**Context:** §12 step 23 — "triage in the Action Center: priority/deadline
+sorting, batch-approve for similar low-risk items, ttl-based auto-expiry." Two of
+the three already existed: ttl auto-expiry (the `expiresAt()` → `expire()` sweep,
+wired into the API's interval) and priority sorting. The new work is batch-approve
+and making the sort deadline-aware.
+
+**The gate is on the response's *commitment*, not on the item.** A batch applies
+one response to many items. The risk is that convenience lets a high-stakes item
+ride through unseen — but only if the response *does* something irreversible. So
+the gate keys off the response outcome: a committing response (`execute` /
+`guided`) is allowed only on items the risk check clears, while a non-committing
+one (`discard`, `defer`) is never gated, because rejecting a hundred newsletters
+in one click commits nothing to the world and cannot be got wrong. This is the
+same principle as the money-lock — guard the *effect*, not the paperwork — applied
+one level out.
+
+**The gate reuses §9's risk axis, not §9's predicates.** `assessBatchRisk` mirrors
+`evaluate()`'s money → irreversible → value rules (money absolute, the other two
+honouring the same per-type overrides), but deliberately omits the predicate rules
+(`escalate_when`, `confidence`, `auto_complete_when`). Every batched item is
+already `pending` — it was escalated on purpose — so the question is not "should
+this have been escalated" but "is this item's stake low enough to wave through
+alongside its neighbours". A separate pure function makes that a different question
+with its own tests, rather than an overload of the engine.
+
+**A batch is confined to one type.** "Similar items" is the same `(capability,
+type)`: they share responses, a render surface and an execution shape, so one
+response id is meaningful across all of them and the UI can find the type's
+"approve". Mixing types would mean guessing which response each item meant. The
+constraint lives in the UI (the picker locks to the first-selected type); the
+service itself is per-item and would honour a heterogeneous set, but nothing asks
+it to.
+
+**Applied means the identical single-approve path.** `batchRespond` calls the same
+`respond()` each item would go through alone — same transition, same execution,
+same audit rows — so a batch is a shortcut for the *input*, never a different code
+path for the *effect*. Verified live: the applied items showed
+`pending → approved (sandip) → executed/failed` in their audit trail exactly as a
+one-at-a-time approve, and a skipped high-value item showed only its original
+ingest event, untouched.
+
+**Deadline sorting is real now but forward-looking.** The list order gained a
+deadline key (soonest first, no-deadline last) as a secondary sort under priority.
+No capability populates `deadline` yet — like `priority` and `ttl` it is a
+capability-supplied field — so the change is inert today and correct the day one
+does, which is the right time to get the ordering right rather than after a
+deadline silently sorts wrong. It is backward-compatible: with every deadline
+null, the NULL-guard leaves today's priority-then-newest order unchanged.
+
+---
+
 ## 2026-07-21 — Policy Engine v1: reversibility and value as overridable risk rules
 
 **Context:** §12 step 19 — "full confidence/reversibility/value rules, per-type

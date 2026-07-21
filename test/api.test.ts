@@ -291,6 +291,65 @@ describe("POST /api/events", () => {
   });
 });
 
+describe("POST /api/actions/batch", () => {
+  it("approves a batch of low-risk items and reports per-item outcomes", async () => {
+    const ids = [await ingest("wrap:batch:1"), await ingest("wrap:batch:2")];
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/actions/batch",
+      payload: { ids, response_id: "approve" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      applied: { id: string }[];
+      skipped: unknown[];
+      errors: unknown[];
+    };
+    expect(body.applied.map((a) => a.id).sort()).toEqual([...ids].sort());
+    expect(body.skipped).toEqual([]);
+    expect(body.errors).toEqual([]);
+  });
+
+  it("skips a high-value item and applies the rest in the same call", async () => {
+    const lowId = await ingest("wrap:batch:low");
+    const richResp = await server.inject({
+      method: "POST",
+      url: "/api/actions",
+      payload: {
+        capability_id: "wrap",
+        items: [
+          wrapItem({ dedupe_key: "wrap:batch:rich", context: { ...wrapItem().context, value: 500 } }),
+        ],
+      },
+    });
+    const richId = (richResp.json() as { accepted: { id: string }[] }).accepted[0]!.id;
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/actions/batch",
+      payload: { ids: [lowId, richId], response_id: "approve" },
+    });
+
+    const body = response.json() as {
+      applied: { id: string }[];
+      skipped: { id: string; rule: string }[];
+    };
+    expect(body.applied.map((a) => a.id)).toEqual([lowId]);
+    expect(body.skipped).toEqual([{ id: richId, result: "skipped", reason: expect.any(String), rule: "risk:value_threshold" }]);
+  });
+
+  it("400s an empty batch", async () => {
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/actions/batch",
+      payload: { ids: [], response_id: "approve" },
+    });
+    expect(response.statusCode).toBe(400);
+  });
+});
+
 describe("/healthz", () => {
   it("reports the loaded capabilities so a boot problem is visible", async () => {
     // Counted from the folder rather than hardcoded. The number is not the

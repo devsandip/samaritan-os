@@ -8,11 +8,12 @@
  * implicit first-item selection does not push history: arriving at /inbox and
  * immediately owning a back-button entry would be wrong.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ActionItem } from "../api/types";
-import type { ApiError } from "../api/client";
+import { api, type ApiError } from "../api/client";
 import { ItemDetail } from "../components/ItemDetail";
 import { ItemRow } from "../components/ItemRow";
+import { Button } from "../components/primitives";
 import { EmptyState, ErrorBanner, SkeletonDetail, SkeletonRows } from "../components/states";
 import type { Catalogue } from "../lib/manifest";
 import { byPriorityThenNewest, titleCase } from "../lib/format";
@@ -59,6 +60,80 @@ export function InboxView({
     [sorted, lane],
   );
 
+  // Batch-approve (§12 step 23) is an opt-in mode, so the everyday one-at-a-time
+  // review flow is untouched until Sandip asks to select. Selection is confined
+  // to a single type — "similar items" is the same (capability, type), which
+  // share responses and a review surface — and the daemon's risk gate holds back
+  // anything high-stakes even inside that set.
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+
+  const keyOf = (item: ActionItem) => `${item.capability_id}::${item.type}`;
+
+  // Drop selected ids that have left the visible list (settled after a batch, or
+  // filtered out by a lane switch) so the count never lies.
+  useEffect(() => {
+    setSelected((prev) => {
+      const next = new Set([...prev].filter((id) => visible.some((i) => i.id === id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [visible]);
+
+  const pendingCount = useMemo(
+    () => visible.filter((i) => i.status === "pending").length,
+    [visible],
+  );
+
+  const groupItem = useMemo(
+    () => visible.find((i) => selected.has(i.id)),
+    [visible, selected],
+  );
+  const groupKey = groupItem ? keyOf(groupItem) : undefined;
+
+  // The type's committing response (its "approve"): the first execute/guided
+  // response, preferring the plain one over an "edit and file" variant.
+  const approveResponse = useMemo(() => {
+    if (!groupItem) return undefined;
+    const responses = catalogue.resolveItem(groupItem)?.spec.responses ?? [];
+    const commit = responses.filter((r) => r.outcome === "execute" || r.outcome === "guided");
+    return commit.find((r) => !/edit/i.test(r.id)) ?? commit[0];
+  }, [groupItem, catalogue]);
+
+  const leaveSelect = () => {
+    setSelecting(false);
+    setSelected(new Set());
+  };
+
+  const toggleSelected = (item: ActionItem) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(item.id)) next.delete(item.id);
+      else next.add(item.id);
+      return next;
+    });
+  };
+
+  const runBatch = async () => {
+    if (!approveResponse || selected.size === 0) return;
+    const ids = [...selected];
+    setBusy(true);
+    try {
+      const result = await api.batch(ids, approveResponse.id);
+      const parts: string[] = [];
+      if (result.applied.length) parts.push(`Approved ${result.applied.length}`);
+      if (result.skipped.length) parts.push(`${result.skipped.length} held for review`);
+      if (result.errors.length) parts.push(`${result.errors.length} couldn’t be applied`);
+      onToast(parts.join(" · ") || "Nothing to approve");
+      setSelected(new Set());
+      reload();
+    } catch (err) {
+      onToast(`Batch failed: ${(err as ApiError).message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   // A routed id that is not in the list still opens: Deferred's "Act now" and a
   // Completed row both deep-link here, and refusing to render them would make
   // the audit trail unreachable for exactly the items whose history matters most.
@@ -93,7 +168,10 @@ export function InboxView({
               <button
                 type="button"
                 className={lane === "all" ? "lane active" : "lane"}
-                onClick={() => setLane("all")}
+                onClick={() => {
+                  setLane("all");
+                  setSelected(new Set());
+                }}
               >
                 All · {sorted.length}
               </button>
@@ -102,7 +180,10 @@ export function InboxView({
                   key={kind}
                   type="button"
                   className={lane === kind ? "lane active" : "lane"}
-                  onClick={() => setLane(kind)}
+                  onClick={() => {
+                    setLane(kind);
+                    setSelected(new Set());
+                  }}
                 >
                   {titleCase(kind)} · {count}
                 </button>
@@ -110,7 +191,32 @@ export function InboxView({
             </div>
           ) : null}
 
-          <div className="list-head">Waiting for you</div>
+          <div className="list-head list-head-row">
+            <span>Waiting for you</span>
+            {pendingCount >= 2 ? (
+              <button type="button" className="select-toggle" onClick={() => (selecting ? leaveSelect() : setSelecting(true))}>
+                {selecting ? "Cancel" : "Select"}
+              </button>
+            ) : null}
+          </div>
+
+          {selecting ? (
+            <div className="batch-bar">
+              <span className="batch-count">
+                {selected.size === 0 ? "Pick similar items to approve together" : `${selected.size} selected`}
+              </span>
+              <Button
+                variant="good"
+                small
+                pending={busy}
+                disabled={busy || selected.size === 0 || !approveResponse}
+                onClick={runBatch}
+              >
+                {approveResponse?.label ?? "Approve"}
+                {selected.size ? ` · ${selected.size}` : ""}
+              </Button>
+            </div>
+          ) : null}
 
           {loading && !items ? (
             <div style={{ padding: "8px 14px" }}>
@@ -123,15 +229,36 @@ export function InboxView({
                 : `Nothing in ${titleCase(lane)}.`}
             </EmptyState>
           ) : (
-            visible.map((item) => (
-              <ItemRow
-                key={item.id}
-                item={item}
-                resolved={catalogue.resolveItem(item)}
-                active={item.id === detailId}
-                onSelect={() => navigate(`/inbox/${item.id}`)}
-              />
-            ))
+            visible.map((item) => {
+              const pickable = item.status === "pending";
+              // Once a type is chosen, other types are locked out of this batch.
+              const locked =
+                pickable && groupKey !== undefined && keyOf(item) !== groupKey && !selected.has(item.id);
+              return (
+                <div key={item.id} className="irow">
+                  {selecting ? (
+                    <label className={`irow-check${locked ? " disabled" : ""}`}>
+                      {pickable ? (
+                        <input
+                          type="checkbox"
+                          checked={selected.has(item.id)}
+                          disabled={locked}
+                          onChange={() => toggleSelected(item)}
+                          aria-label="Select for batch approve"
+                          title={locked ? "A batch approves one type at a time" : "Select for batch approve"}
+                        />
+                      ) : null}
+                    </label>
+                  ) : null}
+                  <ItemRow
+                    item={item}
+                    resolved={catalogue.resolveItem(item)}
+                    active={item.id === detailId}
+                    onSelect={() => navigate(`/inbox/${item.id}`)}
+                  />
+                </div>
+              );
+            })
           )}
         </div>
 

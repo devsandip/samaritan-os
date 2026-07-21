@@ -10,6 +10,7 @@ import type {
   ActionItem,
   ActionItemEvent,
   ActionItemStatus,
+  BatchResult,
   CapabilityManifest,
   Health,
   LoadProblem,
@@ -121,6 +122,13 @@ export const api = {
     request<ActionItem>(`/api/actions/${id}/respond`, {
       method: "POST",
       body: JSON.stringify({ actor: "sandip", ...body }),
+    }),
+
+  /** Batch-approve for similar low-risk items (§12 step 23). Per-item outcomes. */
+  batch: (ids: string[], responseId: string) =>
+    request<BatchResult>("/api/actions/batch", {
+      method: "POST",
+      body: JSON.stringify({ actor: "sandip", ids, response_id: responseId }),
     }),
 
   confirm: (id: string, body: { note?: string } = {}) =>
