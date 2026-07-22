@@ -1,0 +1,75 @@
+# Meeting Notes (TECH-SPEC §2.2 "Event Bus & listeners", §5.2).
+#
+# The consumer half of the Fireflies loop, and the Event Bus's first *networked*
+# subscriber. `fireflies-webhook` announces a transcript is ready by publishing
+# `meeting.transcribed` — carrying only the meeting id, not the words. Because
+# dispatch is registry-driven, declaring `on: [meeting.transcribed]` is the whole
+# subscription: the bus fires this capability, its entrypoint pulls the transcript
+# Fireflies has by then finished, and files each follow-up it extracted.
+#
+# It is the event-driven twin of the manual `/meeting` capability. That one is
+# driven by a Claude skill that already holds the transcript and does the language
+# work; this one runs in the daemon with no model, so it leans on Fireflies' own
+# extraction (`summary.action_items`, `summary.overview`) and only normalises it.
+# Both file behind the same review gate, and for the same reason: a transcript is
+# a second-hand source a model read, so every extracted item escalates
+# unconditionally (§5.6). `pm-os.item.file` routes each kind to its home — a task
+# to TickTick, the summary note to Obsidian.
+
+id: meeting-notes
+name: Meeting Notes
+description: >-
+  Pulls a Fireflies transcript when one is ready and files the follow-ups it
+  extracted, each reviewed before it lands. Never files without a review.
+version: 0.1.0
+owner: sandip
+enabled: true
+entrypoint: index.ts
+
+trigger:
+  mode: event
+  on: [meeting.transcribed]
+
+emits:
+  - type: meeting-note-item
+    render:
+      layout: card
+      primary: title
+      secondary: detail
+      badges: [kind, owner, meeting_title]
+
+    custom_attributes:
+      kind: string # task | note
+      title: string
+      detail: string
+      owner: string
+      meeting_title: string
+      meeting_date: string
+      transcript_url: string
+
+    responses:
+      - { id: approve, label: "File it", outcome: execute }
+      - { id: edit_approve, label: "Edit and file", outcome: execute }
+      - { id: reject, label: "Discard", outcome: discard }
+      - { id: defer, label: "Later", outcome: defer, defer_for: 1d }
+
+    execution:
+      mode: automated
+      capability: pm-os.item.file
+
+    policy:
+      # A transcript is second-hand and a model read it — the same inference risk
+      # the manual /meeting path escalates on, regardless of confidence (§5.6).
+      escalate_when: "true"
+
+    priority: normal
+    ttl: null
+
+requires_capabilities:
+  - pm-os.item.file
+
+delivery:
+  channels: [inbox, telegram]
+
+audit: true
+timeout_ms: 120000

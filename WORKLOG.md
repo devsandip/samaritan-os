@@ -844,3 +844,54 @@ no outbound call to a service the sandbox can't reach.
 - The event is the notice, not the transcript; a consumer that fetches is the
   follow-up. Inert-but-authenticated on the bus today, and documented as such.
 - A deliberately-ignored event is a 202, not a 4xx, so Fireflies doesn't retry.
+
+## 2026-07-21 — Meeting Notes: the consumer that answers the transcript notice
+
+Two hours after the Fireflies webhook shipped, the notice it publishes onto the
+bus was still unanswered — `meeting.transcribed` fired and nothing subscribed. So
+I built the consumer, and because bus dispatch is registry-driven, "subscribe"
+turned out to mean "drop a capability folder in": no daemon wiring, the registry
+is the subscription.
+
+**What I built:**
+- `fireflies-transcript.ts` (pure): the GraphQL query builder, the raw→normalised
+  transcript collapse, `parseActionItems` (splits Fireflies' `action_items` — bold
+  assignee headings carried down, bullets and trailing timestamps stripped), and
+  `transcriptToDraftItems` (one task per follow-up + a summary note from the
+  overview; stable dedupe keys; `trigger_reason: action_type` so every item is
+  gated).
+- `fireflies-source.ts` (thin): `createFirefliesSource` — one authenticated POST
+  to the Fireflies GraphQL API, token/fetch injected for tests, idle (undefined)
+  with no `fireflies:api` token, 401→reauthorise, a GraphQL `errors` array under a
+  200 caught rather than read as success, endpoint overridable.
+- `capabilities/meeting-notes/` — an event-mode capability (`on:
+  [meeting.transcribed]`) whose thin entrypoint reads the meeting id, fetches,
+  maps, and returns the rows. `pm-os.item.file` routes each kind home (task →
+  TickTick, note → Obsidian). No LLM in the daemon: Fireflies already extracted.
+
+**State now:**
+- 572 tests (was 550): +15 pure core, +6 source adapter. Typecheck clean, full
+  suite green. `agents.test.ts` loads the new capability with no problems.
+- Verified live end-to-end against a real daemon, which is the part I did not
+  expect to get: I stood up a local endpoint shaped like Fireflies' GraphQL,
+  started the daemon with `SAMARITAN_FIREFLIES_API_BASE` pointed at it and a fake
+  token, and `POST`ed `meeting.transcribed`. The bus dispatched to `meeting-notes`;
+  the fixture log showed the authenticated `Bearer` fetch land; four items were
+  filed (`pending`, escalated) — three tasks under the right assignees, one
+  summary note; a redelivery came back `deduped:true` with the count unchanged.
+  The one inch the Gmail poll had to take on faith — the outbound call — this
+  closed, because the endpoint override let me stand the far side up myself.
+
+**Next:**
+- The Slack Events route — the last inbound listener (url_verification handshake +
+  signing-secret HMAC), the same encapsulated-plugin shape as the webhook.
+
+**Decisions:**
+- The subscriber is a capability and it does its own fetch — forced by a
+  notice-only webhook and pre-committed by the webhook's docstring; purity kept in
+  the query/normalise/map, the socket alone in the source adapter.
+- Reuse Fireflies' own `action_items`/`overview` rather than run a model in the
+  daemon; the manual `/meeting` skill-driven path coexists.
+- API token as its own secret `fireflies:api`, distinct from the webhook signing
+  secret; `SAMARITAN_FIREFLIES_API_BASE` overrides the endpoint for verification
+  and self-hosting.

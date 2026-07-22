@@ -22,7 +22,7 @@ nothing is filed until Sandip approves it.
 | 11 Inbox web UI | Done |
 | 13-15 Audit endpoint, emit CLI, end-to-end smoke | Done |
 | 17 Scheduler: scheduled-mode agents fire on their cron, in-process, with catch-up | Done |
-| 18 Event Bus: event-mode agents fire on a published event, deduped by source id | Done (bus + vault-watch + Gmail poller + Fireflies webhook; Slack pending) |
+| 18 Event Bus: event-mode agents fire on a published event, deduped by source id | Done (bus + vault-watch + Gmail poller + Fireflies webhook + meeting-notes consumer; Slack pending) |
 | 16 Daemon: one process hosts the scheduler, bus and sweeps; boot reconciliation (§11); launchd plist | Done |
 | 22 Recall query: hybrid retrieval (vector + BM25 → RRF), cited, with an indexer and the Ask box | Done |
 | 19 Policy Engine v1: confidence + reversibility + value rules, per-type overrides, money-lock (§9) | Done |
@@ -90,9 +90,18 @@ verifies the request is authentic (a constant-time HMAC over the exact bytes,
 which is why it reads the raw body in an encapsulated plugin that leaves every
 other route on the default parser) and publishes a `meeting.transcribed` event.
 The event carries the meeting id, not the transcript: the webhook only announces
-readiness, so it is the notice, and wiring a consumer that pulls the transcript
-and extracts it is the follow-up. Off by default; with a signing secret set, an
+readiness, so it is the notice. Off by default; with a signing secret set, an
 unsigned request is refused.
+
+Answering that notice is the `meeting-notes` capability — the bus's first
+networked *subscriber*. Because dispatch is registry-driven, declaring
+`on: [meeting.transcribed]` is the whole subscription: the bus fires it, and it
+makes the second, authenticated call the webhook deliberately left out — a
+Fireflies GraphQL fetch for the transcript — then files each follow-up Fireflies
+extracted (from its own `action_items` and `overview`) as a reviewed Inbox item,
+one task per follow-up plus a summary note. No LLM runs in the daemon: the model
+that read the transcript was Fireflies', and the capability only normalises its
+output behind the same review gate the manual `/meeting` path uses.
 
 The listener still missing is the Slack Events route, so chat events still arrive
 by `samaritan emit-event` or the `POST /api/events` route.
@@ -280,6 +289,19 @@ Point your Fireflies integration at `POST /api/webhooks/fireflies`. With the
 secret set, a request whose HMAC signature does not match is rejected; without it
 the route accepts unverified, which is fine only on loopback and never behind a
 tunnel (§9).
+
+The `meeting-notes` capability makes a second call — a GraphQL fetch for the
+transcript — which needs a Fireflies API token, kept as its own secret so it is
+never confused with the webhook signing secret:
+
+```bash
+security add-generic-password -s samaritan -a fireflies:api -w
+```
+
+Without it the capability skips cleanly (no token, no fetch), the same idle shape
+the Gmail poller has. `SAMARITAN_FIREFLIES_API_BASE` overrides the GraphQL
+endpoint for a single run, which is how the loop is verified end-to-end against a
+local fixture with no real account.
 
 Any secret can be overridden by an environment variable for a single run, for
 example `SAMARITAN_NOTION_PM_OS_WORKSPACE` or `SAMARITAN_GMAIL_DEFAULT`.
