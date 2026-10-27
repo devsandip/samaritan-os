@@ -8,24 +8,44 @@
  */
 import { useCallback, useEffect, useState, type MouseEvent } from "react";
 
-export type ViewName = "dashboard" | "inbox" | "deferred" | "completed" | "settings" | "ask";
+export type ViewName =
+  | "dashboard"
+  | "inbox"
+  | "tasks"
+  | "activity"
+  | "deferred"
+  | "completed"
+  | "settings"
+  | "ask";
 
 export interface Route {
   view: ViewName;
-  /** Present only on /inbox/:itemId. */
+  /** Present on /inbox/:itemId or /tasks/:itemId. */
   itemId?: string;
   hash: string;
   path: string;
 }
 
-const VIEWS: ViewName[] = ["dashboard", "inbox", "deferred", "completed", "settings"];
+const VIEWS: ViewName[] = [
+  "dashboard",
+  "inbox",
+  "tasks",
+  "activity",
+  "deferred",
+  "completed",
+  "settings",
+  "ask",
+];
 
 export function parseRoute(path: string, hash: string): Route {
-  const [head = "", tail] = path.replace(/^\/+/, "").split("/");
+  const [rawHead = "", tail] = path.replace(/^\/+/, "").split("/");
+  const head = rawHead === "now" ? "dashboard" : rawHead;
   const view = (VIEWS as string[]).includes(head) ? (head as ViewName) : "dashboard";
   return {
     view,
-    ...(view === "inbox" && tail ? { itemId: decodeURIComponent(tail) } : {}),
+    ...((view === "inbox" || view === "tasks") && tail
+      ? { itemId: decodeURIComponent(tail) }
+      : {}),
     hash: hash.replace(/^#/, ""),
     path,
   };

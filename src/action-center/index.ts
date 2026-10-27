@@ -25,6 +25,7 @@ import {
   releaseDedupeKey,
   transition,
 } from "../store/action-items.js";
+import { reconcileInterruptedRunsAndTasks } from "../store/runs.js";
 import type { Db } from "../store/db.js";
 import {
   DISMISS_RESPONSE_ID,
@@ -258,6 +259,9 @@ export class ActionCenter {
         execution,
         priority: type.spec.priority,
         expires_at: expiresAt(type.spec.ttl),
+        task_id: draft.task_id ?? null,
+        run_id: draft.run_id ?? null,
+        ...(draft.scope ? { scope: draft.scope } : {}),
       });
     } else if (existing.status === "awaiting_confirmation") {
       // Branch 2a: already dispatched. The row is left byte-identical and only
@@ -325,7 +329,13 @@ export class ActionCenter {
         to: staysDeferred ? "deferred" : "pending",
         actor: "capability",
         reason: "superseded_by_reingest",
-        patch: { context: draft.context, custom: draft.custom, execution },
+        patch: {
+          context: draft.context,
+          custom: draft.custom,
+          execution,
+          ...(draft.task_id !== undefined ? { task_id: draft.task_id } : {}),
+          ...(draft.run_id !== undefined ? { run_id: draft.run_id } : {}),
+        },
       });
     } else {
       // Branch 3: the logical event already ran its course, so it must not be
@@ -344,6 +354,8 @@ export class ActionCenter {
           execution,
           priority: type.spec.priority,
           expires_at: expiresAt(type.spec.ttl),
+          task_id: draft.task_id ?? null,
+          run_id: draft.run_id ?? null,
         });
       });
     }
@@ -476,13 +488,20 @@ export class ActionCenter {
     });
   }
 
-  /** POST /api/actions/:id/respond. Enforces the item's allowed responses. */
+  /** POST /api/actions/:id/respond. Enforces the item's allowed responses and revision binding. */
   async respond(
     id: string,
-    input: { response_id: string; edited_payload?: Record<string, unknown>; actor?: Actor },
+    input: {
+      response_id: string;
+      edited_payload?: Record<string, unknown>;
+      actor?: Actor;
+      expected_payload_hash?: string;
+      expected_revision?: number;
+    },
   ): Promise<ActionItem> {
     const { db } = this.deps;
     const item = this.#require(id);
+    this.#assertRevisionMatch(item, input);
 
     // §4.7's universal fallback, answered before either manifest check below.
     // Both of those ask what the capability declares, and the case this exists
@@ -644,8 +663,17 @@ export class ActionCenter {
   }
 
   /** POST /api/actions/:id/confirm. Only valid from awaiting_confirmation (§5.1). */
-  confirm(id: string, input: { actor?: Actor; note?: string } = {}): ActionItem {
+  confirm(
+    id: string,
+    input: {
+      actor?: Actor;
+      note?: string;
+      expected_payload_hash?: string;
+      expected_revision?: number;
+    } = {},
+  ): ActionItem {
     const item = this.#require(id);
+    this.#assertRevisionMatch(item, input);
     if (item.status !== "awaiting_confirmation") {
       throw new ActionCenterError(
         `item is ${item.status}, not awaiting_confirmation`,
@@ -756,9 +784,10 @@ export class ActionCenter {
   async reconcile(): Promise<number> {
     const { db, execution: registry } = this.deps;
     // Correct the ledger first: fail the pending execution rows the same crash
-    // left behind, so the re-drive below opens a clean attempt rather than
-    // stacking on one that claims to still be running.
+    // left behind, and mark any runs/tasks still in `running` as `interrupted`
+    // while fencing their leases (PROPOSAL G2).
     const failedRows = registry.reconcileStalePending();
+    const interrupted = reconcileInterruptedRunsAndTasks(db);
 
     const stranded = listActionItems(db, { status: "approved", limit: 500 });
     for (const item of stranded) {
@@ -772,13 +801,41 @@ export class ActionCenter {
       }
     }
 
-    if (failedRows || stranded.length) {
+    if (failedRows || stranded.length || interrupted.runs || interrupted.tasks) {
       logger.info(
-        { failed_executions: failedRows, redriven: stranded.length },
+        {
+          failed_executions: failedRows,
+          redriven: stranded.length,
+          interrupted_runs: interrupted.runs,
+          interrupted_tasks: interrupted.tasks,
+        },
         "reconciled interrupted work on boot",
       );
     }
     return stranded.length;
+  }
+
+  #assertRevisionMatch(
+    item: ActionItem,
+    input: { expected_payload_hash?: string; expected_revision?: number },
+  ): void {
+    if (
+      input.expected_payload_hash !== undefined &&
+      item.payload_hash !== input.expected_payload_hash
+    ) {
+      throw new ActionCenterError(
+        `action item ${item.id} payload changed since it was loaded (expected hash ${input.expected_payload_hash}, current ${item.payload_hash})`,
+        "stale_approval",
+        409,
+      );
+    }
+    if (input.expected_revision !== undefined && item.revision !== input.expected_revision) {
+      throw new ActionCenterError(
+        `action item ${item.id} revision changed since it was loaded (expected v${input.expected_revision}, current v${item.revision})`,
+        "stale_approval",
+        409,
+      );
+    }
   }
 
   #require(id: string): ActionItem {

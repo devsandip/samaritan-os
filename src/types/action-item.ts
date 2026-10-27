@@ -61,6 +61,11 @@ export const DraftActionItem = z.object({
   custom: z.record(z.string(), z.unknown()),
   /** Capability-computed idempotency key, unique per (capability_id, dedupe_key). */
   dedupe_key: z.string().min(1),
+  /** Optional linkage to a delegated task and run (PROPOSAL D3). */
+  task_id: z.string().nullable().optional(),
+  run_id: z.string().nullable().optional(),
+  /** Account/domain scope: work vs personal (default work). */
+  scope: z.enum(["work", "personal"]).optional(),
 });
 export type DraftActionItem = z.infer<typeof DraftActionItem>;
 
@@ -87,6 +92,13 @@ export const ActionItem = DraftActionItem.extend({
    * is actually snoozed (UI-SPEC §5.3).
    */
   defer_until: IsoDateTime.nullable().default(null),
+  task_id: z.string().nullable().default(null),
+  run_id: z.string().nullable().default(null),
+  scope: z.enum(["work", "personal"]).default("work"),
+  /** SHA-256 of the canonical custom + execution payload for exact-revision approval binding. */
+  payload_hash: z.string().nullable().default(null),
+  /** Monotonic revision counter bumped whenever the item's payload changes. */
+  revision: z.number().int().min(1).default(1),
   created_at: IsoDateTime,
   updated_at: IsoDateTime,
 });

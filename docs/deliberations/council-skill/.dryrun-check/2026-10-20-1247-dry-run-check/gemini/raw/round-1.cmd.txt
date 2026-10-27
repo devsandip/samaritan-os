@@ -1,0 +1,1 @@
+/opt/homebrew/bin/gemini -p <prompt> --approval-mode plan -o json

@@ -1,0 +1,66 @@
+id: wbr-journal
+name: Weekly Business & Engineering Review (WBR)
+description: Rolls up daily journal entries, shipped PRs, decisions, and metrics across repos into an immutable ISO-week WBR summary.
+version: 0.1.0
+owner: sandip
+enabled: true
+entrypoint: index.ts
+
+trigger:
+  mode: scheduled
+  cron: "0 8 * * 1"
+  catch_up: run_once
+  max_staleness_minutes: 1440
+
+context:
+  inputs:
+    - iso_week
+    - highlights
+    - decisions
+    - direction_changes
+    - needs_revisit
+
+emits:
+  - type: wbr-weekly-summary
+    priority: normal
+    ttl: 72h
+    render:
+      layout: document
+      primary: headline
+      secondary: content
+      badges:
+        - iso_week
+    custom_attributes:
+      headline: string
+      iso_week: string
+      path: string
+      content: string
+    responses:
+      - id: publish_wbr
+        label: Save WBR Summary
+        outcome: execute
+      - id: snooze
+        label: Snooze 1d
+        outcome: defer
+        defer_for: 1d
+      - id: dismiss
+        label: Dismiss
+        outcome: discard
+    execution:
+      mode: assisted
+      capability: obsidian.note.create
+      action_type: journal.capture
+    policy:
+      escalate_when: "confidence >= 0"
+
+requires_capabilities:
+  - obsidian.note.create
+
+delivery:
+  channels:
+    - inbox
+    - telegram
+  quiet_hours: "22:00-07:00"
+
+audit: true
+timeout_ms: 45000

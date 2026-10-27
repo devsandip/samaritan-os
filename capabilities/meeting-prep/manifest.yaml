@@ -1,0 +1,91 @@
+id: meeting-prep
+name: Pre-Meeting Recall Brief
+description: >-
+  Generates a cited pre-meeting brief from Recall (Obsidian vault, Notion
+  decisions/insights, and open TickTick tasks) before a calendar event starts.
+version: 0.1.0
+owner: sandip
+enabled: true
+entrypoint: index.ts
+
+trigger:
+  mode: event
+  on: [calendar.meeting_upcoming, calendar.meeting_ended]
+
+context:
+  memory: [recall]
+
+emits:
+  - type: meeting-prep-brief
+    render:
+      layout: document
+      primary: meeting_title
+      secondary: brief_markdown
+      badges: [starts_at, attendee_count]
+
+    custom_attributes:
+      event_id: string
+      meeting_title: string
+      starts_at: string
+      attendees: string
+      attendee_count: string
+      brief_markdown: string
+      path: string
+      content: string
+
+    responses:
+      - { id: save_brief, label: "Save brief to vault", outcome: execute }
+      - { id: defer, label: "Snooze 15m", outcome: defer, defer_for: 15m }
+      - { id: reject, label: "Dismiss", outcome: discard }
+
+    execution:
+      mode: automated
+      capability: obsidian.note.append
+
+    policy:
+      auto_complete_when: "false"
+      escalate_when: "true"
+
+    priority: high
+    ttl: 6h
+
+  - type: meeting-notes-nudge
+    render:
+      layout: card
+      primary: meeting_title
+      secondary: nudge_message
+      badges: [ends_at, attendee_count]
+
+    custom_attributes:
+      event_id: string
+      meeting_title: string
+      ends_at: string
+      attendee_count: string
+      nudge_message: string
+      path: string
+      content: string
+
+    responses:
+      - { id: approve, label: "Append placeholder note", outcome: execute }
+      - { id: reject, label: "Skip (no notes)", outcome: discard }
+      - { id: defer, label: "Remind in 30m", outcome: defer, defer_for: 30m }
+
+    execution:
+      mode: automated
+      capability: obsidian.note.append
+
+    policy:
+      auto_complete_when: "false"
+      escalate_when: "true"
+
+    priority: normal
+    ttl: 12h
+
+requires_capabilities:
+  - obsidian.note.append
+
+delivery:
+  channels: [inbox, telegram]
+
+audit: true
+timeout_ms: 45000

@@ -16,13 +16,23 @@
  * capability code must avoid enums, namespaces and parameter properties, and
  * must write explicit extensions on relative imports.
  */
+import type { ChildProcess } from "node:child_process";
 import { statSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { log } from "../logger.js";
 import type { CapabilityRegistry } from "../registry/index.js";
 import type { Db } from "../store/db.js";
-import { nowIso, type DraftActionItem } from "../types/index.js";
+import {
+  admitRun,
+  assertLeaseValid,
+  fenceRun,
+  finishRun,
+  getRun,
+  StaleLeaseError,
+} from "../store/runs.js";
+import { isSourcePaused } from "../store/source-rules.js";
+import { nowIso, type DraftActionItem, type RunRecord, type RunRunner } from "../types/index.js";
 import {
   buildRunContext,
   type CapabilityEntrypoint,
@@ -31,12 +41,18 @@ import {
   type RunResult,
   type RunTrigger,
 } from "./context.js";
+import {
+  checkBillingAllowance,
+  computeInputHash,
+  hasUnchangedInputSucceeded,
+} from "./billing.js";
 
 const logger = log("run-layer");
 
-export type RunStatus = "ok" | "error" | "timeout" | "skipped";
+export type RunStatus = "ok" | "error" | "timeout" | "skipped" | "cancelled";
 
 export interface RunReport {
+  run_id?: string;
   capability_id: string;
   status: RunStatus;
   /** Populated for every status except "ok". */
@@ -60,8 +76,78 @@ export interface RunOptions {
   trigger?: Partial<RunTrigger>;
   inputs?: Record<string, unknown>;
   recall?: (question: string) => Promise<RecallAnswer>;
-  /** Run even when the manifest says `enabled: false`. Used by the CLI's --force. */
+  /** Run even when the manifest says `enabled: false` or source_rules says paused. */
   force?: boolean;
+  /** Unique admission key to deduplicate overlapping schedule/event/manual triggers. */
+  admissionKey?: string;
+  /** ISO timestamp when triggered by a schedule slot (PROPOSAL-v1 runs.scheduled_for). */
+  scheduledFor?: string;
+  /** Skip execution if the last succeeded run for this capability had identical inputs (PROPOSAL-v1 C2). */
+  skipIfUnchanged?: boolean;
+  /** Enforce monthly USD budget cap before admitting the run (PROPOSAL-v1 C2). */
+  monthlyCapUsd?: number;
+  /** Cost in USD incurred by this run, recorded on finishRun. */
+  costUsd?: number;
+  /** Optional parent task id when invoked on behalf of a delegated task. */
+  taskId?: string;
+  /** Execution isolation mode recorded on the `runs` row. */
+  runner?: RunRunner;
+}
+
+interface ActiveRunControl {
+  abort: (reason: string) => void;
+  child?: ChildProcess;
+}
+
+const activeRuns = new Map<string, ActiveRunControl>();
+
+/**
+ * Registers a live child process or abort callback against a `runs.id` so
+ * `cancelRun()` can kill the process and fence its lease immediately.
+ */
+export function registerActiveRun(runId: string, control: ActiveRunControl): void {
+  activeRuns.set(runId, control);
+}
+
+export function unregisterActiveRun(runId: string): void {
+  activeRuns.delete(runId);
+}
+
+/**
+ * Cancels an active run (`POST /api/runs/:id/cancel`), killing any attached
+ * child process (`SIGTERM` followed by `SIGKILL`) and fencing the run's lease
+ * token in SQLite so late emissions are rejected (PROPOSAL G2).
+ */
+export function cancelRun(
+  db: Db,
+  runId: string,
+  reason = "cancelled by user",
+): RunRecord | undefined {
+  const control = activeRuns.get(runId);
+  const fenced = fenceRun(db, runId, "cancelled", reason);
+  if (control) {
+    if (control.child && !control.child.killed) {
+      try {
+        control.child.kill("SIGTERM");
+        const childRef = control.child;
+        const killTimer = setTimeout(() => {
+          if (!childRef.killed) {
+            try {
+              childRef.kill("SIGKILL");
+            } catch {
+              // Process already exited.
+            }
+          }
+        }, 1500);
+        killTimer.unref();
+      } catch {
+        // Ignore kill race if process already exited.
+      }
+    }
+    control.abort(reason);
+    activeRuns.delete(runId);
+  }
+  return fenced ?? getRun(db, runId);
 }
 
 class RunFailure extends Error {
@@ -192,9 +278,89 @@ export async function runCapability(
     });
   }
 
+  if (!options.force && isSourcePaused(deps.db, capabilityId)) {
+    return done({
+      ...base,
+      status: "skipped",
+      error: `"${capabilityId}" is paused in source_rules`,
+      missing_inputs: [],
+    });
+  }
+
+  const inputHash = computeInputHash({
+    inputs: options.inputs ?? {},
+    payload: options.trigger?.payload ?? null,
+  });
+
+  const skipIfUnchanged = options.skipIfUnchanged ?? manifest.skip_if_unchanged ?? false;
+  if (skipIfUnchanged && hasUnchangedInputSucceeded(deps.db, capabilityId, inputHash)) {
+    return done({
+      ...base,
+      status: "skipped",
+      error: `unchanged inputs (${inputHash.slice(0, 16)})`,
+      missing_inputs: [],
+    });
+  }
+
+  if (options.monthlyCapUsd !== undefined) {
+    const allowance = checkBillingAllowance(deps.db, options.monthlyCapUsd);
+    if (!allowance.allowed) {
+      return done({
+        ...base,
+        status: "skipped",
+        error: `budget_exceeded: monthly spend $${allowance.mtd_spend_usd.toFixed(2)} >= cap $${allowance.monthly_cap_usd.toFixed(2)}`,
+        missing_inputs: [],
+      });
+    }
+  }
+
+  const { admitted, run: runRecord } = admitRun(deps.db, {
+    capability_id: capabilityId,
+    task_id: options.taskId ?? null,
+    runner: options.runner ?? "in-process",
+    admission_key: options.admissionKey ?? null,
+    scheduled_for: options.scheduledFor ?? null,
+    input_hash: inputHash,
+    lease_ttl_ms: Math.max(manifest.timeout_ms + 30_000, 60_000),
+  });
+
+  if (!admitted) {
+    logger.info(
+      { capability: capabilityId, admissionKey: options.admissionKey, existingRunId: runRecord.id },
+      "skipped duplicate run admission",
+    );
+    return done({
+      ...base,
+      run_id: runRecord.id,
+      status: "skipped",
+      error: `duplicate admission_key "${options.admissionKey}"`,
+      missing_inputs: [],
+    });
+  }
+
+  const leaseToken = runRecord.lease_token!;
+  const leaseGen = runRecord.fencing_generation;
+
+  // Fence all emissions with the active run's lease token and attach run_id / task_id.
+  const fencedIngestor: Ingestor = {
+    ingest: async (capId, drafts) => {
+      assertLeaseValid(deps.db, runRecord.id, leaseToken, leaseGen);
+      const tagged = drafts.map((d) =>
+        typeof d === "object" && d !== null
+          ? {
+              ...(d as Record<string, unknown>),
+              run_id: runRecord.id,
+              ...(options.taskId ? { task_id: options.taskId } : {}),
+            }
+          : d,
+      );
+      return deps.actionCenter.ingest(capId, tagged);
+    },
+  };
+
   const { context, emitted, missingInputs } = buildRunContext({
     manifest,
-    ingestor: deps.actionCenter,
+    ingestor: fencedIngestor,
     trigger: {
       mode: options.trigger?.mode ?? manifest.trigger.mode,
       firedAt: options.trigger?.firedAt ?? nowIso(),
@@ -204,9 +370,26 @@ export async function runCapability(
     ...(options.recall ? { recall: options.recall } : {}),
   });
 
+  let cancelReject: ((err: Error) => void) | undefined;
+  const cancelPromise = new Promise<never>((_, reject) => {
+    cancelReject = reject;
+  });
+
+  registerActiveRun(runRecord.id, {
+    abort: (reason: string) => {
+      cancelReject?.(new RunFailure(reason, "cancelled"));
+    },
+  });
+
   try {
     const run = await loadEntrypoint(dir, manifest.entrypoint);
-    const result = await withTimeout(run(context), manifest.timeout_ms, capabilityId);
+    const result = await withTimeout(
+      Promise.race([run(context), cancelPromise]),
+      manifest.timeout_ms,
+      capabilityId,
+    );
+
+    assertLeaseValid(deps.db, runRecord.id, leaseToken, leaseGen);
 
     const returned: DraftActionItem[] = Array.isArray(result?.action_items)
       ? result.action_items
@@ -214,13 +397,19 @@ export async function runCapability(
     // Anything already sent through ctx.emit() is upserted, not duplicated:
     // ingest keys on (capability_id, dedupe_key). See buildRunContext.
     const ingest = returned.length
-      ? await deps.actionCenter.ingest(capabilityId, returned)
+      ? await fencedIngestor.ingest(capabilityId, returned)
       : { accepted: [], rejected: [] };
 
     const status: RunStatus = result?.status === "error" ? "error" : "ok";
+    finishRun(deps.db, runRecord.id, leaseToken, {
+      status: status === "ok" ? "succeeded" : "failed",
+      ...(status === "error" ? { error: "capability reported status: error" } : {}),
+      ...(options.costUsd !== undefined ? { cost_usd: options.costUsd } : {}),
+    });
     recordRun(deps.db, capabilityId, status);
 
     const report = done({
+      run_id: runRecord.id,
       capability_id: capabilityId,
       status,
       ...(status === "error" ? { error: "capability reported status: error" } : {}),
@@ -234,20 +423,52 @@ export async function runCapability(
       missing_inputs: missingInputs,
     });
     logger.info(
-      { capability: capabilityId, status, emitted: emitted.length, accepted: report.accepted.length },
+      {
+        runId: runRecord.id,
+        capability: capabilityId,
+        status,
+        emitted: emitted.length,
+        accepted: report.accepted.length,
+      },
       "capability run finished",
     );
     return report;
   } catch (err) {
     const failure =
-      err instanceof RunFailure ? err : new RunFailure((err as Error).message, "error");
+      err instanceof RunFailure
+        ? err
+        : err instanceof StaleLeaseError
+          ? new RunFailure(err.message, "cancelled")
+          : new RunFailure((err as Error).message, "error");
+
+    if (failure.status === "timeout") {
+      fenceRun(deps.db, runRecord.id, "timeout", failure.message);
+    } else if (failure.status === "cancelled") {
+      fenceRun(deps.db, runRecord.id, "cancelled", failure.message);
+    } else {
+      try {
+        finishRun(deps.db, runRecord.id, leaseToken, {
+          status: "failed",
+          error: failure.message,
+        });
+      } catch {
+        fenceRun(deps.db, runRecord.id, "cancelled", failure.message);
+      }
+    }
+
     recordRun(deps.db, capabilityId, failure.status);
-    logger.error({ capability: capabilityId, err: failure.message }, "capability run failed");
+    logger.error(
+      { runId: runRecord.id, capability: capabilityId, err: failure.message },
+      "capability run failed",
+    );
     return done({
       ...base,
+      run_id: runRecord.id,
       status: failure.status,
       error: failure.message,
       missing_inputs: missingInputs,
     });
+  } finally {
+    unregisterActiveRun(runRecord.id);
   }
 }

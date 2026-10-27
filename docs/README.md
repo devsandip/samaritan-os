@@ -18,7 +18,8 @@ Samaritan is Sandip's local-first personal agentic OS. Its centerpiece is the **
 | 6 | **architecture.html** | Architecture diagram (browser) | See the layered architecture + contracts at a glance |
 | 7 | **samaritan-app.html** | Full app mockup (browser) | Click through Dashboard · Inbox · Deferred · Completed · Settings |
 | 8 | **action-center-mockup.html** | Detailed Inbox mockup (browser) | The four schema-driven detail surfaces (WBR, email, PRD, meetings) |
-| 9 | **Samaritan-ideation.md** | Raw origin notes | Where this started — kept for provenance |
+| 9 | **COMPETITIVE-LANDSCAPE.md** | Dated competitive scan (2026-07-20) | Who else is building this, what they shipped, and what is actually still unclaimed. The evidence behind the PRFAQ's buy-vs-build answer |
+| 10 | **Samaritan-ideation.md** | Raw origin notes | Where this started — kept for provenance |
 
 *(Open the three `.html` files in a browser — they're self-contained, no build step.)*
 

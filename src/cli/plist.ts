@@ -28,6 +28,11 @@ export interface PlistOptions {
    * non-default config.
    */
   env: Record<string, string>;
+  /**
+   * When true, wraps the supervised daemon in `/usr/bin/caffeinate -dis` so
+   * macOS does not sleep while Samaritan runs on AC power (PROPOSAL-v1 D6).
+   */
+  preventSleep?: boolean;
 }
 
 const DOCTYPE =
@@ -50,6 +55,11 @@ export function renderPlist(o: PlistOptions): string {
     .map(([k, v]) => `    <key>${esc(k)}</key><string>${esc(v)}</string>`)
     .join("\n");
 
+  const args = o.preventSleep
+    ? ["/usr/bin/caffeinate", "-dis", o.nodePath, o.entryPath]
+    : [o.nodePath, o.entryPath];
+  const argsXml = args.map((a) => `    <string>${esc(a)}</string>`).join("\n");
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 ${DOCTYPE}
 <plist version="1.0">
@@ -57,8 +67,7 @@ ${DOCTYPE}
   <key>Label</key><string>${esc(o.label)}</string>
   <key>ProgramArguments</key>
   <array>
-    <string>${esc(o.nodePath)}</string>
-    <string>${esc(o.entryPath)}</string>
+${argsXml}
   </array>
   <key>WorkingDirectory</key><string>${esc(o.workingDir)}</string>
   <key>RunAtLoad</key><true/>

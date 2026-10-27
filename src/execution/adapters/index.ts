@@ -6,22 +6,34 @@
  * type whose declared target is missing down to guided, and that degradation
  * needs somewhere to land.
  */
+import { loadConfig } from "../../config/index.js";
+import { getSecret } from "../../secrets.js";
 import type { Db } from "../../store/db.js";
 import type { ExecutionAdapter } from "../../types/index.js";
 import type { Registry } from "../registry.js";
+import { createCalendarEventAdapter } from "./calendar.js";
+import { buildRfc2822Base64Url, createGmailDraftAdapter } from "./gmail.js";
 import { guidedFallback } from "./guided.js";
+import { createHevyRoutineCopyAdapter } from "./hevy.js";
 import { notionAdapters } from "./notion.js";
 import { obsidianNoteAppend, obsidianNoteCreate } from "./obsidian.js";
 import { pmOsItemFile } from "./pm-os.js";
-import { tickTickTaskCreate } from "./ticktick.js";
+import { createThornhillPhoneAdapter } from "./thornhill.js";
+import { createTickTickAdapter, sanitizeTickTickText, tickTickTaskCreate } from "./ticktick.js";
 
 export function v0Adapters(db: Db): ExecutionAdapter[] {
+  const cfg = loadConfig();
+  const gmailConnected = cfg.gmail.enabled && Boolean(getSecret(`gmail:${cfg.gmail.account}`));
   return [
     guidedFallback,
     obsidianNoteCreate,
     obsidianNoteAppend,
     ...notionAdapters(db),
-    tickTickTaskCreate,
+    createTickTickAdapter({ db }),
+    createHevyRoutineCopyAdapter(),
+    createCalendarEventAdapter(),
+    createThornhillPhoneAdapter(),
+    ...(gmailConnected ? [createGmailDraftAdapter()] : []),
   ];
 }
 
@@ -36,4 +48,8 @@ export { guidedFallback, renderPayload } from "./guided.js";
 export { obsidianNoteAppend, obsidianNoteCreate, resolveInVault } from "./obsidian.js";
 export { notionAdapters } from "./notion.js";
 export { pmOsItemFile, PM_OS_KINDS } from "./pm-os.js";
-export { tickTickTaskCreate } from "./ticktick.js";
+export { createTickTickAdapter, sanitizeTickTickText, tickTickTaskCreate } from "./ticktick.js";
+export { createGmailDraftAdapter, buildRfc2822Base64Url } from "./gmail.js";
+export { createHevyRoutineCopyAdapter } from "./hevy.js";
+export { createCalendarEventAdapter } from "./calendar.js";
+export { createThornhillPhoneAdapter } from "./thornhill.js";

@@ -1,23 +1,12 @@
 /**
- * Dashboard (UI-SPEC §5.1) — "what's the state of my world" in one screenful.
- *
- * Every number here is derived from data the views below it already fetch, so
- * the Dashboard can never disagree with the Inbox.
- *
- * "Last run" used to be approximated from item timestamps because no run-layer
- * telemetry existed. It now comes from the `capabilities` row the Run Layer
- * writes, so a capability that ran and emitted nothing is distinguishable from
- * one that never ran, which the approximation could not do.
- *
- * The auto-handled feed is still reconstructed, from items that reached
- * `executed` without ever waiting on Sandip.
+ * Now / Dashboard (UI-SPEC §5.1, Command Centre D2) - "what's the state of my world"
+ * in one screenful, including active delegated tasks and the Phase 1 Meetings Loop.
  */
-import { useState } from "react";
-import { api } from "../api/client";
-import type { ActionItem, CapabilityManifest, LoadProblem } from "../api/types";
-import type { ApiError } from "../api/client";
+import { useState, type FormEvent } from "react";
+import { api, type ApiError } from "../api/client";
+import type { ActionItem, CapabilityManifest, LoadProblem, Task } from "../api/types";
 import { EmptyState, ErrorBanner, Skeleton, SkeletonRows } from "../components/states";
-import { StatusDot } from "../components/primitives";
+import { Badge, Button, StatusDot } from "../components/primitives";
 import type { Catalogue } from "../lib/manifest";
 import { itemTitle } from "../lib/manifest";
 import { byPriorityThenNewest, clockTime, greeting, relativeTime } from "../lib/format";
@@ -25,6 +14,7 @@ import { navigate } from "../lib/router";
 
 export function DashboardView({
   inbox,
+  tasks,
   deferred,
   autoHandled,
   capabilities,
@@ -36,6 +26,7 @@ export function DashboardView({
   onToast,
 }: {
   inbox: ActionItem[] | undefined;
+  tasks?: Task[] | undefined;
   deferred: ActionItem[] | undefined;
   autoHandled: ActionItem[] | undefined;
   capabilities: CapabilityManifest[];
@@ -51,21 +42,74 @@ export function DashboardView({
   const today = (autoHandled ?? []).filter(isToday);
   const pendingByCapability = catalogue.pendingByCapability(items);
 
+  const activeTasks = (tasks ?? []).filter(
+    (t) => t.status === "running" || t.status === "needs_input" || t.status === "queued",
+  );
+  const needsInputTasks = activeTasks.filter((t) => t.status === "needs_input");
+
   const enabled = capabilities.filter((capability) => capability.enabled);
+
+  const [showMeetingForm, setShowMeetingForm] = useState(false);
+  const [meetingTitle, setMeetingTitle] = useState("");
+  const [meetingAttendees, setMeetingAttendees] = useState("");
+  const [meetingNotes, setMeetingNotes] = useState("");
+  const [submittingMeeting, setSubmittingMeeting] = useState(false);
+
+  const submitMeeting = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!meetingNotes.trim() || submittingMeeting) return;
+    setSubmittingMeeting(true);
+    try {
+      const attendees = meetingAttendees
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const res = await api.submitMeetingNotes({
+        ...(meetingTitle.trim() ? { title: meetingTitle.trim() } : {}),
+        ...(attendees.length ? { attendees } : {}),
+        notes: meetingNotes.trim(),
+      });
+      setMeetingTitle("");
+      setMeetingAttendees("");
+      setMeetingNotes("");
+      setShowMeetingForm(false);
+      reload();
+      onToast(
+        `Meeting note filed to Obsidian (${res.accepted.length} action item(s) surfaced)`,
+      );
+    } catch (err) {
+      onToast(`Meeting note failed: ${(err as Error).message}`, "err");
+    } finally {
+      setSubmittingMeeting(false);
+    }
+  };
 
   return (
     <>
-      <h1 className="h-greet">{greeting()}, Sandip</h1>
-      <p className="h-sub">
-        {new Date().toLocaleDateString(undefined, {
-          weekday: "long",
-          month: "long",
-          day: "numeric",
-        })}
-        {" · "}
-        {items.length} {items.length === 1 ? "thing needs" : "things need"} you,{" "}
-        {today.length} handled automatically today.
-      </p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+        <div>
+          <h1 className="h-greet">{greeting()}, Sandip</h1>
+          <p className="h-sub">
+            {new Date().toLocaleDateString(undefined, {
+              weekday: "long",
+              month: "long",
+              day: "numeric",
+            })}
+            {" · "}
+            {items.length} {items.length === 1 ? "thing needs" : "things need"} you,{" "}
+            {activeTasks.length} active {activeTasks.length === 1 ? "task" : "tasks"},{" "}
+            {today.length} handled automatically today.
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Button small onClick={() => setShowMeetingForm((v) => !v)}>
+            {showMeetingForm ? "Close Meeting Note" : "+ Capture Meeting Notes"}
+          </Button>
+          <Button small variant="primary" onClick={() => navigate("/tasks")}>
+            Delegate Task
+          </Button>
+        </div>
+      </div>
 
       {error ? <ErrorBanner error={error} onRetry={reload} /> : null}
       {problems.length > 0 ? (
@@ -76,17 +120,55 @@ export function DashboardView({
               load.
             </div>
             <div className="detail-text">
-              {problems.map((problem) => `${problem.capabilityId ?? problem.dir}: ${problem.message}`).join(" · ")}
+              {problems
+                .map((problem) => `${problem.capabilityId ?? problem.dir}: ${problem.message}`)
+                .join(" · ")}
             </div>
           </div>
         </div>
       ) : null}
 
+      {showMeetingForm ? (
+        <form className="card" onSubmit={(e) => void submitMeeting(e)}>
+          <h2>Capture Meeting Notes (Obsidian + Action Extraction)</h2>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+            <input
+              className="fi"
+              placeholder="Meeting topic (e.g., Q3 Architecture Sync)"
+              value={meetingTitle}
+              onChange={(e) => setMeetingTitle(e.target.value)}
+            />
+            <input
+              className="fi"
+              placeholder="Attendees (comma-separated, e.g., Sandip, Priya, Rohan)"
+              value={meetingAttendees}
+              onChange={(e) => setMeetingAttendees(e.target.value)}
+            />
+          </div>
+          <textarea
+            className="draft short"
+            rows={4}
+            placeholder="Paste raw meeting notes or transcript lines (lines starting with Decision:, Action:, Task:, Insight: are automatically extracted for review)..."
+            value={meetingNotes}
+            onChange={(e) => setMeetingNotes(e.target.value)}
+          />
+          <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+            <Button
+              type="submit"
+              variant="good"
+              small
+              pending={submittingMeeting}
+              disabled={submittingMeeting || !meetingNotes.trim()}
+            >
+              Write Vault Note &amp; Extract Items
+            </Button>
+          </div>
+        </form>
+      ) : null}
+
       <div className={error ? "tiles dimmed" : "tiles"}>
         {loading && !inbox ? (
-          <>
-            <Skeleton variant="tile" count={4} />
-          </>
+          <Skeleton variant="tile" count={4} />
         ) : (
           <>
             <Tile
@@ -96,14 +178,19 @@ export function DashboardView({
               alert={urgent.length > 0}
             />
             <Tile
+              label="Active tasks"
+              value={activeTasks.length}
+              sub={
+                needsInputTasks.length > 0
+                  ? `${needsInputTasks.length} waiting for your input`
+                  : "workers running or idle"
+              }
+              alert={needsInputTasks.length > 0}
+            />
+            <Tile
               label="Auto-handled today"
               value={today.length}
               sub="no action needed"
-            />
-            <Tile
-              label="Deferred"
-              value={deferred?.length ?? 0}
-              sub={deferred?.length ? "waiting for you to come back" : "nothing snoozed"}
             />
             <Tile
               label="Capabilities"
@@ -113,6 +200,42 @@ export function DashboardView({
           </>
         )}
       </div>
+
+      {activeTasks.length > 0 ? (
+        <div className="card">
+          <h2>
+            Active &amp; Waiting Tasks
+            <button className="link" type="button" onClick={() => navigate("/tasks")}>
+              Open tasks
+            </button>
+          </h2>
+          {activeTasks.slice(0, 5).map((task) => (
+            <button
+              type="button"
+              className="qrow"
+              key={task.id}
+              onClick={() => navigate(`/tasks/${encodeURIComponent(task.id)}`)}
+            >
+              <span
+                className={task.status === "needs_input" ? "prio u" : "prio n"}
+                aria-hidden="true"
+              />
+              <span className="t">
+                {task.goal}
+                <small>
+                  lane: {task.lane} · status: {task.status} · updated {relativeTime(task.updated_at)}
+                </small>
+              </span>
+              <Badge
+                spec={{
+                  label: task.status.replace(/_/g, " "),
+                  variant: task.status === "needs_input" ? "assist" : "guided",
+                }}
+              />
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       <div className="card">
         <h2>
@@ -251,18 +374,6 @@ function isToday(item: ActionItem): boolean {
   );
 }
 
-/**
- * One capability (UI-SPEC §6.3), with the ability to fire it.
- *
- * "Run now" is the only place in the UI that makes something happen without an
- * action item existing first, and it is deliberately not an exception to the
- * review gate: the run emits, policy decides, and whatever needed a human turns
- * up in the Inbox a moment later. Running an agent and approving its output
- * stay two separate acts.
- *
- * `last run` comes from the Run Layer's telemetry rather than being inferred
- * from item timestamps, which is what this card used to do.
- */
 function AgentCard({
   capability,
   pending,
@@ -290,8 +401,6 @@ function AgentCard({
       if (report.status !== "ok") {
         onToast(`${capability.name}: ${report.error ?? report.status}`, "err");
       } else if (!report.accepted.length) {
-        // A run that emits nothing is a normal outcome, not a failure. Triage
-        // deciding three messages need no reply is the system working.
         onToast(`${capability.name} ran, nothing to surface`);
       } else {
         const parts = [
@@ -317,7 +426,7 @@ function AgentCard({
         />
         <b>{capability.name}</b>
         <button className="link" type="button" onClick={run} disabled={running}>
-          {running ? "running…" : "Run now"}
+          {running ? "running..." : "Run now"}
         </button>
       </div>
       <div className="meta">

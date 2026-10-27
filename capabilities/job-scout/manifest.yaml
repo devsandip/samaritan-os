@@ -1,0 +1,130 @@
+id: job-scout
+name: Job Scout & Recruiter Pipeline
+description: Evaluates role matches, drafts assisted Gmail replies to recruiter outreach, and prepares interview dossiers.
+version: 0.1.0
+owner: sandip
+enabled: true
+entrypoint: index.ts
+
+trigger:
+  mode: scheduled
+  cron: "0 9 * * *"
+  catch_up: run_once
+  max_staleness_minutes: 720
+
+context:
+  inputs:
+    - job_postings
+    - recruiter_messages
+    - upcoming_interviews
+
+emits:
+  - type: job-match-review
+    priority: normal
+    ttl: 72h
+    render:
+      layout: card
+      primary: role_title
+      secondary: match_summary
+      badges:
+        - company
+        - fit_score
+    custom_attributes:
+      company: string
+      role_title: string
+      fit_score: number
+      match_summary: string
+      path: string
+      content: string
+    responses:
+      - id: pursue
+        label: Save to Pipeline
+        outcome: execute
+      - id: snooze
+        label: Snooze 3d
+        outcome: defer
+        defer_for: 3d
+      - id: pass
+        label: Pass
+        outcome: discard
+    execution:
+      mode: assisted
+      capability: obsidian.note.create
+      action_type: journal.capture
+    policy:
+      escalate_when: "confidence >= 0"
+
+  - type: recruiter-reply-draft
+    priority: high
+    ttl: 48h
+    render:
+      layout: card
+      primary: subject
+      secondary: draft_body
+      badges:
+        - from
+        - company
+    custom_attributes:
+      from: string
+      to: string
+      company: string
+      subject: string
+      draft_body: string
+    responses:
+      - id: stage_draft
+        label: Stage Gmail Draft
+        outcome: execute
+      - id: snooze
+        label: Snooze 1d
+        outcome: defer
+        defer_for: 1d
+      - id: archive
+        label: Decline / Ignore
+        outcome: discard
+    execution:
+      mode: assisted
+      capability: gmail.draft.create
+      action_type: email.send
+    policy:
+      escalate_when: "confidence >= 0"
+
+  - type: interview-prep-brief
+    priority: high
+    ttl: 24h
+    render:
+      layout: document
+      primary: headline
+      secondary: content
+      badges:
+        - company
+    custom_attributes:
+      headline: string
+      company: string
+      path: string
+      content: string
+    responses:
+      - id: save_brief
+        label: Save Prep Brief
+        outcome: execute
+      - id: dismiss
+        label: Dismiss
+        outcome: discard
+    execution:
+      mode: automated
+      capability: obsidian.note.create
+      action_type: journal.capture
+    policy:
+      auto_complete_when: "confidence >= 0.85"
+
+requires_capabilities:
+  - obsidian.note.create
+  - gmail.draft.create
+
+delivery:
+  channels:
+    - inbox
+    - telegram
+  quiet_hours: "22:00-07:00"
+
+audit: true
+timeout_ms: 45000

@@ -1403,3 +1403,65 @@ input.fi {
   color: var(--ink);
   line-height: 1.5;
 }
+
+/* ---- Command Bar (Ask / Delegate) --------------------------------------- */
+
+.cmd-mode-row {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+
+.cmd-pill {
+  flex: 1;
+  border: 1px solid #2a3145;
+  background: #1f2637;
+  color: #8b93a4;
+  border-radius: 6px;
+  padding: 4px 6px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cmd-pill.active {
+  background: var(--core);
+  border-color: var(--core);
+  color: #fff;
+}
+
+.cmd-delegate-bar {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.cmd-lane-select {
+  flex: 1;
+  background: #1f2637;
+  border: 1px solid #2a3145;
+  border-radius: 7px;
+  color: #e7ebf2;
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 8px;
+}
+
+.cmd-submit-btn {
+  background: var(--core);
+  border: 1px solid var(--core);
+  border-radius: 7px;
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.cmd-submit-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+

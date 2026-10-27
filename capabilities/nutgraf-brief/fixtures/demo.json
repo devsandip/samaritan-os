@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-27",
+  "articles": [
+    {
+      "title": "Why Local-First Agentic Systems Win on Latency and Trust",
+      "source": "Systems & Strategy",
+      "url": "https://example.com/essays/local-first-agents",
+      "nutgraf": "Local SQLite state paired with explicit capability manifests eliminates multi-hop cloud orchestration overhead while keeping credential boundaries auditable."
+    },
+    {
+      "title": "Rule of Two in Autonomous Coding Workers",
+      "source": "Security Engineering Notes",
+      "url": "https://example.com/essays/rule-of-two",
+      "nutgraf": "Stripping external write tokens from worker subprocesses ensures that untrusted input ingestion cannot trigger unauthorized outbound mutations."
+    }
+  ]
+}

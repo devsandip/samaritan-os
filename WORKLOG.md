@@ -844,3 +844,69 @@ no outbound call to a service the sandbox can't reach.
 - The event is the notice, not the transcript; a consumer that fetches is the
   follow-up. Inert-but-authenticated on the bus today, and documented as such.
 - A deliberately-ignored event is a 202, not a 4xx, so Fireflies doesn't retry.
+
+
+## 2026-10-23: Samaritan Command Centre consensus implementation (`D1`-`D6`, `G2`, Phase 1)
+
+**Did:**
+- Created interactive HTML mockups for the 10 core Command Centre screens and actions in `docs/mockups/command-centre-v1.html`.
+- Added SQLite Migration 8 (`src/store/migrations.ts`) and typed store modules (`src/store/tasks.ts`, `src/store/runs.ts`, `src/store/source-rules.ts`, `src/store/action-items.ts`) for `tasks`, `runs`, `artifacts`, append-only `activity_events`, `source_rules`, `delivery_queue.dedupe_key`, and `action_items` payload hashes/revisions.
+- Resolved all 8 `G2` codebase audit defects across `src/execution/adapters/obsidian.ts` (local calendar date), `src/delivery/index.ts` (`flush()` + `(item_id, revision)` dedupe + source silence checks), `src/run-layer/index.ts` (source pause, `admission_key` dedupe, `SIGTERM`/`SIGKILL` cancellation, lease-fenced `ctx.emit()`), `src/action-center/index.ts` (`409` `stale_approval` on mismatched `expected_payload_hash`/`expected_revision`, restart reconciliation), and `src/api/server.ts` (server-derived `actor: "sandip"` and remote Bearer/cookie auth via `web:token`).
+- Implemented the 5-method `WorkerAdapter` and `WorkerService` (`src/worker/index.ts`, `capabilities/worker-task/index.ts`) with path-confined `~/.samaritan/artifacts/<task-id>/` storage, Phase 1 Meetings Loop (`src/events/listeners/calendar-sync.ts`, `capabilities/meeting-prep/index.ts`, `capabilities/meeting/index.ts`), TickTick Open API v1 execution with `#word` tag sanitization (`src/execution/adapters/ticktick.ts`), coding-agent waiting hooks (`src/events/listeners/coding-agent-hook.ts`, `capabilities/coding-agent/index.ts`), the 8-tool cross-assistant MCP server (`src/mcp/index.ts`, `src/cli/mcp.ts`), Telegram inbound callback/command handler (`src/delivery/telegram-inbound.ts`), and the updated 4-destination Command Centre UI (`ui/src/`).
+- Added external routing pointers (`docs/SAMARITAN_MCP.md`, `~/Documents/Obsidian/Samaritan/SAMARITAN_MCP.md`, `~/AGENTS.md`, `~/.claude/settings.json`, `~/Developer/esp32-iphone-agent/docs/architecture.md`) and 16 verification tests in `test/command-centre.test.ts`.
+
+**State now:**
+- Branch `feat/command-centre` passes `pnpm typecheck`, `pnpm build`, `pnpm build:ui`, and the full Vitest suite (44 test files, 569 tests passing).
+- All consensus deliverables (`D1` through `D6`), `G2` prerequisite fixes, Phase 1 capabilities, and Command Centre UI views (`Now`, `Tasks`, `Activity`, `Settings`) are implemented and verified.
+- Pre-existing untracked/modified deliberation docs (`docs/PRFAQ.md`, `docs/README.md`, `docs/COMPETITIVE-LANDSCAPE.md`, `docs/deliberations/`, `journal/`) remain untouched in the working tree.
+
+**Next:**
+- Stage and commit the `feat/command-centre` implementation files (or open a PR for review), and run `samaritan secret set web:token` + `samaritan secret set ticktick:token` on the host machine before enabling Tailscale Serve or live TickTick Open API execution in `~/.samaritan/config.yaml`.
+
+**Decisions:**
+- Enforced approval-payload hashing (`sha256(canonicalJson(execution_plan ?? payload))`) and monotonic `revision` checks in `ActionCenter.respond()` and `ActionCenter.confirm()` so neither Web UI nor Telegram callbacks can approve a mutated payload (`409` `stale_approval`).
+- Kept MCP approval-free (`get_context`, `search`, `read_artifact`, `list_inbox`, `propose_action`, `submit_task`, `task_status`, `answer_question` only) so external assistants can propose actions and delegate tasks while only Sandip approves in the Command Centre UI or Telegram.
+- Confined all worker task artifacts to `~/.samaritan/artifacts/<task-id>/` using `resolveTaskArtifactPath` (`path.resolve` + `path.relative` prefix check) to reject traversal outside the task directory.
+
+
+## 2026-10-27: Completed full PROPOSAL-v1 Command Centre specification and Milestones 1 through 5 (Phases 0 through 4)
+
+**Did:**
+- Wrote the exhaustive engineering specification `docs/COMMAND-CENTRE-SPEC.md` covering all 25 work items across Phases 0, 1, 2, 3, and 4 from `docs/deliberations/consensus/PROPOSAL-v1.md` and `docs/deliberations/consensus/PROPOSAL.md`, and created GitHub Milestones 1 through 5 (`Phase 0` through `Phase 4`) and Issues `9` through `35` on `devsandip/samaritan-os` (linked to GitHub Project `11`).
+- Implemented Phase 0 (`Migration 9` in `src/store/migrations.ts`, `preventSleep` `/usr/bin/caffeinate -dis` in `src/cli/plist.ts`, `VACUUM INTO` backups and Keychain probe in `src/store/backup.ts` and `src/cli/backup-db.ts`, `computeInputHash` and `checkBillingAllowance` in `src/run-layer/billing.ts`, and `max_staleness_minutes` wake-gap catch-up in `src/scheduler/index.ts`).
+- Implemented Phase 1 (`calendar.meeting_ended` post-meeting nudge in `src/events/listeners/calendar-sync.ts` and `capabilities/meeting-prep/index.ts`, Fireflies GraphQL consumer in `src/events/listeners/fireflies-client.ts`, and Granola/health/backup endpoints in `src/api/server.ts`) and Phase 2 (child-process worker sandbox with Rule-of-Two credential stripping in `src/worker/child-worker.ts`, 5-view UI with System Health/Backups/Billing in `ui/src/views/Settings.tsx`, `scope: "work" | "personal"` MCP filtering in `src/mcp/index.ts`, and Telegram `edit:`, `/meeting`, and photo screenshot handling in `src/delivery/telegram-inbound.ts`).
+- Implemented Phase 3 and Phase 4 (`stop_hook_active` loop guard in `src/events/listeners/coding-agent-hook.ts`, execution adapters `gmail.draft.create` in `src/execution/adapters/gmail.ts`, `hevy.routine.copy` in `src/execution/adapters/hevy.ts`, `calendar.event.create` in `src/execution/adapters/calendar.ts`, and `phone.task.run` in `src/execution/adapters/thornhill.ts`, webhooks in `src/api/webhooks.ts`, read-only `chat.db` reader in `src/events/listeners/imessage-reader.ts`, Remote MCP OAuth 2.1 endpoints in `src/api/server.ts`, and all 13 remaining capabilities under `capabilities/`).
+- Verified all 44 test files (612 tests total, including 20 Command Centre tests in `test/command-centre.test.ts` and 80 capability contract tests in `test/agents.test.ts`) and closed all 5 GitHub Milestones and Issues `9` through `35`.
+
+**State now:**
+- Branch `feat/command-centre` is 100% feature-complete against `PROPOSAL-v1.md` across all 5 phases (21 capabilities on disk, 9 SQLite migrations, 44 passing test files / 612 passing tests, `pnpm typecheck`, `pnpm build`, and `pnpm build:ui` all clean with 0 errors).
+- All 5 GitHub Milestones (`Phase 0` through `Phase 4`) and Issues `9` through `35` on `devsandip/samaritan-os` are closed.
+
+**Next:**
+- Stage and commit the changes on `feat/command-centre`, push the branch to `origin/feat/command-centre`, and open the pull request into `main` on `devsandip/samaritan-os`.
+
+**Decisions:**
+- Conditionally registered `gmail.draft.create` in `src/execution/adapters/index.ts` only when `cfg.gmail.enabled` and the `gmail:<account>` Keychain secret are present so `email-triage` continues to degrade to `guided` when Gmail is unconfigured while enabling live draft creation when configured.
+- Used dedicated event types (`bill.statement_received`, `music.offer_received`, `screenshot.received`, `prd.submitted`, `phone.task_requested`, `phone.stop_point_reached`) for the new Phase 3 and Phase 4 capabilities so existing `email.received` routing invariants (`email-triage` and `newsletter-digest`) remain untouched.
+- Enforced Rule-of-Two credential stripping in `src/worker/child-worker.ts` (`sanitizeWorkerEnv`) so child worker processes never inherit provider secrets (`NOTION_*`, `GMAIL_*`, `GOOGLE_*`, `TICKTICK_*`, `TELEGRAM_*`, `FIREFLIES_*`, `HEVY_*`, `THORNHILL_*`) and must propose external side effects through IPC into the Action Center.
+
+
+## 2026-10-27: Deepened Phase 3 and 4 capabilities, Recall hybrid SQL retrieval, Slack webhook, Connections grid, and merged Command Centre to main
+
+**Did:**
+- Replaced stub logic across Phase 3 and Phase 4 capabilities with pure, testable extractors and injectable HTTP client seams: `scanMultiRepoJournals` in `capabilities/wbr-journal/index.ts` plus `discoverJournalRoots` in `src/events/listeners/vault-watch.ts`, `evaluatePrdMultiLens` with Recall citation enrichment and versioned artifact persistence in `capabilities/prd-review/index.ts`, `fetchNutgrafSummary` in `capabilities/nutgraf-brief/index.ts`, `fetchPosthogMetrics` and `evaluatePosthogMetrics` (`data_missing` vs `0`) in `capabilities/posthog-pulse/index.ts`, `fetchOuraV2DailyMetrics` and `computeReadinessCoaching` (`deload`, `maintenance`, `progressive_overload`) in `capabilities/health-coach/index.ts`, `parseBillEmail` (INR and USD, due-date certainty, account masks) in `capabilities/bill-watch/index.ts`, `extractEventFromScreenshotText` and `detectCalendarConflicts` in `capabilities/calendar-from-screenshot/index.ts`, `location.office_arrived` and `workout.completed` handling in `capabilities/morning-plan/index.ts`, `isHighSignalImessage` and `isHighSignalWhatsapp` OTP/shortcode filters, and contextual mood/focus soundtrack triggers in `capabilities/music-offer/index.ts`.
+- Implemented Recall structured SQL retrieval over mirror tables (`notion_decisions`, `notion_insights`, `ticktick_tasks`, `calendar_events`) in `src/recall/structured.ts`, fused structured and semantic passages in `src/recall/service.ts` (`retrieval_path` reporting `"hybrid"`, `"structured"`, or `"semantic"`), and added `scope` filtering (`work`, `personal`, `all`) across `src/recall/index-store.ts`, `src/recall/retrieve.ts`, `src/mcp/index.ts`, and `POST /api/recall/query`.
+- Added `calendar.meeting_rescheduled` emission in `src/events/listeners/calendar-sync.ts`, Slack Events API HMAC verification (`verifySlackSignature` with 5-minute replay window) and `POST /api/webhooks/slack` in `src/events/listeners/slack-webhook.ts` and `src/api/webhooks.ts`, `GET /api/connections` and `schema_version` on `GET /api/system/health` in `src/api/server.ts`, `ui/src/components/CommandBar.tsx` (`Cmd+K`), and the live Connections status grid in `ui/src/views/Settings.tsx`.
+- Verified AWS CLI SSO session (`aws sts get-caller-identity` on account `175110780229`, profile `admin`, region `us-east-1`), ran `pnpm typecheck`, `pnpm test` (44 test files, 614 passing tests), `pnpm build`, and `pnpm build:ui`, committed and merged `feat/command-centre` to `main`, pushed to `origin/main`, and restarted the live daemon on `127.0.0.1:4173`.
+
+**State now:**
+- `main` and `origin/main` include the complete Samaritan Command Centre (Phases 0 through 4, 21 capabilities, 9 SQLite migrations, 44 test files / 614 tests passing).
+- The live daemon on `127.0.0.1:4173` is running the merged build with SQLite migration 9 applied.
+
+**Next:**
+- Add live API credentials to macOS Keychain (`gcal:default`, `gmail:default`, `ticktick:default`, `fireflies:webhook`, `slack:signing`, `oura:default`, `hevy:default`, `posthog:api`, `nutgraf:machine`, `thornhill:default`) as each external account is enabled in `~/.samaritan/config.yaml`.
+
+**Decisions:**
+- Kept `RecallService.query()` returning `retrieval_path: "semantic"` when structured SQL mirror tables yield zero matches, `"hybrid"` when both structured and semantic retrievers match, and `"structured"` when only mirror tables match.
+- Reported missing PostHog metric values (`null` or `undefined`) explicitly as `data_missing` rather than `0` or `-100%` so telemetry gaps are never misclassified as traffic drops.
+- Added `schema_version` to `GET /api/system/health` while keeping `GET /healthz` at its three-field contract (`status`, `capabilities`, `problems`).

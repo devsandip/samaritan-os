@@ -37,6 +37,7 @@ function main(): void {
     outLog: join(logDir, "daemon.out.log"),
     errLog: join(logDir, "daemon.err.log"),
     env: { SAMARITAN_CONFIG: configPath, NODE_ENV: "production" },
+    preventSleep: !process.argv.includes("--no-caffeinate"),
   });
 
   if (print) {

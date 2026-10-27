@@ -1,0 +1,65 @@
+id: prd-review
+name: Multi-Lens PRD & Spec Reviewer
+description: Evaluates a product specification across PM, UX, and SDE lenses and files a structured review report in the Obsidian vault.
+version: 0.1.0
+owner: sandip
+enabled: true
+entrypoint: index.ts
+
+trigger:
+  mode: event
+  on:
+    - prd.submitted
+
+context:
+  memory:
+    - recall
+  inputs:
+    - prd_title
+    - project
+    - findings
+
+emits:
+  - type: prd-review-report
+    priority: normal
+    ttl: 72h
+    render:
+      layout: document
+      primary: headline
+      secondary: content
+      badges:
+        - project
+    custom_attributes:
+      headline: string
+      project: string
+      path: string
+      content: string
+    responses:
+      - id: save_review
+        label: File PRD Review
+        outcome: execute
+      - id: snooze
+        label: Snooze 1d
+        outcome: defer
+        defer_for: 1d
+      - id: dismiss
+        label: Dismiss
+        outcome: discard
+    execution:
+      mode: assisted
+      capability: obsidian.note.create
+      action_type: journal.capture
+    policy:
+      escalate_when: "confidence >= 0"
+
+requires_capabilities:
+  - obsidian.note.create
+
+delivery:
+  channels:
+    - inbox
+    - telegram
+  quiet_hours: "22:00-07:00"
+
+audit: true
+timeout_ms: 45000

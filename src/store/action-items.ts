@@ -7,7 +7,7 @@
  * by construction" claim true: there is no way to move an item without leaving
  * a trace, because the two writes cannot be separated.
  */
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { Db, SqlValue } from "./db.js";
 import {
   ActionItem,
@@ -19,6 +19,33 @@ import {
   type Priority,
   nowIso,
 } from "../types/index.js";
+
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalJson).join(",")}]`;
+  }
+  const obj = value as Record<string, unknown>;
+  const keys = Object.keys(obj).sort();
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalJson(obj[k])}`).join(",")}}`;
+}
+
+/**
+ * Deterministic SHA-256 over the actionable payload (custom + execution) so
+ * `respond()` and `confirm()` can verify that the revision on screen is the
+ * exact revision being approved (PROPOSAL G2).
+ */
+export function computePayloadHash(
+  custom: Record<string, unknown>,
+  execution: ActionItemExecution,
+): string {
+  const digest = createHash("sha256")
+    .update(canonicalJson({ custom, execution }))
+    .digest("hex");
+  return `sha256:${digest}`;
+}
 
 export interface CreateActionItemInput {
   capability_id: string;
@@ -32,6 +59,9 @@ export interface CreateActionItemInput {
   deadline?: string | null;
   expires_at?: string | null;
   defer_until?: string | null;
+  task_id?: string | null;
+  run_id?: string | null;
+  scope?: "work" | "personal";
 }
 
 export interface TransitionInput {
@@ -48,6 +78,8 @@ export interface TransitionInput {
     deadline?: string | null;
     expires_at?: string | null;
     defer_until?: string | null;
+    task_id?: string | null;
+    run_id?: string | null;
   };
 }
 
@@ -56,6 +88,9 @@ export interface ListFilter {
   capability_id?: string;
   priority?: Priority;
   type?: string;
+  task_id?: string;
+  run_id?: string;
+  scope?: "work" | "personal";
   limit?: number;
   offset?: number;
 }
@@ -127,11 +162,18 @@ interface ActionItemRow {
   deadline: string | null;
   expires_at: string | null;
   defer_until: string | null;
+  task_id?: string | null;
+  run_id?: string | null;
+  scope?: string | null;
+  payload_hash?: string | null;
+  revision?: number;
   created_at: string;
   updated_at: string;
 }
 
 function rowToActionItem(row: ActionItemRow): ActionItem {
+  const custom = JSON.parse(row.custom_json) as Record<string, unknown>;
+  const execution = JSON.parse(row.execution_json) as ActionItemExecution;
   return ActionItem.parse({
     id: row.id,
     capability_id: row.capability_id,
@@ -140,12 +182,17 @@ function rowToActionItem(row: ActionItemRow): ActionItem {
     dedupe_key: row.dedupe_key,
     priority: row.priority,
     context: JSON.parse(row.context_json),
-    custom: JSON.parse(row.custom_json),
+    custom,
     responses: JSON.parse(row.responses_json),
-    execution: JSON.parse(row.execution_json),
+    execution,
     deadline: row.deadline,
     expires_at: row.expires_at,
     defer_until: row.defer_until,
+    task_id: row.task_id ?? null,
+    run_id: row.run_id ?? null,
+    scope: row.scope === "personal" ? "personal" : "work",
+    payload_hash: row.payload_hash ?? computePayloadHash(custom, execution),
+    revision: row.revision ?? 1,
     created_at: row.created_at,
     updated_at: row.updated_at,
   });
@@ -196,6 +243,18 @@ export function listActionItems(db: Db, filter: ListFilter = {}): ActionItem[] {
   if (filter.type) {
     clauses.push("type = ?");
     params.push(filter.type);
+  }
+  if (filter.task_id) {
+    clauses.push("task_id = ?");
+    params.push(filter.task_id);
+  }
+  if (filter.run_id) {
+    clauses.push("run_id = ?");
+    params.push(filter.run_id);
+  }
+  if (filter.scope) {
+    clauses.push("scope = ?");
+    params.push(filter.scope);
   }
 
   const where = clauses.length ? ` WHERE ${clauses.join(" AND ")}` : "";
@@ -287,6 +346,7 @@ export function createActionItem(
   opts: { actor?: Actor; reason?: string } = {},
 ): ActionItem {
   const now = nowIso();
+  const payloadHash = computePayloadHash(input.custom, input.execution);
   const item: ActionItem = ActionItem.parse({
     id: randomUUID(),
     capability_id: input.capability_id,
@@ -301,6 +361,11 @@ export function createActionItem(
     deadline: input.deadline ?? null,
     expires_at: input.expires_at ?? null,
     defer_until: input.defer_until ?? null,
+    task_id: input.task_id ?? null,
+    run_id: input.run_id ?? null,
+    scope: input.scope ?? "work",
+    payload_hash: payloadHash,
+    revision: 1,
     created_at: now,
     updated_at: now,
   });
@@ -310,8 +375,8 @@ export function createActionItem(
       `INSERT INTO action_items
          (id, capability_id, type, status, dedupe_key, priority, context_json,
           custom_json, responses_json, execution_json, deadline, expires_at,
-          defer_until, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          defer_until, task_id, run_id, scope, payload_hash, revision, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       item.id,
       item.capability_id,
@@ -326,6 +391,11 @@ export function createActionItem(
       item.deadline,
       item.expires_at,
       item.defer_until,
+      item.task_id,
+      item.run_id,
+      item.scope,
+      item.payload_hash,
+      item.revision,
       item.created_at,
       item.updated_at,
     );
@@ -376,14 +446,25 @@ export function transition(db: Db, input: TransitionInput): ActionItem {
     }
 
     const patch = input.patch ?? {};
+    const nextCustom = patch.custom !== undefined ? patch.custom : before.custom;
+    const nextExecution = patch.execution !== undefined ? patch.execution : before.execution;
+    const nextPayloadHash = computePayloadHash(nextCustom, nextExecution);
+    const payloadChanged =
+      nextPayloadHash !== before.payload_hash ||
+      (patch.context !== undefined &&
+        JSON.stringify(patch.context) !== JSON.stringify(before.context));
+    const nextRevision = payloadChanged ? before.revision + 1 : before.revision;
+
     const next: ActionItem = ActionItem.parse({
       ...before,
       ...(patch.context !== undefined ? { context: patch.context } : {}),
-      ...(patch.custom !== undefined ? { custom: patch.custom } : {}),
-      ...(patch.execution !== undefined ? { execution: patch.execution } : {}),
+      custom: nextCustom,
+      execution: nextExecution,
       ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
       ...(patch.deadline !== undefined ? { deadline: patch.deadline } : {}),
       ...(patch.expires_at !== undefined ? { expires_at: patch.expires_at } : {}),
+      ...(patch.task_id !== undefined ? { task_id: patch.task_id } : {}),
+      ...(patch.run_id !== undefined ? { run_id: patch.run_id } : {}),
       // A resurface time only means anything while the item is snoozed. Clearing
       // it on the way out keeps a woken item from rendering a stale "returns at"
       // in the Inbox, and keeps the resurface sweep's index free of dead rows.
@@ -393,6 +474,8 @@ export function transition(db: Db, input: TransitionInput): ActionItem {
           : input.to === "deferred"
             ? before.defer_until
             : null,
+      payload_hash: nextPayloadHash,
+      revision: nextRevision,
       status: input.to,
       updated_at: nowIso(),
     });
@@ -401,6 +484,7 @@ export function transition(db: Db, input: TransitionInput): ActionItem {
       `UPDATE action_items
           SET status = ?, priority = ?, context_json = ?, custom_json = ?,
               execution_json = ?, deadline = ?, expires_at = ?, defer_until = ?,
+              task_id = ?, run_id = ?, payload_hash = ?, revision = ?,
               updated_at = ?
         WHERE id = ?`,
     ).run(
@@ -412,6 +496,10 @@ export function transition(db: Db, input: TransitionInput): ActionItem {
       next.deadline,
       next.expires_at,
       next.defer_until,
+      next.task_id,
+      next.run_id,
+      next.payload_hash,
+      next.revision,
       next.updated_at,
       next.id,
     );

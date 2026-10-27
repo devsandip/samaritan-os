@@ -1,0 +1,88 @@
+id: worker-task
+name: Delegated Worker Task
+description: >-
+  Surfaces clarifying questions and proposed actions from background delegated
+  worker tasks into the Inbox so Sandip can answer or approve them in one place.
+version: 0.1.0
+owner: sandip
+enabled: true
+entrypoint: index.ts
+
+trigger:
+  mode: manual
+  command: /task
+
+emits:
+  - type: task-question
+    render:
+      layout: form
+      primary: question
+      secondary: context_summary
+      badges: [lane, task_id]
+
+    custom_attributes:
+      task_id: string
+      run_id: string
+      lane: string
+      question: string
+      context_summary: string
+      answer: string
+
+    responses:
+      - { id: answer, label: "Send answer & resume", outcome: execute }
+      - { id: defer, label: "Snooze 2h", outcome: defer, defer_for: 2h }
+      - { id: reject, label: "Cancel question", outcome: discard }
+
+    execution:
+      mode: guided
+      capability: guided.fallback
+
+    policy:
+      escalate_when: "true"
+
+    priority: high
+    ttl: null
+
+  - type: task-action-proposal
+    render:
+      layout: card
+      primary: title
+      secondary: detail
+      badges: [kind, project, task_id]
+
+    custom_attributes:
+      kind: string
+      title: string
+      detail: string
+      project: string
+      owner: string
+      due: string
+      evidence: string
+      task_id: string
+      run_id: string
+
+    responses:
+      - { id: approve, label: "Approve & file", outcome: execute }
+      - { id: edit_approve, label: "Edit & file", outcome: execute }
+      - { id: defer, label: "Snooze 1d", outcome: defer, defer_for: 1d }
+      - { id: reject, label: "Discard", outcome: discard }
+
+    execution:
+      mode: automated
+      capability: pm-os.item.file
+
+    policy:
+      escalate_when: "true"
+
+    priority: normal
+    ttl: null
+
+requires_capabilities:
+  - guided.fallback
+  - pm-os.item.file
+
+delivery:
+  channels: [inbox, telegram]
+
+audit: true
+timeout_ms: 60000

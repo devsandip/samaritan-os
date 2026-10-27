@@ -1,0 +1,94 @@
+id: thornhill-phone
+name: Thornhill Voice Phone Agent
+description: Stages outbound administrative phone calls via Thornhill in assisted mode and escalates mid-call stop-points (payment, OTP, legal commitment) to the Inbox.
+version: 0.1.0
+owner: sandip
+enabled: true
+entrypoint: index.ts
+
+trigger:
+  mode: event
+  on:
+    - phone.task_requested
+    - phone.stop_point_reached
+
+context:
+  inputs:
+    - callee_name
+    - phone_number
+    - call_objective
+    - stop_points
+    - stop_point_alert
+
+emits:
+  - type: phone-call-proposal
+    priority: high
+    ttl: 48h
+    render:
+      layout: card
+      primary: callee_name
+      secondary: call_objective
+      badges:
+        - phone_number
+    custom_attributes:
+      callee_name: string
+      phone_number: string
+      call_objective: string
+      stop_points: string
+    responses:
+      - id: initiate_call
+        label: Approve & Dial via Thornhill
+        outcome: execute
+      - id: snooze
+        label: Snooze 1d
+        outcome: defer
+        defer_for: 1d
+      - id: cancel_call
+        label: Cancel Call
+        outcome: discard
+    execution:
+      mode: assisted
+      capability: phone.task.run
+    policy:
+      escalate_when: "confidence >= 0"
+
+  - type: phone-stop-point-alert
+    priority: urgent
+    ttl: 2h
+    render:
+      layout: card
+      primary: callee_name
+      secondary: question
+      badges:
+        - stop_reason
+        - phone_number
+    custom_attributes:
+      call_id: string
+      callee_name: string
+      phone_number: string
+      stop_reason: string
+      question: string
+    responses:
+      - id: take_over_call
+        label: Take Over / Instruct Agent
+        outcome: guided
+      - id: abort_call
+        label: Hang Up Immediately
+        outcome: discard
+    execution:
+      mode: guided
+      capability: guided.fallback
+    policy:
+      escalate_when: "confidence >= 0"
+
+requires_capabilities:
+  - phone.task.run
+  - guided.fallback
+
+delivery:
+  channels:
+    - inbox
+    - telegram
+
+audit: true
+timeout_ms: 30000

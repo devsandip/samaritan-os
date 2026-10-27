@@ -1,0 +1,60 @@
+id: nutgraf-brief
+name: Nutgraf Reading & Macro Brief
+description: Synthesizes high-signal articles and essays from Nutgraf into a daily reading brief and extracts durable insights.
+version: 0.1.0
+owner: sandip
+enabled: true
+entrypoint: index.ts
+
+trigger:
+  mode: scheduled
+  cron: "0 19 * * *"
+  catch_up: run_once
+  max_staleness_minutes: 720
+
+context:
+  inputs:
+    - date
+    - articles
+
+emits:
+  - type: nutgraf-reading-digest
+    priority: low
+    ttl: 48h
+    render:
+      layout: document
+      primary: headline
+      secondary: content
+      badges:
+        - date
+        - article_count
+    custom_attributes:
+      headline: string
+      date: string
+      article_count: number
+      path: string
+      content: string
+    responses:
+      - id: save_brief
+        label: Save Reading Brief
+        outcome: execute
+      - id: dismiss
+        label: Dismiss
+        outcome: discard
+    execution:
+      mode: automated
+      capability: obsidian.note.create
+      action_type: journal.capture
+    policy:
+      auto_complete_when: "confidence >= 0.8"
+
+requires_capabilities:
+  - obsidian.note.create
+
+delivery:
+  channels:
+    - inbox
+  quiet_hours: "22:00-07:00"
+
+audit: true
+timeout_ms: 30000

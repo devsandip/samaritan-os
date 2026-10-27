@@ -40,6 +40,8 @@ export interface RetrieveOptions {
   candidates?: number;
   /** Fused passages kept. §7 step 3 says ~8. */
   limit?: number;
+  /** Optional scope filter (`work` | `personal` | `all`). */
+  scope?: "work" | "personal" | "all";
 }
 
 const DEFAULTS = { candidates: 20, limit: 8 } as const;
@@ -102,6 +104,9 @@ export async function retrieve(
   for (const hit of fused) {
     const row = rows.get(hit.rowid);
     if (!row) continue;
+    if (options.scope && options.scope !== "all" && row.scope && row.scope !== options.scope) {
+      continue;
+    }
     passages.push({
       rowid: row.rowid,
       kind: row.source_kind,

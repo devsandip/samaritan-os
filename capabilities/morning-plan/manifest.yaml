@@ -1,0 +1,97 @@
+id: morning-plan
+name: Morning Plan & Backlog Nudge
+description: Synthesizes today's meetings, priority tasks, readiness signals, and undated TickTick backlog items into a morning plan.
+version: 0.1.0
+owner: sandip
+enabled: true
+entrypoint: index.ts
+
+trigger:
+  mode: scheduled
+  cron: "30 7 * * *"
+  catch_up: run_once
+  max_staleness_minutes: 360
+
+context:
+  inputs:
+    - date
+    - meetings
+    - open_tasks
+    - undated_tasks
+    - readiness_note
+
+emits:
+  - type: morning-plan-brief
+    priority: normal
+    ttl: 18h
+    render:
+      layout: document
+      primary: headline
+      secondary: content
+      badges:
+        - date
+    custom_attributes:
+      headline: string
+      date: string
+      path: string
+      content: string
+    responses:
+      - id: append
+        label: Write to daily note
+        outcome: execute
+      - id: dismiss
+        label: Skip today
+        outcome: discard
+    execution:
+      mode: automated
+      capability: obsidian.note.append
+      action_type: journal.capture
+    policy:
+      auto_complete_when: "confidence >= 0.8"
+
+  - type: backlog-date-nudge
+    priority: normal
+    ttl: 48h
+    render:
+      layout: card
+      primary: title
+      secondary: suggested_slot
+      badges:
+        - list
+        - due
+    custom_attributes:
+      title: string
+      content: string
+      due: string
+      list: string
+      suggested_slot: string
+    responses:
+      - id: schedule_task
+        label: Assign Due Date
+        outcome: execute
+      - id: snooze
+        label: Snooze 2d
+        outcome: defer
+        defer_for: 2d
+      - id: dismiss
+        label: Leave Undated
+        outcome: discard
+    execution:
+      mode: automated
+      capability: ticktick.task.create
+      action_type: task.create
+    policy:
+      escalate_when: "confidence >= 0"
+
+requires_capabilities:
+  - obsidian.note.append
+  - ticktick.task.create
+
+delivery:
+  channels:
+    - inbox
+    - telegram
+  quiet_hours: "22:00-07:00"
+
+audit: true
+timeout_ms: 30000

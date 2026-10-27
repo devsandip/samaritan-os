@@ -41,6 +41,11 @@ export const TriggerSpec = z
      * value as "skip".
      */
     catch_up: CatchUpMode.optional(),
+    /**
+     * Maximum age in minutes for a missed scheduled slot to still be replayed
+     * under `catch_up: run_once` (PROPOSAL Part VIII-D).
+     */
+    max_staleness_minutes: z.number().int().positive().optional(),
     /** Required when mode is "event", e.g. ["email.received"]. */
     on: z.array(z.string().min(1)).optional(),
     filter: z.record(z.string(), z.unknown()).optional(),
@@ -240,6 +245,8 @@ export const CapabilityManifest = z
       .optional(),
     audit: z.boolean().default(true),
     timeout_ms: z.number().int().positive().default(60_000),
+    /** Skip execution if the input hash matches a recent succeeded run (PROPOSAL C2). */
+    skip_if_unchanged: z.boolean().optional(),
   })
   .superRefine((manifest, ctx) => {
     const types = manifest.emits.map((e) => e.type);

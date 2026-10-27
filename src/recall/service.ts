@@ -21,7 +21,8 @@ import type { Db } from "../store/db.js";
 import { createEmbedder, type Embedder } from "./embed.js";
 import { indexStats, type IndexStats } from "./index-store.js";
 import { reindex, type IndexTally } from "./indexer.js";
-import { retrieve } from "./retrieve.js";
+import { retrieve, type Passage } from "./retrieve.js";
+import { structuredRetrieve } from "./structured.js";
 import { chooseSynthesizer, validateCitations, type Citation, type Synthesizer } from "./synthesize.js";
 
 const logger = log("recall");
@@ -77,11 +78,27 @@ export class RecallService {
     });
   }
 
-  async query(question: string, opts: { maxCitations?: number } = {}): Promise<RecallAnswer> {
-    const retrieval_path: RetrievalPath = "semantic";
-    const passages = await retrieve(this.#db, this.#embedder, question, {
+  async query(
+    question: string,
+    opts: { maxCitations?: number; scope?: "work" | "personal" | "all" } = {},
+  ): Promise<RecallAnswer> {
+    const structuredHits: Passage[] =
+      opts.scope === "personal"
+        ? []
+        : structuredRetrieve(this.#db, question, { limit: Math.min(4, this.#contextChunks) });
+    const semanticHits = await retrieve(this.#db, this.#embedder, question, {
       limit: this.#contextChunks,
+      ...(opts.scope ? { scope: opts.scope } : {}),
     });
+
+    const retrieval_path: RetrievalPath =
+      structuredHits.length > 0 && semanticHits.length > 0
+        ? "hybrid"
+        : structuredHits.length > 0
+          ? "structured"
+          : "semantic";
+
+    const passages = [...structuredHits, ...semanticHits].slice(0, this.#contextChunks);
     if (!passages.length) {
       return { answer: NOTHING_FOUND, citations: [], retrieval_path };
     }

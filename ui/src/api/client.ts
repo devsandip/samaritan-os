@@ -10,15 +10,27 @@ import type {
   ActionItem,
   ActionItemEvent,
   ActionItemStatus,
+  ActivityEvent,
+  Artifact,
   BatchResult,
   CapabilityManifest,
+  ConnectionStatusEntry,
   Health,
   LoadProblem,
+  NowSummary,
   Priority,
   RecallAnswer,
   RecallStats,
   RoutingEntry,
+  RunRecord,
   RunReport,
+  SourceRule,
+  SyncCursor,
+  SystemHealth,
+  BackupRecord,
+  Task,
+  TaskLane,
+  TaskStatus,
 } from "./types";
 
 export class ApiError extends Error {
@@ -107,6 +119,19 @@ function query(filter: ListFilter): string {
 export const api = {
   health: () => request<Health>("/healthz"),
 
+  systemHealth: () => request<SystemHealth>("/api/system/health"),
+
+  connections: () =>
+    request<{ connections: ConnectionStatusEntry[] }>("/api/connections").then(
+      (r) => r.connections,
+    ),
+
+  triggerBackup: () =>
+    request<{ backup: BackupRecord }>("/api/system/backup", {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
   listActions: (filter: ListFilter = {}) =>
     request<{ items: ActionItem[] }>(`/api/actions${query(filter)}`).then((r) => r.items),
 
@@ -117,7 +142,13 @@ export const api = {
 
   respond: (
     id: string,
-    body: { response_id: string; edited_payload?: Record<string, unknown>; actor?: string },
+    body: {
+      response_id: string;
+      edited_payload?: Record<string, unknown>;
+      actor?: string;
+      expected_payload_hash?: string;
+      expected_revision?: number;
+    },
   ) =>
     request<ActionItem>(`/api/actions/${id}/respond`, {
       method: "POST",
@@ -131,7 +162,10 @@ export const api = {
       body: JSON.stringify({ actor: "sandip", ids, response_id: responseId }),
     }),
 
-  confirm: (id: string, body: { note?: string } = {}) =>
+  confirm: (
+    id: string,
+    body: { note?: string; expected_payload_hash?: string; expected_revision?: number } = {},
+  ) =>
     request<ActionItem>(`/api/actions/${id}/confirm`, {
       method: "POST",
       body: JSON.stringify({ actor: "sandip", ...body }),
@@ -141,6 +175,94 @@ export const api = {
     request<ActionItem>(`/api/actions/${id}/reopen`, {
       method: "POST",
       body: JSON.stringify({ actor: "sandip", ...body }),
+    }),
+
+  now: () => request<NowSummary>("/api/now"),
+
+  listTasks: (filter: { status?: TaskStatus | TaskStatus[]; lane?: TaskLane; limit?: number } = {}) =>
+    request<{ tasks: Task[] }>(`/api/tasks${query(filter as ListFilter)}`).then((r) => r.tasks),
+
+  getTask: (id: string) =>
+    request<{
+      task: Task;
+      runs: RunRecord[];
+      artifacts: Artifact[];
+      events: ActivityEvent[];
+      action_items: ActionItem[];
+    }>(`/api/tasks/${encodeURIComponent(id)}`),
+
+  createTask: (body: { goal: string; lane?: TaskLane; priority?: Priority }) =>
+    request<{ task: Task; run: RunRecord }>("/api/tasks", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  answerTask: (id: string, body: { answer: string; expected_revision?: number }) =>
+    request<{ task: Task }>(`/api/tasks/${encodeURIComponent(id)}/answer`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  cancelTask: (id: string, reason?: string) =>
+    request<{ task: Task | null; run: RunRecord | null }>(
+      `/api/tasks/${encodeURIComponent(id)}/cancel`,
+      {
+        method: "POST",
+        body: JSON.stringify(reason ? { reason } : {}),
+      },
+    ),
+
+  listRuns: (filter: { task_id?: string; status?: string; limit?: number } = {}) =>
+    request<{ runs: RunRecord[] }>(`/api/runs${query(filter as ListFilter)}`).then((r) => r.runs),
+
+  cancelRun: (id: string, reason?: string) =>
+    request<{ run: RunRecord | null }>(
+      `/api/runs/${encodeURIComponent(id)}/cancel`,
+      {
+        method: "POST",
+        body: JSON.stringify(reason ? { reason } : {}),
+      },
+    ),
+
+  getArtifactContent: async (id: string): Promise<string> => {
+    const res = await request<{ artifact: Artifact; content?: string }>(
+      `/api/artifacts/${encodeURIComponent(id)}`,
+    );
+    return res.content ?? `(Artifact stored at ${res.artifact.path_or_url})`;
+  },
+
+  activity: (limit = 100) =>
+    request<{
+      events: ActivityEvent[];
+      runs: RunRecord[];
+      seen_events: { id: string; event_type: string; seen_at: string }[];
+    }>(`/api/activity?limit=${limit}`),
+
+  sourceRules: () =>
+    request<{ rules: SourceRule[]; sync_cursors: SyncCursor[] }>("/api/source-rules"),
+
+  updateSourceRule: (
+    sourceId: string,
+    body: {
+      muted?: boolean;
+      snoozed_until?: string | null;
+      paused?: boolean;
+    },
+  ) =>
+    request<SourceRule>(`/api/source-rules/${encodeURIComponent(sourceId)}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+
+  submitMeetingNotes: (body: {
+    title?: string;
+    date?: string;
+    attendees?: string[];
+    notes: string;
+  }) =>
+    request<RunReport>("/api/meetings/notes", {
+      method: "POST",
+      body: JSON.stringify(body),
     }),
 
   capabilities: () =>

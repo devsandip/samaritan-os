@@ -1,0 +1,14 @@
+{
+  "date": "2026-10-27",
+  "readiness_note": "Oura readiness 84 (7h 40m sleep); Hevy upper-body session completed at 07:05",
+  "meetings": [
+    { "title": "Q4 Product Architecture Sync", "starts_at": "10:00" },
+    { "title": "Partner API Review", "starts_at": "14:30" }
+  ],
+  "open_tasks": [
+    { "title": "Finalize Command Centre rollout checklist", "due": "2026-10-27", "list": "work-list" }
+  ],
+  "undated_tasks": [
+    { "title": "Audit PostHog funnel drop-off on onboarding step 2", "list": "work-list" }
+  ]
+}

@@ -1,0 +1,56 @@
+id: coding-agent
+name: Coding-Agent Waiting Monitor
+description: >-
+  Receives HTTP hooks from Claude Code, Codex, and Gemini CLI when an interactive
+  coding session is blocked on a permission prompt or idle question, and auto-resolves
+  the Inbox card when the session resumes or ends.
+version: 0.1.0
+owner: sandip
+enabled: true
+entrypoint: index.ts
+
+trigger:
+  mode: event
+  on: [coding_agent.waiting]
+
+emits:
+  - type: coding-agent-waiting
+    render:
+      layout: card
+      primary: summary
+      secondary: detail
+      badges: [agent, repo, hook_event]
+
+    custom_attributes:
+      agent: string
+      session_id: string
+      hook_event: string
+      cwd: string
+      repo: string
+      summary: string
+      detail: string
+      remote_url: string
+
+    responses:
+      - { id: acknowledge, label: "Handled in terminal", outcome: execute }
+      - { id: defer, label: "Snooze 30m", outcome: defer, defer_for: 30m }
+      - { id: reject, label: "Dismiss", outcome: discard }
+
+    execution:
+      mode: guided
+      capability: guided.fallback
+
+    policy:
+      escalate_when: "true"
+
+    priority: urgent
+    ttl: 4h
+
+requires_capabilities:
+  - guided.fallback
+
+delivery:
+  channels: [inbox, telegram]
+
+audit: true
+timeout_ms: 15000

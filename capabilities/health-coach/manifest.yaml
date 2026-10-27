@@ -1,0 +1,66 @@
+id: health-coach
+name: Health & Training Coach
+description: Correlates 7-day Oura V2 sleep/HRV, Whoop recovery, Apple Health metrics, and Hevy workout volume to propose non-destructive Hevy routine adjustments.
+version: 0.1.0
+owner: sandip
+enabled: true
+entrypoint: index.ts
+
+trigger:
+  mode: scheduled
+  cron: "0 7 * * *"
+  catch_up: run_once
+  max_staleness_minutes: 360
+
+context:
+  inputs:
+    - date
+    - sleep_score
+    - hrv_ms
+    - recovery_pct
+    - routine_title
+    - adjustment_summary
+
+emits:
+  - type: hevy-routine-proposal
+    priority: normal
+    ttl: 24h
+    render:
+      layout: card
+      primary: routine_title
+      secondary: adjustment_summary
+      badges:
+        - recovery_badge
+    custom_attributes:
+      routine_title: string
+      adjustment_summary: string
+      recovery_badge: string
+      notes: string
+    responses:
+      - id: create_copy
+        label: Create Adjusted Hevy Copy
+        outcome: execute
+      - id: snooze
+        label: Snooze 1d
+        outcome: defer
+        defer_for: 1d
+      - id: keep_original
+        label: Keep Original Routine
+        outcome: discard
+    execution:
+      mode: assisted
+      capability: hevy.routine.copy
+    policy:
+      escalate_when: "confidence >= 0"
+
+requires_capabilities:
+  - hevy.routine.copy
+
+delivery:
+  channels:
+    - inbox
+    - telegram
+  quiet_hours: "22:00-07:00"
+
+audit: true
+timeout_ms: 30000

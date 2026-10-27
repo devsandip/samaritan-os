@@ -66,8 +66,118 @@ export interface ActionItem {
   expires_at: string | null;
   /** When a deferred item returns to the inbox. Non-null only while deferred. */
   defer_until: string | null;
+  task_id?: string | null;
+  run_id?: string | null;
+  payload_hash?: string;
+  revision?: number;
   created_at: string;
   updated_at: string;
+}
+
+export type TaskLane = "general" | "coding" | "research" | "operations";
+
+export type TaskStatus =
+  | "queued"
+  | "running"
+  | "needs_input"
+  | "awaiting_review"
+  | "succeeded"
+  | "failed"
+  | "cancelled"
+  | "interrupted";
+
+export interface Task {
+  id: string;
+  goal: string;
+  lane: TaskLane;
+  status: TaskStatus;
+  revision: number;
+  runner: string;
+  parent_task_id: string | null;
+  result_summary: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type RunRecordStatus =
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "timeout"
+  | "cancelled"
+  | "interrupted"
+  | "skipped";
+
+export interface RunRecord {
+  id: string;
+  task_id: string | null;
+  capability_id: string | null;
+  runner: "in-process" | "child-process" | "worker";
+  remote_run_id: string | null;
+  admission_key: string | null;
+  lease_token: string | null;
+  lease_expires_at: string | null;
+  fencing_generation: number;
+  status: RunRecordStatus;
+  cost_usd: number;
+  started_at: string;
+  heartbeat_at: string;
+  ended_at: string | null;
+  error: string | null;
+}
+
+export type ArtifactKind = "file" | "diff" | "url" | "transcript" | "brief";
+
+export interface Artifact {
+  id: string;
+  task_id: string | null;
+  run_id: string | null;
+  kind: ArtifactKind;
+  path_or_url: string;
+  content_hash: string;
+  media_type: string;
+  created_at: string;
+}
+
+export interface ActivityEvent {
+  cursor: number;
+  id: string;
+  task_id: string | null;
+  run_id: string | null;
+  capability_id: string | null;
+  type: string;
+  payload: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface SourceRule {
+  source_id: string;
+  muted: boolean;
+  snoozed_until: string | null;
+  paused: boolean;
+  updated_at: string;
+}
+
+export interface SyncCursor {
+  source: string;
+  cursor: string | null;
+  last_success_at: string | null;
+  last_error: string | null;
+}
+
+export interface NowSummary {
+  inbox: ActionItem[];
+  tasks: Task[];
+  runs: RunRecord[];
+  meetings: {
+    id: string;
+    title: string;
+    starts_at: string;
+    ends_at: string | null;
+    attendees: string;
+  }[];
+  source_rules: SourceRule[];
+  sync_cursors: SyncCursor[];
 }
 
 export interface ActionItemEvent {
@@ -170,6 +280,42 @@ export interface RoutingEntry {
 
 export interface Health {
   status: string;
+  capabilities: number;
+  problems: number;
+}
+
+export interface BackupRecord {
+  id: string;
+  backup_path: string;
+  size_bytes: number;
+  integrity_ok: boolean;
+  created_at: string;
+}
+
+export interface ConnectionStatusEntry {
+  id: string;
+  name: string;
+  provider: string;
+  enabled: boolean;
+  keychain_account: string;
+  status: "connected" | "not_configured" | "error";
+  last_sync_at: string | null;
+  last_error: string | null;
+}
+
+export interface SystemHealth {
+  status: string;
+  schema_version?: number;
+  sqlite_integrity: string;
+  keychain: { accessible: boolean; detail: string };
+  billing: {
+    allowed: boolean;
+    mtd_spend_usd: number;
+    monthly_cap_usd: number;
+    remaining_usd: number;
+  };
+  backups: BackupRecord[];
+  sync_cursors: SyncCursor[];
   capabilities: number;
   problems: number;
 }

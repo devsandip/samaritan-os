@@ -1,0 +1,9 @@
+{
+  "prd_title": "Samaritan Command Centre v1",
+  "project": "Samaritan",
+  "findings": [
+    "PM Lens: Clear persona separation across Web UI, Telegram, and cross-assistant MCP.",
+    "UX Lens: 5-view information architecture keeps Now and Inbox distinct.",
+    "SDE Lens: Lease fencing and payload-hash approval binding prevent TOCTOU races."
+  ]
+}

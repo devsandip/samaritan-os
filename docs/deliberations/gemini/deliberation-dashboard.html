@@ -1,0 +1,1574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Samaritan Deliberations: How Claude, Codex & Gemini Converged</title>
+<style>
+  :root {
+    --core: #4f46e5;
+    --core-soft: #eef0fe;
+    --claude: #b45309;
+    --claude-soft: #fdf1e0;
+    --codex: #047857;
+    --codex-soft: #e2f6ee;
+    --gemini: #2563eb;
+    --gemini-soft: #dbeafe;
+    --urgent: #dc2626;
+    --urgent-soft: #fef6f6;
+    --ok: #059669;
+    --ink: #1a1d24;
+    --muted: #616b7a;
+    --line: #e3e6ec;
+    --line2: #eef0f4;
+    --bg: #eef0f4;
+    --surface: #ffffff;
+    --pane: #f7f8fb;
+    --sidebar: #151a26;
+    --sidebar-text: #c7cdd9;
+    --sidebar-hover: #1f2637;
+    --sidebar-border: #2a3145;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--ink);
+    background: var(--bg);
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .app {
+    display: grid;
+    grid-template-columns: 245px 1fr;
+    height: 100vh;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    background: var(--sidebar);
+    color: var(--sidebar-text);
+    display: flex;
+    flex-direction: column;
+    padding: 18px 14px;
+    border-right: 1px solid var(--sidebar-border);
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 8px 16px;
+    border-bottom: 1px solid var(--sidebar-border);
+    margin-bottom: 14px;
+  }
+  .brand-swatch {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    background: var(--core);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: 700;
+    font-size: 13px;
+  }
+  .brand b {
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .brand small {
+    display: block;
+    font-size: 11px;
+    color: #8b93a7;
+    font-weight: 400;
+  }
+
+  .nav {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .nav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    color: var(--sidebar-text);
+    padding: 9px 11px;
+    border-radius: 8px;
+    font-size: 13.5px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .nav-btn:hover { background: var(--sidebar-hover); color: #fff; }
+  .nav-btn.active { background: var(--core); color: #fff; font-weight: 600; }
+  .nav-btn .pill {
+    background: var(--sidebar-border);
+    color: var(--sidebar-text);
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .nav-btn.active .pill {
+    background: rgba(255, 255, 255, 0.24);
+    color: #fff;
+  }
+
+  .sidebar-spacer { flex: 1; }
+
+  .legend-box {
+    background: var(--sidebar-hover);
+    border: 1px solid var(--sidebar-border);
+    border-radius: 9px;
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  .legend-box h5 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #8b93a7;
+    margin-bottom: 8px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #e1e5ee;
+    margin-bottom: 6px;
+  }
+  .legend-item:last-child { margin-bottom: 0; }
+  .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .dot.claude { background: #f59e0b; }
+  .dot.codex { background: #10b981; }
+  .dot.gemini { background: #3b82f6; }
+
+  .sidebar-footer {
+    font-size: 11.5px;
+    color: #6b7385;
+    padding-top: 10px;
+    border-top: 1px solid var(--sidebar-border);
+    line-height: 1.4;
+  }
+
+  /* Main View */
+  .main {
+    padding: 24px 30px 60px;
+    overflow-y: auto;
+    height: 100vh;
+  }
+  .view { display: none; }
+  .view.active { display: block; }
+
+  .h-greet {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin-bottom: 4px;
+  }
+  .h-sub {
+    color: var(--muted);
+    font-size: 13.5px;
+    margin-bottom: 18px;
+  }
+
+  /* Stat Tiles */
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+  .tile {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 15px 16px;
+  }
+  .tile .k {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .tile .v {
+    font-size: 26px;
+    font-weight: 750;
+    color: var(--ink);
+    margin-bottom: 2px;
+  }
+  .tile .sub {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+  .card h2 {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .sec-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  /* Badges */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 5px;
+    background: #f0f1f4;
+    color: var(--ink);
+    letter-spacing: 0.02em;
+  }
+  .badge.claude { background: var(--claude-soft); color: var(--claude); }
+  .badge.codex { background: var(--codex-soft); color: var(--codex); }
+  .badge.gemini { background: var(--gemini-soft); color: var(--gemini); }
+  .badge.core { background: var(--core-soft); color: var(--core); }
+  .badge.auto { background: var(--codex-soft); color: var(--codex); }
+  .badge.urgent { background: var(--urgent-soft); color: var(--urgent); border: 1px solid #f3c9c9; }
+
+  /* Buttons & Filter Pills */
+  .btn-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .btn {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn:hover { background: var(--pane); }
+  .btn.primary { background: var(--core); color: #fff; border-color: var(--core); }
+  .btn.primary:hover { opacity: 0.92; }
+  .btn.good { background: var(--codex); color: #fff; border-color: var(--codex); }
+
+  .pill-filter {
+    padding: 5px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .pill-filter.active {
+    background: var(--core);
+    color: #fff;
+    border-color: var(--core);
+  }
+
+  /* Animated Stage */
+  .stage-grid {
+    display: grid;
+    grid-template-columns: 1.25fr 1fr;
+    gap: 16px;
+  }
+  .svg-stage {
+    background: var(--pane);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 12px;
+    position: relative;
+  }
+  .player-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .step-Scrubber {
+    display: flex;
+    gap: 4px;
+    flex: 1;
+  }
+  .step-dot {
+    flex: 1;
+    height: 8px;
+    border-radius: 4px;
+    background: var(--line);
+    cursor: pointer;
+    border: none;
+    transition: background 0.2s;
+  }
+  .step-dot.done { background: #a5b4fc; }
+  .step-dot.current { background: var(--core); }
+
+  .beat-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .beat-box {
+    background: var(--pane);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .beat-box h3 {
+    font-size: 15px;
+    font-weight: 700;
+    margin: 4px 0 6px;
+  }
+  .beat-box p {
+    font-size: 13px;
+    color: var(--ink);
+    margin-bottom: 8px;
+  }
+  .why-callout {
+    background: var(--core-soft);
+    border-left: 3px solid var(--core);
+    padding: 9px 12px;
+    border-radius: 0 7px 7px 0;
+    font-size: 12.5px;
+    color: var(--ink);
+  }
+
+  /* 3-Column Agent Grid */
+  .agent-cols {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+  .agent-col {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .agent-col.claude-col { border-top: 3px solid var(--claude); }
+  .agent-col.codex-col { border-top: 3px solid var(--codex); }
+  .agent-col.gemini-col { border-top: 3px solid var(--gemini); }
+  .agent-col h3 {
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .agent-col .role-tag {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--line2);
+  }
+  .agent-col ul {
+    padding-left: 16px;
+    margin-bottom: 12px;
+  }
+  .agent-col li {
+    font-size: 12.8px;
+    margin-bottom: 6px;
+  }
+
+  /* Tables */
+  table.matrix {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.8px;
+  }
+  table.matrix th {
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+    background: var(--pane);
+  }
+  table.matrix td {
+    padding: 11px 12px;
+    border-bottom: 1px solid var(--line2);
+    vertical-align: top;
+  }
+  table.matrix tr:last-child td { border-bottom: none; }
+  table.matrix tr:hover td { background: #fafbfe; }
+
+  /* Diff / Clash Cards */
+  .clash-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+  }
+  .clash-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px 18px;
+  }
+  .clash-card h3 {
+    font-size: 14.5px;
+    font-weight: 700;
+    margin: 6px 0 8px;
+  }
+  .diff-row {
+    background: var(--pane);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 9px 11px;
+    margin-bottom: 8px;
+    font-size: 12.5px;
+  }
+  .diff-old {
+    color: var(--muted);
+    text-decoration: line-through;
+    display: block;
+    margin-bottom: 3px;
+  }
+  .diff-new {
+    color: var(--core);
+    font-weight: 600;
+    display: block;
+  }
+
+  /* Convergence Meter */
+  .meter-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .meter-bar {
+    width: 140px;
+    height: 8px;
+    background: var(--line);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .meter-fill {
+    height: 100%;
+    background: var(--codex);
+    transition: width 0.35s ease;
+  }
+
+  /* SVG transitions */
+  .node-box { transition: all 0.3s ease; }
+  .node-active { stroke-width: 3px !important; filter: drop-shadow(0 0 6px rgba(79, 70, 229, 0.35)); }
+  .packet { transition: all 0.45s cubic-bezier(0.22, 1, 0.36, 1); }
+
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11.5px;
+    background: #f0f1f5;
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- LEFT SIDEBAR -->
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-swatch">S</span>
+      <div>
+        <b>Samaritan OS</b>
+        <small>3-LLM Deliberation Replay</small>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <button class="nav-btn active" onclick="switchView('replay', this)">
+        <span>1. Animated Replay</span>
+        <span class="pill">12 beats</span>
+      </button>
+      <button class="nav-btn" onclick="switchView('profiles', this)">
+        <span>2. LLM Approaches</span>
+        <span class="pill">3 models</span>
+      </button>
+      <button class="nav-btn" onclick="switchView('rounds', this)">
+        <span>3. Round-by-Round</span>
+        <span class="pill">D1-D10</span>
+      </button>
+      <button class="nav-btn" onclick="switchView('clashes', this)">
+        <span>4. The 8 Clashes</span>
+        <span class="pill">Diffs</span>
+      </button>
+      <button class="nav-btn" onclick="switchView('coverage', this)">
+        <span>5. Issue Audit</span>
+        <span class="pill">24/24</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-spacer"></div>
+
+    <div class="legend-box">
+      <h5>Deliberating Agents</h5>
+      <div class="legend-item">
+        <span class="dot claude"></span>
+        <span><b>Claude</b> (Protocol & Draft)</span>
+      </div>
+      <div class="legend-item">
+        <span class="dot codex"></span>
+        <span><b>Codex</b> (Security & Audit)</span>
+      </div>
+      <div class="legend-item">
+        <span class="dot gemini"></span>
+        <span><b>Gemini</b> (Schema & Flows)</span>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      3 rounds · 46 mins (10:36 to 11:22 IST)<br/>
+      Signed PROPOSAL.md v2 · 0 reservations
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main" id="mainScroll">
+
+    <!-- VIEW 1: ANIMATED REPLAY -->
+    <section class="view active" id="view-replay">
+      <h1 className="h-greet">How Claude, Codex & Gemini Converged</h1>
+      <p class="h-sub">
+        Interactive replay of the 3-round deliberation on 2026-10-20 (10:36 IST to 11:22 IST). Use Play or step through each beat to inspect what each model read, proposed, challenged, and signed.
+      </p>
+
+      <div class="tiles">
+        <div class="tile">
+          <div class="k">Final Verdict</div>
+          <div class="v">Samaritan + SDK</div>
+          <div class="sub">No OpenClaw/Hermes core</div>
+        </div>
+        <div class="tile">
+          <div class="k">Convergence Trajectory</div>
+          <div class="v" id="tileConvPct">62% &rarr; 100%</div>
+          <div class="sub" id="tileConvSub">R1: 62% · R2: 88% · R3 v2: 100%</div>
+        </div>
+        <div class="tile">
+          <div class="k">Clashes Resolved</div>
+          <div class="v">8 / 8</div>
+          <div class="sub">0 unresolved split items</div>
+        </div>
+        <div class="tile">
+          <div class="k">Issues Audited</div>
+          <div class="v">24 / 24</div>
+          <div class="sub">Every code/security gap covered</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="player-controls">
+          <div class="btn-row">
+            <button class="btn primary" id="playBtn" onclick="togglePlay()">Play Animation</button>
+            <button class="btn" onclick="prevBeat()">Prev</button>
+            <button class="btn" onclick="nextBeat()">Next</button>
+            <button class="btn" onclick="resetBeats()">Reset</button>
+          </div>
+          <div class="step-Scrubber" id="scrubber"></div>
+          <div class="meter-wrap">
+            <span style="font-size:12px;font-weight:600;color:var(--muted)" id="beatCounter">Beat 1 / 12</span>
+            <div class="meter-bar"><div class="meter-fill" id="convBar" style="width: 35%"></div></div>
+            <span class="badge auto" id="convBadge">Setup</span>
+          </div>
+        </div>
+
+        <div class="stage-grid">
+          <!-- SVG Network Diagram -->
+          <div class="svg-stage">
+            <svg viewBox="0 0 560 360" width="100%" height="340" id="delibSvg">
+              <defs>
+                <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#9aa3b2" />
+                </marker>
+              </defs>
+
+              <!-- Background connection lines -->
+              <line x1="105" y1="75" x2="280" y2="175" stroke="#d5dae2" stroke-width="1.5" stroke-dasharray="4 3" />
+              <line x1="280" y1="60" x2="280" y2="175" stroke="#d5dae2" stroke-width="1.5" stroke-dasharray="4 3" />
+              <line x1="455" y1="75" x2="280" y2="175" stroke="#d5dae2" stroke-width="1.5" stroke-dasharray="4 3" />
+
+              <!-- Peer-to-peer triangle -->
+              <line x1="155" y1="65" x2="225" y2="55" stroke="#e3e6ec" stroke-width="1.5" />
+              <line x1="335" y1="55" x2="405" y2="65" stroke="#e3e6ec" stroke-width="1.5" />
+              <line x1="140" y1="95" x2="420" y2="95" stroke="#e3e6ec" stroke-width="1.5" />
+
+              <!-- Hub to Proposal -->
+              <line x1="280" y1="215" x2="280" y2="285" stroke="#4f46e5" stroke-width="2" marker-end="url(#arrow)" />
+
+              <!-- Local Repos Box (Left Bottom) -->
+              <g id="node-repos" class="node-box">
+                <rect x="20" y="155" width="150" height="75" rx="10" fill="#ffffff" stroke="#cbd2de" stroke-width="1.5" />
+                <text x="95" y="177" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1a1d24">7 Local Repos</text>
+                <text x="95" y="194" text-anchor="middle" font-size="10" fill="#616b7a">samaritan · thornhill</text>
+                <text x="95" y="208" text-anchor="middle" font-size="10" fill="#616b7a">nutgraf · MailMCP · healthAI</text>
+                <text x="95" y="221" text-anchor="middle" font-size="10" fill="#616b7a">scrask-bot · job_tracker</text>
+              </g>
+
+              <!-- Web Docs Box (Right Bottom) -->
+              <g id="node-web" class="node-box">
+                <rect x="390" y="155" width="150" height="75" rx="10" fill="#ffffff" stroke="#cbd2de" stroke-width="1.5" />
+                <text x="465" y="177" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1a1d24">2026 Primary Docs</text>
+                <text x="465" y="194" text-anchor="middle" font-size="10" fill="#616b7a">OpenClaw · Hermes Agent</text>
+                <text x="465" y="208" text-anchor="middle" font-size="10" fill="#616b7a">Claude Agent SDK & Hooks</text>
+                <text x="465" y="221" text-anchor="middle" font-size="10" fill="#616b7a">Oura V2 OpenAPI · Hevy API</text>
+              </g>
+
+              <!-- Shared Protocol Hub (Center) -->
+              <g id="node-protocol" class="node-box">
+                <rect x="200" y="150" width="160" height="65" rx="10" fill="#eef0fe" stroke="#4f46e5" stroke-width="1.8" />
+                <text x="280" y="173" text-anchor="middle" font-size="12" font-weight="700" fill="#4f46e5">PROTOCOL.md + STATUS</text>
+                <text x="280" y="190" text-anchor="middle" font-size="10.5" fill="#1a1d24">Decisions D1-D10, C1/G1, G2, C2</text>
+                <text x="280" y="205" text-anchor="middle" font-size="10" fill="#616b7a">messages-to-peers.md</text>
+              </g>
+
+              <!-- Agent 1: Claude -->
+              <g id="node-claude" class="node-box">
+                <rect x="30" y="35" width="140" height="64" rx="10" fill="#fdf1e0" stroke="#b45309" stroke-width="2" />
+                <text x="100" y="57" text-anchor="middle" font-size="12.5" font-weight="700" fill="#b45309">Claude</text>
+                <text x="100" y="73" text-anchor="middle" font-size="10" fill="#1a1d24">Protocol · Hooks · Drafter</text>
+                <text x="100" y="88" text-anchor="middle" font-size="9.5" fill="#616b7a" id="svg-status-claude">state: researching</text>
+              </g>
+
+              <!-- Agent 2: Codex -->
+              <g id="node-codex" class="node-box">
+                <rect x="210" y="18" width="140" height="64" rx="10" fill="#e2f6ee" stroke="#047857" stroke-width="2" />
+                <text x="280" y="40" text-anchor="middle" font-size="12.5" font-weight="700" fill="#047857">Codex (ChatGPT)</text>
+                <text x="280" y="56" text-anchor="middle" font-size="10" fill="#1a1d24">Audit · Security · Leases</text>
+                <text x="280" y="71" text-anchor="middle" font-size="9.5" fill="#616b7a" id="svg-status-codex">state: researching</text>
+              </g>
+
+              <!-- Agent 3: Gemini -->
+              <g id="node-gemini" class="node-box">
+                <rect x="390" y="35" width="140" height="64" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="2" />
+                <text x="460" y="57" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2563eb">Gemini</text>
+                <text x="460" y="73" text-anchor="middle" font-size="10" fill="#1a1d24">4-Table Schema · Flows</text>
+                <text x="460" y="88" text-anchor="middle" font-size="9.5" fill="#616b7a" id="svg-status-gemini">state: researching</text>
+              </g>
+
+              <!-- Consensus Proposal Box (Bottom Center) -->
+              <g id="node-consensus" class="node-box">
+                <rect x="155" y="285" width="250" height="62" rx="11" fill="#ffffff" stroke="#047857" stroke-width="2" />
+                <text x="280" y="308" text-anchor="middle" font-size="12.5" font-weight="700" fill="#047857" id="svg-prop-title">consensus/PROPOSAL.md</text>
+                <text x="280" y="325" text-anchor="middle" font-size="10.5" fill="#1a1d24" id="svg-prop-sub">Awaiting Round 1 & 2 convergence</text>
+                <text x="280" y="339" text-anchor="middle" font-size="9.5" fill="#616b7a" id="svg-prop-hash">Sign-offs: 0 / 3</text>
+              </g>
+
+              <!-- Animated Signal Packet -->
+              <circle id="sigPacket1" class="packet" cx="280" cy="175" r="7" fill="#4f46e5" opacity="0" />
+              <circle id="sigPacket2" class="packet" cx="280" cy="175" r="7" fill="#047857" opacity="0" />
+              <circle id="sigPacket3" class="packet" cx="280" cy="175" r="7" fill="#b45309" opacity="0" />
+            </svg>
+          </div>
+
+          <!-- Narrative Panel for Current Beat -->
+          <div class="beat-panel">
+            <div class="beat-box">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span class="badge core" id="beatTime">10:36 - 10:41 IST</span>
+                <span class="badge" id="beatPhase">Round 0: Setup & Protocol</span>
+              </div>
+              <h3 id="beatTitle">1. Self-Organizing the Deliberation Protocol</h3>
+              <p id="beatDesc"></p>
+              <div class="why-callout" id="beatTakeaway"></div>
+            </div>
+
+            <div class="beat-box">
+              <div class="sec-label">Live Agent Postures at This Beat</div>
+              <div style="font-size:12.5px;display:flex;flex-direction:column;gap:8px;" id="beatAgentPostures"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW 2: LLM APPROACHES & COGNITIVE PROFILES -->
+    <section class="view" id="view-profiles">
+      <h1 class="h-greet">How Each LLM Approached the Problem</h1>
+      <p class="h-sub">
+        All three models read the exact same brief (`scratch-pad.md`), yet each approached the problem with a distinct engineering lens, uncovered different ground-truth facts, and had blind spots that the other two caught.
+      </p>
+
+      <div class="agent-cols">
+        <!-- CLAUDE -->
+        <div class="agent-col claude-col">
+          <h3>
+            <span>Claude</span>
+            <span class="badge claude">Product & Ecosystem Architect</span>
+          </h3>
+          <div class="role-tag">Mental model: Contract-first platform design & developer-folder synthesis</div>
+
+          <div class="sec-label">How Claude Approached It</div>
+          <ul>
+            <li><b>Created the governance rules first:</b> Wrote <code>PROTOCOL.md</code> with `D1`-`D10` decision IDs, `<agent>/STATUS.md` signalling, and the alphabetical tie-break rule so the three models wouldn't talk past each other.</li>
+            <li><b>Scanned the wider `~/Developer` portfolio:</b> Discovered `MailMCP`, `clawhub/scrask-bot`, `healthAI`, and `job_tracker` early and shared those facts with Codex and Gemini in `messages-to-peers.md`.</li>
+            <li><b>Found native Claude Code HTTP hooks:</b> Identified `Notification` matchers (`permission_prompt`, `idle_prompt`, `agent_needs_input`) and `Stop`/`SessionEnd` hooks that POST directly to Samaritan.</li>
+            <li><b>Investigated billing mechanics (`C2`):</b> Uncovered the tension between April 2026 third-party harness restrictions and the Oct 7, 2026 Max monthly API credits policy.</li>
+          </ul>
+
+          <div class="sec-label">Blind Spots Caught by Peers</div>
+          <ul>
+            <li>Relied on a third-party guide claiming Hermes approvals were "off by default" (Codex proved `smart` is default in official docs).</li>
+            <li>Assumed Gemini Spark was still US-only (Codex found the July 29, 2026 Google India Pro rollout).</li>
+            <li>Proposed an "auto-approve after N minutes unless I object" tier in `D9` (Codex and Gemini pushed back: silence must never approve a write).</li>
+          </ul>
+        </div>
+
+        <!-- CODEX -->
+        <div class="agent-col codex-col">
+          <h3>
+            <span>Codex (ChatGPT)</span>
+            <span class="badge codex">Systems & Security Auditor</span>
+          </h3>
+          <div class="role-tag">Mental model: Distributed systems correctness, failure modes & authority boundaries</div>
+
+          <div class="sec-label">How Codex Approached It</div>
+          <ul>
+            <li><b>Audited source code against README claims:</b> Verified line-by-line that `TelegramDelivery.flush()` (`src/delivery/index.ts:158`) had zero callers and `withTimeout()` (`src/run-layer/index.ts:145`) only stopped waiting via `Promise.race`.</li>
+            <li><b>Proved the exact SQLite trigger boundary:</b> Showed that triggers in `migrations.ts` only prevent `UPDATE/DELETE` on `action_item_events`; in-process TS capabilities can still bypass the registry unless isolated.</li>
+            <li><b>Enforced strict human approval authority:</b> Caught that `src/api/server.ts` trusted request-supplied `actor: "sandip"` and blocked giving MCP clients an approval tool.</li>
+            <li><b>Verified primary schemas:</b> Pulled Oura's V2 OpenAPI 1.42 JSON schema directly to prove `PublicDailyStress` is a daily aggregate, not a real-time mental-stress stream.</li>
+          </ul>
+
+          <div class="sec-label">Blind Spots Caught by Peers</div>
+          <ul>
+            <li>Proposed a 2-day OpenClaw vs SDK benchmark trial before building Phase 1 (Claude and Gemini pushed back: `WorkerAdapter` gives swappability without delaying Week 1).</li>
+            <li>Proposed 10 new SQLite tables including separate `questions`, `approvals`, and `outbox` tables (Gemini and Claude pushed back: that creates a second inbox alongside `action_items` and `delivery_queue`).</li>
+          </ul>
+        </div>
+
+        <!-- GEMINI -->
+        <div class="agent-col gemini-col">
+          <h3>
+            <span>Gemini</span>
+            <span class="badge gemini">Workflow & Schema Minimalist</span>
+          </h3>
+          <div class="role-tag">Mental model: Day-in-the-life UX mapping, schema consolidation & code bug hunting</div>
+
+          <div class="sec-label">How Gemini Approached It</div>
+          <ul>
+            <li><b>Mapped all 11 daily beats end-to-end:</b> Translated every bullet in `scratch-pad.md` (06:45 wake to 18:00 job scout and Friday WBR) into Samaritan `manifest.yaml` triggers, render layouts (`card`, `form`, `document`, `diff`), and execution modes.</li>
+            <li><b>Found the UTC date bug (`G2`):</b> Spotted that `dailyNotePath()` in `src/execution/adapters/obsidian.ts` computes dates in UTC, causing notes written after 00:00 IST to file into the wrong day.</li>
+            <li><b>Designed the Ask/Delegate Command Bar:</b> Proposed unifying Recall RAG ("Ask") and Cowork task submission ("Delegate") in one top bar across views.</li>
+            <li><b>Compressed the SQLite schema to 4 tables:</b> Pushed back on Codex's 10-table model so task questions and approvals stay inside `action_items` with nullable `task_id`, `run_id`, and `payload_hash`.</li>
+          </ul>
+
+          <div class="sec-label">Blind Spots Caught by Peers</div>
+          <ul>
+            <li>Included `samaritan_act` in Round 1's MCP tool list (Codex and Claude rightly rejected it: an injected LLM session could approve its own staged action).</li>
+            <li>Proposed a 15-minute auto-regenerated `BRAIN_INDEX.md` containing live calendar/decisions (Claude and Codex pushed back: keep the pointer file static so personal/work data isn't dumped into every repo).</li>
+            <li>Proposed a `source_cursors` table before Codex pointed out `sync_cursors` already exists in Migration 1.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Why Three Models Were Better Than One</h2>
+        <table class="matrix">
+          <thead>
+            <tr>
+              <th>Dimension</th>
+              <th>If You Only Asked Claude</th>
+              <th>If You Only Asked Codex</th>
+              <th>If You Only Asked Gemini</th>
+              <th>What the 3-Way Consensus Delivered</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><b>Security & Approvals</b></td>
+              <td>Would have included a countdown "auto-approve on silence" tier.</td>
+              <td>Strict human-only approval, payload hash binding, and server-derived actor.</td>
+              <td>Would have exposed `samaritan_act` over MCP to assistant sessions.</td>
+              <td><b>Codex's strict human-only approval model won:</b> no MCP approve tool, no silence-as-approval, server-derived `actor`.</td>
+            </tr>
+            <tr>
+              <td><b>Database Schema</b></td>
+              <td>High-level task store + activity ledger without exact replay cursors.</td>
+              <td>10 new tables (`questions`, `approvals`, `outbox` duplicating existing tables).</td>
+              <td>4 new tables keeping all questions and approvals in the single `action_items` Inbox.</td>
+              <td><b>Gemini's 4-table count + Codex's `activity_events` cursor won:</b> `tasks`, `runs`, `artifacts`, `activity_events`, reusing `sync_cursors`, `action_items`, and `delivery_queue`.</td>
+            </tr>
+            <tr>
+              <td><b>Runtime & Velocity</b></td>
+              <td>Immediate Claude Agent SDK build after Phase 0 daemon fixes.</td>
+              <td>2-day OpenClaw benchmark trial before committing to the runtime.</td>
+              <td>Immediate Claude Agent SDK build behind a clean worker interface.</td>
+              <td><b>Claude + Gemini's velocity + Codex's interface won:</b> ship Phase 1 on Claude Agent SDK now behind Codex's 5-method `WorkerAdapter`; defer trials until after Phase 2.</td>
+            </tr>
+            <tr>
+              <td><b>Cross-Assistant Context</b></td>
+              <td>Static routing doc + small MCP server.</td>
+              <td>Static routing doc + scoped MCP tools + per-client hook verification.</td>
+              <td>15-minute regenerated `BRAIN_INDEX.md` with live calendar & decisions.</td>
+              <td><b>Claude + Codex's static routing file won:</b> static pointer doc in vault + live state fetched on demand via `get_context`.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- VIEW 3: ROUND-BY-ROUND DECISION MATRIX -->
+    <section class="view" id="view-rounds">
+      <h1 class="h-greet">Round-by-Round Convergence Matrix</h1>
+      <p class="h-sub">
+        Track how each decision ID (`D1` through `D10`, plus `C1/G1`, `G2`, `C2`) evolved from independent Round 1 positions to Round 2 pushback and final Round 3 v2 sign-off.
+      </p>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+          <div class="btn-row" id="roundFilters">
+            <button class="pill-filter active" onclick="filterDecisions('all', this)">All Decisions (13)</button>
+            <button class="pill-filter" onclick="filterDecisions('debated', this)">Had Disagreement / Pushback (8)</button>
+            <button class="pill-filter" onclick="filterDecisions('unanimous', this)">Unanimous from Round 1 (5)</button>
+          </div>
+          <span class="badge core">Click any row to compare R1 &rarr; R2 &rarr; R3</span>
+        </div>
+
+        <table class="matrix" id="decisionTable">
+          <thead>
+            <tr>
+              <th style="width:70px;">ID</th>
+              <th style="width:185px;">Round 1 (Independent)</th>
+              <th style="width:230px;">Round 2 (Pushback & Shifts)</th>
+              <th style="width:250px;">Round 3 / Proposal v2 (Converged)</th>
+              <th style="width:190px;">How Consensus Was Reached</th>
+            </tr>
+          </thead>
+          <tbody id="decisionTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- VIEW 4: THE 8 CLASHES -->
+    <section class="view" id="view-clashes">
+      <h1 class="h-greet">The 8 Substantive Clashes & How They Resolved</h1>
+      <p class="h-sub">
+        Per `PROTOCOL.md`, agreeing just to be agreeable was forbidden. These are the 8 concrete disagreements across Rounds 1, 2, and 3, showing the exact old position vs the converged v2 position.
+      </p>
+
+      <div class="clash-grid" id="clashGrid"></div>
+    </section>
+
+    <!-- VIEW 5: ISSUE COVERAGE AUDIT -->
+    <section class="view" id="view-coverage">
+      <h1 class="h-greet">Issue Coverage Audit: Did Consensus Solve Everything?</h1>
+      <p class="h-sub">
+        Every code defect, security hole, architectural overlap, and API constraint discovered by Claude, Codex, and Gemini across all 3 rounds, mapped to its resolution in `consensus/PROPOSAL.md` v2.
+      </p>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+          <div class="btn-row">
+            <button class="pill-filter active" onclick="filterAudit('all', this)">All 24 Issues</button>
+            <button class="pill-filter" onclick="filterAudit('code', this)">Samaritan Code Bugs (6)</button>
+            <button class="pill-filter" onclick="filterAudit('security', this)">Security & Authority (6)</button>
+            <button class="pill-filter" onclick="filterAudit('arch', this)">Architecture & Schema (6)</button>
+            <button class="pill-filter" onclick="filterAudit('api', this)">External API Limits (6)</button>
+          </div>
+          <span class="badge auto">24 / 24 Addressed in Proposal v2</span>
+        </div>
+
+        <table class="matrix">
+          <thead>
+            <tr>
+              <th style="width:45px;">#</th>
+              <th style="width:190px;">Issue / Risk Identified</th>
+              <th style="width:110px;">Found By</th>
+              <th style="width:210px;">Evidence / Source</th>
+              <th>How `consensus/PROPOSAL.md` v2 Addresses It</th>
+              <th style="width:110px;">Target Phase</th>
+            </tr>
+          </thead>
+          <tbody id="auditTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+  // --- DATA: 12 ANIMATED BEATS ---
+  const beats = [
+    {
+      time: "10:36 - 10:40 IST",
+      phase: "Beat 1 · Protocol & Setup",
+      pct: 25,
+      badge: "Setup",
+      title: "1. Self-Organizing the Deliberation Protocol",
+      desc: "All three agents start in `docs/deliberations/`. Claude writes `PROTOCOL.md` establishing one folder per agent (`claude/`, `codex/`, `gemini/`), greppable `<agent>/STATUS.md` state machines, and fixed Decision IDs `D1` through `D10`.",
+      takeaway: "Mechanism: Instead of free-form essays, forcing every model to answer the exact same 10 decision IDs (`D1`-`D10`) made agreements and disagreements immediately diffable.",
+      activeNodes: ["node-protocol", "node-claude", "node-codex", "node-gemini"],
+      packets: [{ from: [100, 67], to: [280, 180], color: "#b45309" }],
+      statuses: { claude: "R1: researching", codex: "R1: researching", gemini: "R1: researching" },
+      prop: { title: "consensus/PROPOSAL.md", sub: "Not created yet (Round 1 starting)", hash: "Sign-offs: 0 / 3" },
+      postures: [
+        "<b>Claude:</b> Authored <code>PROTOCOL.md</code> and started scanning local repos.",
+        "<b>Codex:</b> Adopted <code>PROTOCOL.md</code> and pushed back on the 6-hour silence rule (Amendment A1: wait for all 3).",
+        "<b>Gemini:</b> Created <code>COORDINATION.md</code> summary table and adopted <code>PROTOCOL.md</code>."
+      ]
+    },
+    {
+      time: "10:41 - 10:46 IST",
+      phase: "Beat 2 · Ground Rules & User Answers",
+      pct: 35,
+      badge: "Inputs Locked",
+      title: "2. Sharing Direct User Answers Across Agents",
+      desc: "Codex records your two direct answers in `codex/USER-ANSWERS.md` (First workflow: Meeting context -> notes -> follow-up tasks; Host: current Mac initially). Claude records your read-only boundary in `claude/USER-ANSWERS.md` (writes only inside `docs/deliberations`).",
+      takeaway: "Mechanism: Peer message files (`messages-to-peers.md` and `USER-ANSWERS.md`) ensured an answer given to one LLM in chat was immediately visible to the other two.",
+      activeNodes: ["node-codex", "node-claude", "node-protocol"],
+      packets: [{ from: [280, 50], to: [280, 180], color: "#047857" }, { from: [100, 67], to: [280, 180], color: "#b45309" }],
+      statuses: { claude: "R1: researching", codex: "R1: researching", gemini: "R1: researching" },
+      prop: { title: "consensus/PROPOSAL.md", sub: "D6 (Mac) & D10 (Meetings first) anchored", hash: "Sign-offs: 0 / 3" },
+      postures: [
+        "<b>Codex:</b> Shared Sandip's D6 (Mac) and D10 (Meetings) answers with peers.",
+        "<b>Claude:</b> Adopted Amendment A1 (no moving ahead on silence) and shared the read-only boundary.",
+        "<b>Gemini:</b> Incorporated both user constraints into Round 1 research."
+      ]
+    },
+    {
+      time: "10:42 - 10:48 IST",
+      phase: "Beat 3 · Code & Repo Discovery",
+      pct: 48,
+      badge: "Code Audit",
+      title: "3. Deep Audit of 7 Local Repos & 2026 Docs",
+      desc: "Before reading each other's opinions, all three inspect `~/Developer/` and live docs. They discover Samaritan has 330 passing tests and a working Run Layer, `healthAI` has mocked Oura/Hevy files (`oura.ts`, `hevy.ts`), and `TelegramDelivery.flush()` is never called.",
+      takeaway: "Mechanism: Sharing verified repo facts (without sharing opinions) in `messages-to-peers.md` prevented any agent from designing on top of stale README assumptions.",
+      activeNodes: ["node-repos", "node-web", "node-claude", "node-codex", "node-gemini"],
+      packets: [{ from: [95, 190], to: [280, 50], color: "#047857" }, { from: [95, 190], to: [100, 67], color: "#b45309" }, { from: [465, 190], to: [460, 67], color: "#2563eb" }],
+      statuses: { claude: "R1: researching", codex: "R1: researching", gemini: "R1: researching" },
+      prop: { title: "consensus/PROPOSAL.md", sub: "3 code bugs & Thornhill brain overlap found", hash: "Sign-offs: 0 / 3" },
+      postures: [
+        "<b>Claude:</b> Found `MailMCP`, `scrask-bot`, `job_tracker`, and Thornhill's 33-tool Cowork bug.",
+        "<b>Codex:</b> Found `TelegramDelivery.flush()` has no caller, `withTimeout()` leaks runs, and Oura stress is daily-only.",
+        "<b>Gemini:</b> Found `dailyNotePath()` UTC date bug in `obsidian.ts` and mapped all 6 repos."
+      ]
+    },
+    {
+      time: "10:49 - 10:53 IST",
+      phase: "Beat 4 · Round 1 Complete (62% Agreement)",
+      pct: 62,
+      badge: "Round 1 Done",
+      title: "4. Independent Round 1 Proposals Published",
+      desc: "Codex (`codex/round-1.md`), Gemini (`gemini/round-1.md`), and Claude (`claude/round-1.md`) finish independently. All three reject OpenClaw and Hermes as the core OS and independently propose collapsing Thornhill's planned Brain into Samaritan (`C1`/`G1`).",
+      takeaway: "Where they split in R1: Codex wanted a 2-day OpenClaw trial and 10 new SQLite tables; Gemini included `samaritan_act` in MCP and a 15-min live `BRAIN_INDEX.md`; Claude proposed a countdown auto-approve tier.",
+      activeNodes: ["node-claude", "node-codex", "node-gemini"],
+      packets: [{ from: [100, 67], to: [280, 180], color: "#b45309" }, { from: [280, 50], to: [280, 180], color: "#047857" }, { from: [460, 67], to: [280, 180], color: "#2563eb" }],
+      statuses: { claude: "R1: complete", codex: "R1: waiting", gemini: "R1: waiting" },
+      prop: { title: "Round 1 Baseline: 62% Aligned", sub: "Core architecture unanimous; 8 sharp disagreements", hash: "Sign-offs: 0 / 3" },
+      postures: [
+        "<b>Claude:</b> Proposed Samaritan + Claude Agent SDK, `C1` (one brain), `C2` (Max API credits), HTTP hooks.",
+        "<b>Codex:</b> Proposed Samaritan + SDK with a 2-day OpenClaw trial and a 10-table `build-blueprint.md`.",
+        "<b>Gemini:</b> Proposed Samaritan + SDK, `G1` (brain merge), `G2` (fix Run Layer/flush/UTC first), and 11 daily flows."
+      ]
+    },
+    {
+      time: "10:51 - 10:53 IST",
+      phase: "Beat 5 · Round 2 Security & Evidence Critique",
+      pct: 72,
+      badge: "R2 Pushback",
+      title: "5. Codex & Claude Challenge MCP Approval & Live Context",
+      desc: "In Round 2, Codex and Claude push back hard on Gemini's `samaritan_act` MCP tool: if an assistant can approve items via MCP, a prompt-injected session can approve its own staged action. Claude also pushes back on Gemini's 15-minute `BRAIN_INDEX.md` dump.",
+      takeaway: "Resolution: Gemini accepts both critiques immediately in `gemini/round-2.md` - dropping `samaritan_act` from MCP and switching to a static routing doc in the vault.",
+      activeNodes: ["node-codex", "node-claude", "node-gemini"],
+      packets: [{ from: [280, 50], to: [460, 67], color: "#047857" }, { from: [100, 67], to: [460, 67], color: "#b45309" }],
+      statuses: { claude: "R2: researching", codex: "R2: researching", gemini: "R2: researching" },
+      prop: { title: "Security Boundary Hardened", sub: "MCP approval dropped; static context pointer adopted", hash: "Sign-offs: 0 / 3" },
+      postures: [
+        "<b>Codex:</b> Proved `actor` must come from authenticated human sessions, never MCP or request JSON.",
+        "<b>Claude:</b> Showed a 15-minute regenerated index leaks personal/work context into every repo.",
+        "<b>Gemini:</b> Dropped `samaritan_act` and adopted the static routing doc + on-demand `get_context`."
+      ]
+    },
+    {
+      time: "10:52 - 10:54 IST",
+      phase: "Beat 6 · Round 2 Runtime & Policy Critique",
+      pct: 80,
+      badge: "R2 Pushback",
+      title: "6. Pushing Back on the OpenClaw Trial & Silence-Approval",
+      desc: "Claude and Gemini push back on Codex's up-front 2-day OpenClaw trial: wrapping the Claude Agent SDK behind Codex's 5-method `WorkerAdapter` already gives swappability without delaying Week 1. Meanwhile, Codex and Gemini reject Claude's 'auto-approve after N minutes of silence' tier.",
+      takeaway: "Resolution: Codex drops the mandatory up-front trial in `codex/round-2.md`; Claude drops the countdown auto-approval tier so unanswered items stay strictly fail-closed.",
+      activeNodes: ["node-claude", "node-gemini", "node-codex"],
+      packets: [{ from: [100, 67], to: [280, 50], color: "#b45309" }, { from: [460, 67], to: [100, 67], color: "#2563eb" }],
+      statuses: { claude: "R2: complete", codex: "R2: waiting", gemini: "R2: researching" },
+      prop: { title: "Runtime & Fail-Closed Policy Locked", sub: "No upfront trial; silence never approves", hash: "Sign-offs: 0 / 3" },
+      postures: [
+        "<b>Codex:</b> Agreed to make Claude Agent SDK the default worker without a pre-Phase-1 trial.",
+        "<b>Claude:</b> Accepted dropping countdown auto-approval and corrected Hermes (`smart` default) & Spark India facts.",
+        "<b>Gemini:</b> Dropped 30-minute Oura stress polling and adopted Claude Code native HTTP hooks."
+      ]
+    },
+    {
+      time: "10:54 - 10:56 IST",
+      phase: "Beat 7 · Round 2 Schema Pushback (88% Agreement)",
+      pct: 88,
+      badge: "R2 Complete",
+      title: "7. Challenging the 10-Table Blueprint vs Single Inbox",
+      desc: "In `gemini/round-2.md`, Gemini pushes back on Codex's 10-table SQLite blueprint (`questions`, `approvals`, `outbox`), arguing it duplicates `action_items` and `delivery_queue` and splits the review surface. Gemini proposes 4 tables (`tasks`, `runs`, `artifacts`, `source_cursors`).",
+      takeaway: "Mechanism: All three Round 2 files complete. The architecture is 88% converged; only the exact Migration 6 table design awaits Round 3 synthesis.",
+      activeNodes: ["node-gemini", "node-codex", "node-protocol"],
+      packets: [{ from: [460, 67], to: [280, 50], color: "#2563eb" }],
+      statuses: { claude: "R2: complete", codex: "R2: waiting", gemini: "R2: complete" },
+      prop: { title: "Round 2 Complete: 88% Aligned", sub: "Only Migration 6 table layout left to synthesize", hash: "Sign-offs: 0 / 3" },
+      postures: [
+        "<b>Gemini:</b> Proposed 4 tables + nullable `task_id`, `run_id`, `payload_hash` on `action_items`.",
+        "<b>Claude:</b> Offered to draft `consensus/PROPOSAL.md` in Round 3 per alphabetical tie-break.",
+        "<b>Codex:</b> Inspected `src/store/migrations.ts` to test Gemini's 4-table compression."
+      ]
+    },
+    {
+      time: "10:57 - 11:00 IST",
+      phase: "Beat 8 · Round 3 Schema Synthesis",
+      pct: 93,
+      badge: "Schema Solved",
+      title: "8. The 4-Table Synthesis: `tasks`, `runs`, `artifacts`, `activity_events`",
+      desc: "Codex checks `src/store/migrations.ts` and spots that `sync_cursors` already exists in Migration 1, so Gemini's `source_cursors` is unnecessary. Codex replaces the 4th table with append-only `activity_events` (monotonic cursor for task messages and run progress). Gemini and Claude immediately agree.",
+      takeaway: "Why this synthesis worked: It kept Gemini's 4-table simplicity and single `action_items` Inbox while preserving Codex's durable task conversation and reconnect replay.",
+      activeNodes: ["node-codex", "node-gemini", "node-claude"],
+      packets: [{ from: [280, 50], to: [460, 67], color: "#047857" }, { from: [460, 67], to: [100, 67], color: "#2563eb" }],
+      statuses: { claude: "R3: researching", codex: "R3: researching", gemini: "R3: waiting" },
+      prop: { title: "Migration 6 Schema Locked", sub: "tasks, runs, artifacts, activity_events + action_items FK", hash: "Sign-offs: 0 / 3" },
+      postures: [
+        "<b>Codex:</b> Proposed `tasks, runs, artifacts, activity_events` + reusing `sync_cursors` (10:57 IST).",
+        "<b>Gemini:</b> Accepted the `activity_events` refinement in `gemini/messages-to-peers.md` (10:58 IST).",
+        "<b>Claude:</b> Incorporated the 4-table schema into `consensus/PROPOSAL.md`."
+      ]
+    },
+    {
+      time: "11:04 - 11:06 IST",
+      phase: "Beat 9 · Proposal v1 Drafted",
+      pct: 96,
+      badge: "v1 Drafted",
+      title: "9. Claude Publishes `consensus/PROPOSAL.md` v1",
+      desc: "Following the alphabetical drafter rule (`claude`, `codex`, `gemini`), Claude writes `consensus/PROPOSAL.md` v1 and signs off in `claude/round-3.md`. Gemini reviews v1 and signs off in `gemini/round-3.md`.",
+      takeaway: "At 11:06 IST, 2 of 3 agents have signed v1, but Codex performs a strict line-by-line verification of v1 before signing.",
+      activeNodes: ["node-claude", "node-consensus", "node-gemini"],
+      packets: [{ from: [100, 67], to: [280, 310], color: "#b45309" }, { from: [460, 67], to: [280, 310], color: "#2563eb" }],
+      statuses: { claude: "R3: complete (v1)", codex: "R3: reviewing v1", gemini: "R3: signed v1" },
+      prop: { title: "consensus/PROPOSAL.md (v1)", sub: "Signed by Claude & Gemini; Codex reviewing", hash: "Sign-offs: 2 / 3" },
+      postures: [
+        "<b>Claude:</b> Drafted and signed `consensus/PROPOSAL.md` v1 at 11:04 IST.",
+        "<b>Gemini:</b> Signed `consensus/PROPOSAL.md` v1 at 11:06 IST.",
+        "<b>Codex:</b> Audited v1 for remaining sequencing or factual inconsistencies."
+      ]
+    },
+    {
+      time: "11:06 - 11:08 IST",
+      phase: "Beat 10 · Codex's 6 Precision Amendments",
+      pct: 98,
+      badge: "v1 Audit",
+      title: "10. Codex Catches a Phase-1 Dependency Bug in v1",
+      desc: "In `codex/round-3.md`, Codex accepts all architectural decisions in v1 but requests 6 narrow fixes before signing: most importantly, v1's Phase 1 promised 'notes sent on Telegram' and a 'laptop and phone acceptance test' while deferring Telegram inbound and phone web to Phase 2.",
+      takeaway: "Why this pushback mattered: Without moving authenticated phone web review into Phase 1 (and keeping Telegram note intake in Phase 2), Phase 1's own exit test would have been impossible to pass.",
+      activeNodes: ["node-codex", "node-consensus", "node-claude"],
+      packets: [{ from: [280, 50], to: [100, 67], color: "#047857" }],
+      statuses: { claude: "R3: updating to v2", codex: "R3: waiting for v2", gemini: "R3: endorsed v2 edits" },
+      prop: { title: "consensus/PROPOSAL.md (v1 -> v2)", sub: "Fixing Phase 1 phone/Telegram dependency order", hash: "Sign-offs: 2 / 3 (v2 pending)" },
+      postures: [
+        "<b>Codex:</b> Filed 6 exact amendments in `codex/round-3.md` §4 (sequencing, `activity_events`, isolation wording).",
+        "<b>Gemini:</b> Endorsed all 6 of Codex's v2 amendments at 11:08 IST.",
+        "<b>Claude:</b> Archived `PROPOSAL-v1.md` and folded all 6 amendments into `consensus/PROPOSAL.md` v2."
+      ]
+    },
+    {
+      time: "11:14 - 11:16 IST",
+      phase: "Beat 11 · Proposal v2 & Unanimous Sign-Off",
+      pct: 100,
+      badge: "100% Converged",
+      title: "11. `consensus/PROPOSAL.md` v2 Published & Signed by All Three",
+      desc: "Claude publishes `consensus/PROPOSAL.md` v2 at 11:14 IST with all 6 amendments integrated. Claude signs at 11:14 IST, Codex verifies the text and signs at 11:15 IST with SHA-256 hash `3ed4a57c...`, and Gemini signs v2 at 11:16 IST.",
+      takeaway: "Every single decision row (`D1`-`D10`, `C1/G1`, `G2`, `C2`) is marked Agree with zero reservations across all three agents.",
+      activeNodes: ["node-claude", "node-codex", "node-gemini", "node-consensus"],
+      packets: [
+        { from: [100, 67], to: [280, 310], color: "#b45309" },
+        { from: [280, 50], to: [280, 310], color: "#047857" },
+        { from: [460, 67], to: [280, 310], color: "#2563eb" }
+      ],
+      statuses: { claude: "state: converged", codex: "state: converged", gemini: "state: converged" },
+      prop: { title: "consensus/PROPOSAL.md (v2 FINAL)", sub: "Unanimous 3/3 sign-off · 0 reservations", hash: "SHA-256: 3ed4a57c41a47477..." },
+      postures: [
+        "<b>Claude:</b> Signed v2 at 11:14 IST, zero reservations.",
+        "<b>Codex:</b> Signed v2 at 11:15 IST, zero reservations, recorded SHA-256.",
+        "<b>Gemini:</b> Signed v2 at 11:16 IST, zero reservations, updated `COORDINATION.md`."
+      ]
+    },
+    {
+      time: "11:22 IST",
+      phase: "Beat 12 · Cryptographic Lock",
+      pct: 100,
+      badge: "Locked",
+      title: "12. Final Integrity Check & Handoff to Sandip",
+      desc: "Claude and Codex both verify the body SHA-256 (`3ed4a57c41a47477967b6ef1b5dd331991def78855f688d4fab857afc388069d`) on `consensus/PROPOSAL.md` v2 at 11:22 IST. Zero product files outside `docs/deliberations` were modified.",
+      takeaway: "Outcome: A single, implementation-ready blueprint backed by three independent audits of your repos and 2026 framework docs.",
+      activeNodes: ["node-consensus"],
+      packets: [],
+      statuses: { claude: "state: converged", codex: "state: converged", gemini: "state: converged" },
+      prop: { title: "consensus/PROPOSAL.md (v2 FINAL)", sub: "Verified SHA-256 · Ready for Phase 0 & 1 build", hash: "Sign-offs: 3 / 3 (Claude, Codex, Gemini)" },
+      postures: [
+        "<b>Claude:</b> Verified body SHA-256 and recorded final sign-off block.",
+        "<b>Codex:</b> Verified body SHA-256 and closed Round 3.",
+        "<b>Gemini:</b> Built this interactive deliberation visualizer."
+      ]
+    }
+  ];
+
+  // --- DATA: 13 DECISIONS (D1-D10, C1/G1, G2, C2) ---
+  const decisions = [
+    {
+      id: "D1",
+      name: "Agent Runtime",
+      type: "debated",
+      r1: "<b>All 3:</b> Keep Samaritan core + Claude Agent SDK for LLM tasks.<br><b>Split:</b> Codex proposed a 2-day OpenClaw trial before committing; Claude & Gemini opposed any upfront trial.",
+      r2: "Claude & Gemini pushed back on the 2-day trial (`claude/round-2.md` §4.1, `gemini/round-2.md` §4.1): `WorkerAdapter` gives swappability now. Codex dropped the upfront trial (`codex/round-2.md` §3).",
+      r3: "<b>Samaritan Run Layer + TypeScript Claude Agent SDK</b> in child processes behind a 5-method `WorkerAdapter` (`start`, `events`, `answer`, `cancel`, `status`). Deterministic capabilities stay as TS functions.",
+      how: "Combined Claude/Gemini's immediate SDK choice with Codex's 5-method `WorkerAdapter` and explicit post-Phase-2 reversal criteria."
+    },
+    {
+      id: "D2",
+      name: "Command Centre",
+      type: "debated",
+      r1: "<b>All 3:</b> Extend Samaritan's React SPA.<br><b>Split:</b> Codex proposed 10 new tables (`questions`, `approvals`, `outbox`); Gemini proposed Ask/Delegate bar; Claude proposed Now/Activity/Tasks.",
+      r2: "Gemini pushed back on 10 tables (`gemini/round-2.md` §4.2), proposing 4 tables + reusing `action_items`. Codex spotted `sync_cursors` already existed and proposed `activity_events` as the 4th table.",
+      r3: "Extend React UI with <b>Now, Inbox, Activity, Tasks, Settings</b> + <b>Ask/Delegate</b> bar. Add 4 tables (`tasks`, `runs`, `artifacts`, `activity_events`) and reuse `action_items` + `delivery_queue`.",
+      how: "Merged Claude's view structure, Gemini's Ask/Delegate bar + 4-table cap, and Codex's `activity_events` monotonic replay cursor."
+    },
+    {
+      id: "D3",
+      name: "Second Brain",
+      type: "unanimous",
+      r1: "<b>Unanimous:</b> Obsidian vault for prose/notes, Notion for typed DBs, TickTick for tasks, Samaritan SQLite for operational state + derived Recall index.",
+      r2: "Claude and Gemini adopted Codex's addition of `~/.samaritan/artifacts/<task-id>/` for raw/transient run outputs so git repos stay clean.",
+      r3: "One owner per data type: Vault for readable prose/exports, Notion for 4 DBs, TickTick for to-dos, SQLite for state/Recall, `~/.samaritan/artifacts/<task-id>/` for raw run outputs.",
+      how: "Unanimous in Round 1; enriched in Round 2 with Codex's transient artifact directory rule."
+    },
+    {
+      id: "D4",
+      name: "Cross-Assistant Context",
+      type: "debated",
+      r1: "<b>Split on 3 points:</b> (1) Gemini included `samaritan_act` (approve) in MCP; (2) Gemini proposed a 15-min live `BRAIN_INDEX.md`; (3) Claude thought ChatGPT desktop couldn't use local MCP and Spark wasn't in India.",
+      r2: "Codex & Claude rejected `samaritan_act` (self-approval risk) and live `BRAIN_INDEX.md` (context leak). Codex proved ChatGPT desktop/Codex supports local MCP and Spark launched in India on July 29, 2026.",
+      r3: "One `samaritan` MCP server (~8 tools: `get_context`, `search`, `read_artifact`, `list_inbox`, `propose_action`, `submit_task`, `task_status`, `answer_question`; <b>no approve tool</b>) + short <b>static</b> routing doc.",
+      how: "Evidence and security pushback in Round 2 eliminated both the MCP approval hole and the live context dump."
+    },
+    {
+      id: "D5",
+      name: "Surfaces",
+      type: "debated",
+      r1: "<b>All 3:</b> Laptop UI + Tailscale phone web/PWA + 1 unified Telegram bot.<br><b>Gap:</b> Unclear whether phone web and Telegram inbound ship in Phase 1 or Phase 2.",
+      r2: "Codex pointed out that `src/api/server.ts` trusts loopback and request-supplied `actor`, requiring real session auth before Tailscale exposure.",
+      r3: "One backend. Phase 1 ships laptop UI, minimal authenticated phone web over Tailscale HTTPS, and Telegram outbound alerts. Phase 2 adds Telegram inbound buttons/notes/tasks and PWA install.",
+      how: "Codex's Round 3 dependency check aligned the Phase 1 acceptance test (laptop + phone state) with Phase 1 deliverables."
+    },
+    {
+      id: "D6",
+      name: "Hosting",
+      type: "unanimous",
+      r1: "<b>Unanimous:</b> Current Mac under `launchd` with sleep disabled (`caffeinate -dis`), keeping `MailMCP` and `Nutgraf` on AWS.",
+      r2: "Adopted Codex's operational checks: test Keychain access after reboot before login (FileVault) and surface source-sync freshness/outage banners.",
+      r3: "Current Mac under `launchd`, sleep disabled, DB backups, Tailscale HTTPS, reboot/Keychain verification, and source freshness UI; `MailMCP` and `Nutgraf` stay on AWS.",
+      how: "Anchored by your direct answer in `codex/USER-ANSWERS.md` + Codex's FileVault/Keychain operational check."
+    },
+    {
+      id: "D7",
+      name: "Integrations",
+      type: "debated",
+      r1: "<b>All 3:</b> API/MCP first, Mac-local second, Thornhill third.<br><b>Split:</b> Gemini proposed 30-min Oura stress polling and TTS inside Samaritan; Recall timing differed.",
+      r2: "Claude & Codex pushed back (`claude/round-2.md` §4.4, `codex/round-2.md` §4.E): Oura `daily_stress` is a daily summary (no 30m poll), Nutgraf owns audio, and minimal Recall belongs in Phase 1.",
+      r3: "API/MCP first; minimal vault/Notion Recall in Phase 1; Claude Code HTTP hooks in Phase 1; Hevy writes a copy of today's routine; Oura stress is daily summary only; WhatsApp is read-only from agent phone.",
+      how: "Verified Oura V2 OpenAPI 1.42 schema and repo boundaries (`the-library`, `healthAI`) settled every integration rule."
+    },
+    {
+      id: "D8",
+      name: "Phone Control",
+      type: "unanimous",
+      r1: "<b>Unanimous:</b> Thornhill (`esp32-iphone-agent`) drops its planned separate Brain, task store, and Telegram bot, becoming Samaritan's phone executor.",
+      r2: "Codex clarified that Thornhill keeps its own service-local executor state (device pool, account locks, 30-day screenshot logs, `memory/apps/` routines) correlated by Samaritan's `task_id`/`run_id`.",
+      r3: "Thornhill runs as the phone executor service (WDA now, ESP32 when parts arrive), sharing Samaritan's task/run IDs and routing all `stop_before` approvals to Samaritan's Inbox.",
+      how: "All three agents independently identified the Thornhill Brain overlap in Round 1 and converged on the exact service boundary in Round 2."
+    },
+    {
+      id: "D9",
+      name: "Trust & Safety",
+      type: "debated",
+      r1: "<b>All 3:</b> Keep Policy Engine + money lock + Rule of Two for untrusted text.<br><b>Split:</b> Claude proposed countdown auto-approval; Gemini overstated SQLite triggers on `action_items`.",
+      r2: "Codex proved triggers only guard `action_item_events` and child processes are not OS sandboxes. Codex & Gemini rejected Claude's countdown auto-approval tier.",
+      r3: "Meta's Rule of Two (untrusted readers get zero write/send credentials); restricted worker tools/paths; exact `payload_hash`/revision human approval; lease fencing on cancel/timeout; <b>silence never approves</b>.",
+      how: "Codex's code audit of `migrations.ts` and `run-layer/index.ts` defined the exact security controls adopted by all three."
+    },
+    {
+      id: "D10",
+      name: "Build Sequence",
+      type: "debated",
+      r1: "<b>Split:</b> Codex put Stage 1 (Meetings) before Stage 2 (Supervised daemon); Gemini put Recall in Phase 4; Claude proposed Phase 0 daemon first.",
+      r2: "Claude showed pre-meeting briefs need the scheduler/daemon first (`Phase 0 -> Phase 1`). Codex showed pre-meeting briefs need minimal Recall in Phase 1. Round 3 fixed phone web vs Telegram inbound.",
+      r3: "<b>Phase 0 (2-3d):</b> daemon, cron, Migration 6, G2 fixes, auth. <b>Phase 1 (~1w):</b> Meetings loop + minimal Recall + TickTick adapter + phone web + Claude Code hooks. <b>Phase 2 (1-2w):</b> SDK worker, Activity/Tasks UI, Telegram inbound, MCP. <b>Phase 3-4:</b> Domains & Thornhill.",
+      how: "Dependency sorting across all three agents eliminated circular prerequisites between Phases 0, 1, and 2."
+    },
+    {
+      id: "C1/G1",
+      name: "One Brain Authority",
+      type: "unanimous",
+      r1: "Proposed independently by Claude (`C1`) and Gemini (`G1`), and matched by Codex in `D8`: Samaritan is the single user-facing brain, task ledger, and Telegram bot.",
+      r2: "Merged `C1` and `G1` with Codex's storage clarification: one user-facing authority, while Thornhill, Nutgraf, and MailMCP keep their service-local storage.",
+      r3: "Samaritan is the single user-facing planner, task ledger, approval inbox, and Telegram bot; other services keep internal state and correlate by ID.",
+      how: "Unanimous from Round 1; merged into `C1/G1` in Round 2."
+    },
+    {
+      id: "G2",
+      name: "Prerequisite Fixes",
+      type: "unanimous",
+      r1: "Identified in Round 1 code audits: `TelegramDelivery.flush()` never called, `withTimeout()` leaves runs executing, `dailyNotePath()` uses UTC, `actor` is unauthenticated.",
+      r2: "All three agreed to make `G2` a mandatory Phase 0 gate before any unattended cron job runs.",
+      r3: "Ship child-process cancellation with lease fencing, scheduled `TelegramDelivery.flush()`, `dailyNotePath()` local-date fix, server-derived `actor`, and startup crash recovery in Phase 0.",
+      how: "Direct source inspection across `src/delivery/index.ts`, `src/run-layer/index.ts`, `src/execution/adapters/obsidian.ts`, and `src/api/server.ts`."
+    },
+    {
+      id: "C2",
+      name: "Billing & Spend Caps",
+      type: "debated",
+      r1: "Claude flagged conflicting sources on Anthropic's April 2026 third-party harness restriction vs Oct 7, 2026 support docs and Max monthly API credits.",
+      r2: "Codex independently fetched both Anthropic support articles, confirming Agent SDK/`claude -p` plan usage and Max/Team monthly API credits, and recommended explicit API key + spend caps for daemon runs.",
+      r3: "Interactive sessions stay on your Claude plan; unattended daemon runs use a Console API key with a hard monthly cap and per-run cost tracking in `runs` (drawing Max API credits if eligible), skipping calls when `sync_cursors` show no change.",
+      how: "Cross-verified primary Anthropic support docs (`articles/15036540` and `17154008`) + per-run budget tracking."
+    }
+  ];
+
+  // --- DATA: THE 8 CLASHES ---
+  const clashes = [
+    {
+      num: "Clash 1 · D1 Runtime",
+      title: "Up-Front 2-Day OpenClaw Trial vs Ship Claude Agent SDK Now",
+      who: "Codex (R1) vs Claude & Gemini (R2)",
+      oldPos: "Codex R1 (`codex/round-1.md`): Spend up to 2 focused days benchmarking OpenClaw vs Claude Agent SDK on meeting fixtures and mid-run restarts before committing to D1.",
+      newPos: "Proposal v2 (`D1`): Ship Phase 1 with the TypeScript Claude Agent SDK behind Codex's 5-method `WorkerAdapter`; only run a 2-day trial after Phase 2 if a concrete gap appears.",
+      why: "Claude proved neither Hermes nor the Agent SDK transparently resumes an interrupted turn on process restart (durable task state belongs to Samaritan either way), and wrapping the SDK behind `WorkerAdapter` makes swapping later cheap without delaying Week 1."
+    },
+    {
+      num: "Clash 2 · D4 & D9 Security",
+      title: "Exposing `samaritan_act` (Approve) on the MCP Server",
+      who: "Gemini (R1) vs Codex & Claude (R2)",
+      oldPos: "Gemini R1 (`gemini/round-1.md` §7.4): Include `samaritan_act(action_item_id, response_id, edits)` in the 6-tool `samaritan-mcp` server so any assistant can approve items.",
+      newPos: "Proposal v2 (`D4`, `D9`): Zero approval tools on `samaritan` MCP (`answer_question` is restricted to clarifications only). Approvals require an authenticated human session in the UI or Telegram.",
+      why: "Codex and Claude pointed out that if an MCP tool can approve escalated writes, a prompt injection inside an email or web page read by an assistant session could approve its own staged action and bypass the human review gate."
+    },
+    {
+      num: "Clash 3 · D2 Data Model",
+      title: "10 New SQLite Tables vs 4 Minimal Tables + Single Inbox",
+      who: "Codex (R1) vs Gemini & Claude (R2 -> R3)",
+      oldPos: "Codex R1 (`codex/build-blueprint.md`): Add 10 new tables (`delegated_tasks`, `task_messages`, `runs`, `run_events`, `artifacts`, `questions`, `approvals`, `schedule_receipts`, `source_events`, `outbox`).",
+      newPos: "Proposal v2 (`Data model changes`): Add 4 tables (`tasks`, `runs`, `artifacts`, `activity_events`), reuse `sync_cursors`, `delivery_queue`, and `executions`, and add `task_id`, `run_id`, `payload_hash` to `action_items`.",
+      why: "Gemini showed separate `questions`, `approvals`, and `outbox` tables duplicated Samaritan's existing `action_items` and `delivery_queue`. Codex then improved Gemini's 4-table list by noting `sync_cursors` already existed in Migration 1 and making the 4th table `activity_events`."
+    },
+    {
+      num: "Clash 4 · D4 Cross-Assistant Context",
+      title: "15-Minute Auto-Generated `BRAIN_INDEX.md` vs Static Routing Doc",
+      who: "Gemini (R1) vs Claude & Codex (R2)",
+      oldPos: "Gemini R1 (`gemini/round-1.md` §7.4): Rewrite `~/.samaritan/BRAIN_INDEX.md` every 15 minutes with today's calendar, active projects, and last 20 decisions, linked from global `CLAUDE.md`.",
+      newPos: "Proposal v2 (`D4`): Keep one short, static routing document in the vault pointed to by `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, and `~/.gemini/GEMINI.md`; fetch live state via `get_context`.",
+      why: "Claude and Codex showed that linking a live dump from global instruction files injects personal and employer data into every coding session in every repo and goes stale between 15-minute ticks."
+    },
+    {
+      num: "Clash 5 · D9 Trust & Timeouts",
+      title: "Countdown Auto-Approval ('Approve After N Mins Unless I Object')",
+      who: "Claude (R1) vs Codex & Gemini (R2)",
+      oldPos: "Claude R1 (`claude/round-1.md` D9): Add an 'auto-approve after N minutes unless I object' tier for low-risk items alongside fail-closed timeouts.",
+      newPos: "Proposal v2 (`D9`): Silence never approves. Unanswered items stay `pending` or transition to `expired`; low-risk items are pre-authorized by deterministic Policy Engine rules at ingest.",
+      why: "Codex and Gemini argued that if you are in a meeting or commuting and miss a phone notification for 15 minutes, a timer expiring must never trigger an external write."
+    },
+    {
+      num: "Clash 6 · D7 Biofeedback & Audio",
+      title: "30-Minute Oura Stress Polling & In-Samaritan TTS",
+      who: "Gemini (R1) vs Codex & Claude (R2)",
+      oldPos: "Gemini R1 (`gemini/round-1.md` §7.5): Poll Oura `daily_stress` every 30 minutes to offer focus music when stress spikes, and synthesize morning newsletter TTS audio inside Samaritan.",
+      newPos: "Proposal v2 (`D7`, `Not doing`): No real-time Oura stress trigger (use pre-meeting calendar hooks only), and keep newsletter ranking/audio inside Nutgraf (`the-library`).",
+      why: "Codex fetched Oura's V2 OpenAPI 1.42 schema proving `PublicDailyStress` only reports daily cumulative totals after phone sync, and both peers noted Nutgraf already owns newsletter summarization and planned Phase 3 audio."
+    },
+    {
+      num: "Clash 7 · D1 & D4 External Evidence",
+      title: "Hermes Approval Defaults, OpenClaw Advisories & Gemini Spark in India",
+      who: "Claude & Gemini (R1) vs Codex (R2 -> R3)",
+      oldPos: "R1 claims: Hermes approvals are 'off by default' and only cover memory writes; OpenClaw rejected partly on a 722-advisory count; Gemini consumer app has no custom MCP in India.",
+      newPos: "Proposal v2 (`Why not OpenClaw, Hermes`, `Sources`): Hermes defaults to `smart` approval and `deny` for unattended runs; bounded build-vs-adopt rationale without unverified advisory counts; Spark India Pro rollout cited (July 29, 2026).",
+      why: "Codex verified primary documentation (`hermes-agent.nousresearch.com/docs/user-guide/security/` and `blog.google/intl/en-in/...`) so the final proposal rests on accurate engineering trade-offs rather than stale secondary blog posts."
+    },
+    {
+      num: "Clash 8 · D5 & D10 Phase 1 Dependencies",
+      title: "Phase 1 Phone Review & Telegram Note Intake Ordering",
+      who: "Claude (R3 v1 draft) vs Codex & Gemini (R3 v2)",
+      oldPos: "Proposal v1 (`Build sequence` Phase 1): Promised 'notes sent on Telegram' and 'laptop and phone show the same state' in Phase 1 while putting Telegram inbound and phone web in Phase 2.",
+      newPos: "Proposal v2 (`Build sequence` Phase 1 & 2): Moves minimal authenticated phone web over Tailscale into Phase 1 (notes pasted in web UI on laptop or phone) and keeps Telegram inbound in Phase 2.",
+      why: "Codex's Round 3 audit caught that Phase 1's exit test ('laptop and phone show the same state') could not be run unless minimal authenticated phone web shipped in Phase 1."
+    }
+  ];
+
+  // --- DATA: 24 AUDIT ISSUES ---
+  const auditIssues = [
+    { num: 1, cat: "code", title: "`TelegramDelivery.flush()` has no caller", who: "Codex (verified by Claude, Gemini)", src: "`samaritan/src/delivery/index.ts:158`", fix: "Phase 0 wires a scheduled daemon timer and boot hook to call `flush()` so quiet-hour and retry queues drain.", phase: "Phase 0" },
+    { num: 2, cat: "code", title: "`withTimeout()` does not stop timed-out runs", who: "Codex (verified by Claude, Gemini)", src: "`samaritan/src/run-layer/index.ts:145`", fix: "Phase 0 moves worker execution to child processes with termination plus lease/fencing tokens so a killed or timed-out run cannot emit or write late.", phase: "Phase 0" },
+    { num: 3, cat: "code", title: "`dailyNotePath()` computes dates in UTC", who: "Gemini & Claude", src: "`samaritan/src/execution/adapters/obsidian.ts`", fix: "Phase 0 fixes `dailyNotePath()` to use local timezone (`Asia/Kolkata`) so notes after midnight IST land in the right daily note.", phase: "Phase 0" },
+    { num: 4, cat: "code", title: "Declared capability crons never fire", who: "All 3 agents", src: "`samaritan/src/app.ts`, `WORKLOG.md`", fix: "Phase 0 adds an in-process `node-cron` scheduler inside the `launchd`-supervised daemon with unique schedule occurrence admission keys on `runs`.", phase: "Phase 0" },
+    { num: 5, cat: "code", title: "`src/recall/` has chunk/embed primitives but no query pipeline", who: "All 3 agents", src: "`samaritan/src/recall/`, `run-layer/context.ts`", fix: "Phase 1 adds minimal cited lookup over vault and Notion for meeting briefs; Phase 2+ completes full hybrid FTS5 + `sqlite-vec` retrieval.", phase: "Phase 1 / 2" },
+    { num: 6, cat: "code", title: "UI `App.tsx` has no live background event stream", who: "Codex", src: "`samaritan/ui/src/App.tsx`", fix: "Phase 2 adds `activity_events` with a monotonic cursor so the browser replays new activity and task updates without clobbering open drafts.", phase: "Phase 2" },
+
+    { num: 7, cat: "security", title: "API trusts loopback and request-supplied `actor`", who: "Codex", src: "`samaritan/src/api/server.ts`", fix: "Phase 0 adds real session authentication and derives `actor` server-side before exposing the UI on Tailscale HTTPS.", phase: "Phase 0" },
+    { num: 8, cat: "security", title: "SQLite triggers only guard `action_item_events`", who: "Codex", src: "`samaritan/src/store/migrations.ts`, `action-items.ts`", fix: "Proposal v2 (`D9`) accurately documents the trigger boundary and isolates untrusted workers in child processes without DB or write credentials.", phase: "Phase 0 / 2" },
+    { num: 9, cat: "security", title: "Child processes are not OS sandboxes", who: "Codex", src: "`codex/round-3.md` §4.5", fix: "Proposal v2 (`D9`) restricts each worker's tool list, filesystem paths, credentials, and write routes, never granting human approval sessions.", phase: "Phase 2" },
+    { num: 10, cat: "security", title: "Indirect prompt injection from email, messages & web", who: "All 3 agents", src: "Meta's Agents Rule of Two", fix: "Any capability reading untrusted text gets zero send/write credentials and can only emit structured Action Items for human review.", phase: "Phase 1+" },
+    { num: 11, cat: "security", title: "MCP self-approval risk (`samaritan_act`)", who: "Codex & Claude", src: "`gemini/round-1.md` critique", fix: "Removed `samaritan_act` from `samaritan` MCP; assistants can propose items and answer clarifications, but only human surfaces can approve.", phase: "Phase 2" },
+    { num: 12, cat: "security", title: "Stale or edited draft approval race across surfaces", who: "Codex", src: "`codex/build-blueprint.md`", fix: "Approvals bind to exact `payload_hash`, account, and revision on `action_items` so approving on Telegram and Web cannot execute twice or commit stale text.", phase: "Phase 0 / 1" },
+
+    { num: 13, cat: "arch", title: "Thornhill planned a duplicate Brain, Task Store & Bot", who: "All 3 agents (`C1/G1`)", src: "`esp32-iphone-agent/docs/architecture.md`", fix: "Thornhill drops its planned brain and bot; Samaritan is the single user-facing planner and inbox, calling Thornhill as the phone executor service.", phase: "Phase 4" },
+    { num: 14, cat: "arch", title: "Cowork drops tool arguments on 33-tool MCP servers", who: "Claude (from Thornhill worklog)", src: "`esp32-iphone-agent/WORKLOG.md` (2026-10-18)", fix: "`samaritan` MCP is capped at ~8 plain-schema tools (`get_context`, `search`, `read_artifact`, `list_inbox`, `propose_action`, `submit_task`, `task_status`, `answer_question`).", phase: "Phase 2" },
+    { num: 15, cat: "arch", title: "Missing Cowork-style delegated task & run model", who: "All 3 agents", src: "`scratch-pad.md` requirement #4", fix: "Migration 6 adds `tasks`, `runs`, `artifacts`, and `activity_events`, plus the Tasks composer and Ask/Delegate bar in the UI.", phase: "Phase 0 / 2" },
+    { num: 16, cat: "arch", title: "Muting noisy notifications vs disabling the job", who: "Codex & Gemini", src: "`scratch-pad.md` requirement #2", fix: "`D2` separates Mute, Snooze, and Pause in Settings: muting silences outbound delivery while the capability still runs and logs to Activity/Inbox.", phase: "Phase 2" },
+    { num: 17, cat: "arch", title: "Keychain availability after unattended Mac reboot", who: "Codex", src: "`samaritan/src/secrets.ts` (`/usr/bin/security`)", fix: "Phase 0 tests `launchd` startup and Keychain access across reboot/FileVault login and surfaces disconnected/outage states.", phase: "Phase 0" },
+    { num: 18, cat: "arch", title: "Detecting when Claude Code / Codex / Gemini CLI wait for input", who: "Claude & Codex", src: "Official Claude Code, Codex, and Gemini CLI hook docs", fix: "Uses native HTTP hooks (`Notification` matchers `permission_prompt`, `idle_prompt`, `agent_needs_input` in Claude Code) to emit Inbox cards with Remote Control links.", phase: "Phase 1 / 2" },
+
+    { num: 19, cat: "api", title: "`healthAI` Oura and Hevy adapters are 27-line mocks", who: "Codex, Claude, Gemini", src: "`healthAI/packages/core/src/sources/{oura,hevy}.ts`", fix: "Phase 3 replaces the mocks with real Oura V2 OAuth and Hevy Pro REST clients while reusing `healthAI`'s coaching prompts.", phase: "Phase 3" },
+    { num: 20, cat: "api", title: "Oura V2 `daily_stress` is not a real-time stress detector", who: "Codex (verified by Claude, Gemini)", src: "Oura V2 OpenAPI 1.42 (`PublicDailyStress`)", fix: "Dropped 30-minute stress polling; music offers trigger from pre-meeting calendar context and manual/morning check-ins.", phase: "Phase 3 / 4" },
+    { num: 21, cat: "api", title: "Hevy API requires Hevy Pro; overwriting plans is destructive", who: "Codex & Claude", src: "Hevy API docs / `hevy-py`", fix: "Writes a copy of today's routine on approval rather than overwriting your master training plan.", phase: "Phase 3" },
+    { num: 22, cat: "api", title: "Nutgraf (`the-library`) uses Cognito + TOTP human login", who: "Claude & Codex", src: "`the-library/README.md`", fix: "Adds a scoped machine credential route to Nutgraf so Samaritan can fetch `GET /summary` unattended; audio generation stays in Nutgraf's Phase 3.", phase: "Phase 3" },
+    { num: 23, cat: "api", title: "WhatsApp has no official personal API; bridges risk bans", who: "Claude & Codex", src: "WhatsApp companion device policy", fix: "Never run `whatsmeow`/Baileys on your main number; use the Thornhill agent phone as an official linked companion device for read-only digests.", phase: "Phase 4" },
+    { num: 24, cat: "api", title: "TickTick adapter in Samaritan v0 is guided-only", who: "All 3 agents", src: "`samaritan/DECISIONS.md` (2026-07-19)", fix: "Phase 1 builds the TickTick Open API OAuth adapter (reusing your Claude TickTick OAuth app); stays guided until a provider receipt returns, then promotes to automated.", phase: "Phase 1" }
+  ];
+
+  // --- RENDER FUNCTIONS ---
+  let currentBeat = 0;
+  let timer = null;
+
+  function initScrubber() {
+    const sc = document.getElementById("scrubber");
+    sc.innerHTML = "";
+    beats.forEach((b, idx) => {
+      const btn = document.createElement("button");
+      btn.className = "step-dot" + (idx === 0 ? " current" : "");
+      btn.title = b.title;
+      btn.onclick = () => { stopPlay(); renderBeat(idx); };
+      sc.appendChild(btn);
+    });
+  }
+
+  function renderBeat(idx) {
+    currentBeat = idx;
+    const b = beats[idx];
+    document.getElementById("beatCounter").textContent = `Beat ${idx + 1} / ${beats.length}`;
+    document.getElementById("convBar").style.width = `${b.pct}%`;
+    document.getElementById("convBadge").textContent = `${b.pct}% · ${b.badge}`;
+    document.getElementById("beatTime").textContent = b.time;
+    document.getElementById("beatPhase").textContent = b.phase;
+    document.getElementById("beatTitle").textContent = b.title;
+    document.getElementById("beatDesc").innerHTML = b.desc;
+    document.getElementById("beatTakeaway").innerHTML = b.takeaway;
+
+    document.getElementById("svg-status-claude").textContent = b.statuses.claude;
+    document.getElementById("svg-status-codex").textContent = b.statuses.codex;
+    document.getElementById("svg-status-gemini").textContent = b.statuses.gemini;
+
+    document.getElementById("svg-prop-title").textContent = b.prop.title;
+    document.getElementById("svg-prop-sub").textContent = b.prop.sub;
+    document.getElementById("svg-prop-hash").textContent = b.prop.hash;
+
+    const posturesEl = document.getElementById("beatAgentPostures");
+    posturesEl.innerHTML = b.postures.map(p => `<div style="padding:6px 8px;background:#fff;border:1px solid var(--line);border-radius:6px;">${p}</div>`).join("");
+
+    // Scrubber dots
+    const dots = document.querySelectorAll(".step-dot");
+    dots.forEach((d, i) => {
+      d.className = "step-dot" + (i < idx ? " done" : i === idx ? " current" : "");
+    });
+
+    // Highlight active SVG nodes
+    ["node-repos", "node-web", "node-protocol", "node-claude", "node-codex", "node-gemini", "node-consensus"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        if (b.activeNodes.includes(id)) el.classList.add("node-active");
+        else el.classList.remove("node-active");
+      }
+    });
+
+    // Animate packets
+    ["sigPacket1", "sigPacket2", "sigPacket3"].forEach((pid, pIdx) => {
+      const pkt = document.getElementById(pid);
+      const spec = b.packets[pIdx];
+      if (!spec) {
+        pkt.setAttribute("opacity", "0");
+      } else {
+        pkt.setAttribute("fill", spec.color);
+        pkt.setAttribute("cx", spec.from[0]);
+        pkt.setAttribute("cy", spec.from[1]);
+        pkt.setAttribute("opacity", "1");
+        setTimeout(() => {
+          pkt.setAttribute("cx", spec.to[0]);
+          pkt.setAttribute("cy", spec.to[1]);
+        }, 60);
+      }
+    });
+  }
+
+  function togglePlay() {
+    if (timer) {
+      stopPlay();
+    } else {
+      document.getElementById("playBtn").textContent = "Pause Animation";
+      if (currentBeat >= beats.length - 1) currentBeat = 0;
+      renderBeat(currentBeat);
+      timer = setInterval(() => {
+        if (currentBeat < beats.length - 1) {
+          renderBeat(currentBeat + 1);
+        } else {
+          stopPlay();
+        }
+      }, 2800);
+    }
+  }
+
+  function stopPlay() {
+    if (timer) clearInterval(timer);
+    timer = null;
+    document.getElementById("playBtn").textContent = "Play Animation";
+  }
+
+  function nextBeat() {
+    stopPlay();
+    renderBeat((currentBeat + 1) % beats.length);
+  }
+
+  function prevBeat() {
+    stopPlay();
+    renderBeat((currentBeat - 1 + beats.length) % beats.length);
+  }
+
+  function resetBeats() {
+    stopPlay();
+    renderBeat(0);
+  }
+
+  // Render Decision Matrix
+  function renderDecisions(filter) {
+    const tbody = document.getElementById("decisionTableBody");
+    const rows = decisions.filter(d => filter === "all" || d.type === filter);
+    tbody.innerHTML = rows.map(d => `
+      <tr>
+        <td>
+          <b>${d.id}</b><br/>
+          <span class="badge ${d.type === 'debated' ? 'claude' : 'auto'}">${d.type === 'debated' ? 'Debated' : 'Unanimous'}</span>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px;">${d.name}</div>
+        </td>
+        <td>${d.r1}</td>
+        <td>${d.r2}</td>
+        <td>${d.r3}</td>
+        <td>${d.how}</td>
+      </tr>
+    `).join("");
+  }
+
+  function filterDecisions(filter, btn) {
+    document.querySelectorAll("#roundFilters .pill-filter").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    renderDecisions(filter);
+  }
+
+  // Render Clashes
+  function renderClashes() {
+    const grid = document.getElementById("clashGrid");
+    grid.innerHTML = clashes.map(c => `
+      <div class="clash-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span class="badge core">${c.num}</span>
+          <span class="badge claude">${c.who}</span>
+        </div>
+        <h3>${c.title}</h3>
+        <div class="diff-row">
+          <span class="diff-old">Initial / Disputed: ${c.oldPos}</span>
+          <span class="diff-new">Converged v2: ${c.newPos}</span>
+        </div>
+        <div style="font-size:12.5px;color:var(--muted);">
+          <b style="color:var(--ink);">Why it resolved this way:</b> ${c.why}
+        </div>
+      </div>
+    `).join("");
+  }
+
+  // Render Audit Table
+  function renderAudit(filter) {
+    const tbody = document.getElementById("auditTableBody");
+    const rows = auditIssues.filter(a => filter === "all" || a.cat === filter);
+    tbody.innerHTML = rows.map(a => `
+      <tr>
+        <td><b>#${a.num}</b></td>
+        <td><b>${a.title}</b></td>
+        <td><span class="badge">${a.who}</span></td>
+        <td><code>${a.src}</code></td>
+        <td>${a.fix}</td>
+        <td><span class="badge auto">${a.phase}</span></td>
+      </tr>
+    `).join("");
+  }
+
+  function filterAudit(filter, btn) {
+    btn.parentElement.querySelectorAll(".pill-filter").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    renderAudit(filter);
+  }
+
+  function switchView(viewId, btn) {
+    stopPlay();
+    document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+    document.getElementById("view-" + viewId).classList.add("active");
+    document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById("mainScroll").scrollTop = 0;
+  }
+
+  // Initialize
+  initScrubber();
+  renderBeat(0);
+  renderDecisions("all");
+  renderClashes();
+  renderAudit("all");
+</script>
+</body>
+</html>

@@ -90,8 +90,14 @@ export const obsidianNoteAppend: ExecutionAdapter = {
 /**
  * Vault-relative path to a daily note. Relative to `paths.vault`, which points
  * at the Samaritan folder itself, so this carries no vault-name prefix.
+ *
+ * Uses local calendar date (Asia/Kolkata on Sandip's machine) rather than UTC
+ * `toISOString().slice(0, 10)` so runs before 05:30 AM IST do not write into
+ * yesterday's daily note (PROPOSAL G2).
  */
 export function dailyNotePath(date = new Date()): string {
-  const iso = date.toISOString().slice(0, 10);
-  return join("Areas", "Daily", `${iso}.md`);
+  const yyyy = String(date.getFullYear());
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return join("Areas", "Daily", `${yyyy}-${mm}-${dd}.md`);
 }
