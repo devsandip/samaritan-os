@@ -33,9 +33,11 @@ emits:
       - { id: defer, label: "Snooze 2h", outcome: defer, defer_for: 2h }
       - { id: reject, label: "Cancel question", outcome: discard }
 
+    # Approving the item with an edited "answer" hands it to the task and
+    # re-queues it (src/execution/adapters/task-answer.ts).
     execution:
-      mode: guided
-      capability: guided.fallback
+      mode: automated
+      capability: samaritan.task.answer
 
     policy:
       escalate_when: "true"
@@ -78,7 +80,7 @@ emits:
     ttl: null
 
 requires_capabilities:
-  - guided.fallback
+  - samaritan.task.answer
   - pm-os.item.file
 
 delivery:

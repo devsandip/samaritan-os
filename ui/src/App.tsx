@@ -6,7 +6,7 @@
  * the Inbox list, and the Tasks view never disagree.
  */
 import { useEffect, useMemo, useState } from "react";
-import { api } from "./api/client";
+import { api, UNAUTHORIZED_EVENT } from "./api/client";
 import { CommandBar } from "./components/CommandBar";
 import { Sidebar } from "./components/Sidebar";
 import { Toast } from "./components/states";
@@ -14,12 +14,14 @@ import { Catalogue } from "./lib/manifest";
 import { useRoute } from "./lib/router";
 import { COMPLETED_STATUSES, INBOX_STATUSES } from "./lib/transitions";
 import { useAsync } from "./lib/useAsync";
+import { usePoll } from "./lib/usePoll";
 import { ActivityView } from "./views/Activity";
 import { AskView } from "./views/Ask";
 import { CompletedView } from "./views/Completed";
 import { DashboardView } from "./views/Dashboard";
 import { DeferredView } from "./views/Deferred";
 import { InboxView } from "./views/Inbox";
+import { LoginView } from "./views/Login";
 import { SettingsView } from "./views/Settings";
 import { TasksView } from "./views/Tasks";
 
@@ -40,6 +42,24 @@ interface ToastState {
 }
 
 export function App() {
+  const [signedOut, setSignedOut] = useState(false);
+
+  // Any 401 from any view means the session is missing or stale (D5).
+  useEffect(() => {
+    const onUnauthorized = () => setSignedOut(true);
+    window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
+    api
+      .session()
+      .then((s) => setSignedOut(s.token_configured && !s.authenticated))
+      .catch(() => undefined);
+    return () => window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
+  }, []);
+
+  if (signedOut) return <LoginView onSignedIn={() => window.location.reload()} />;
+  return <Shell />;
+}
+
+function Shell() {
   const route = useRoute();
   const [toast, setToast] = useState<ToastState | undefined>(undefined);
 
@@ -86,6 +106,18 @@ export function App() {
         (t) => t.status === "running" || t.status === "needs_input" || t.status === "queued",
       ).length,
     [tasks.data],
+  );
+
+  // Work happens in the background (tasks, syncs, Telegram answers), so the
+  // shared lists refresh on their own: quickly while a task is in flight, and
+  // slowly otherwise so laptop and phone converge on the same state.
+  const busy = (tasks.data ?? []).some((t) => t.status === "running" || t.status === "queued");
+  usePoll(
+    () => {
+      tasks.reload();
+      inbox.reload();
+    },
+    busy ? 4_000 : 30_000,
   );
 
   const statusLine = capabilities.error

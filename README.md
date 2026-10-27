@@ -97,6 +97,17 @@ unsigned request is refused.
 The listener still missing is the Slack Events route, so chat events still arrive
 by `samaritan emit-event` or the `POST /api/events` route.
 
+### Command Centre (architecture consensus, Phases 0-2)
+
+The three-agent architecture consensus of 2026-10-20 is built on top of this:
+delegated tasks that run on the Claude Agent SDK in a child process and can only
+read, write files into their own folder, ask, or propose; Now, Tasks and Activity
+views; a sign-in for the phone; Telegram buttons bound to the exact revision they
+were sent for; one `samaritan` MCP server with eight tools and no approve tool;
+and the first workflow, meeting brief to notes nudge to reviewed items to
+TickTick. What maps to which decision, what is verified and what is not is in
+[docs/features/command-centre.md](docs/features/command-centre.md).
+
 ## Quick start
 
 Requires Node 24 or newer (the store uses the built-in `node:sqlite`; see
@@ -253,9 +264,15 @@ security add-generic-password -s samaritan -a notion:pm-os-workspace -w
 ```
 
 Without it, `notion.*` adapters report `not_configured` and any item routed to
-them fails loudly rather than silently appearing to succeed. TickTick is
-guided-only in v0 (no OAuth flow yet), so tasks stage for confirmation instead of
-being created.
+them fails loudly rather than silently appearing to succeed. TickTick files
+through its Open API once `ticktick.enabled` is on and `ticktick:default` holds a
+token; until then tasks stage for confirmation instead of being created.
+
+The Command Centre adds four more: `web:token` (sign-in for the phone, and for
+decisions in the UI once set), `anthropic:worker` (a Console key with a spend cap
+for delegated tasks), `telegram:bot`, and `gcal:default` (an OAuth refresh-token
+bundle). The table is in
+[docs/features/command-centre.md](docs/features/command-centre.md#setting-it-up-on-this-mac).
 
 The Gmail listener reads the same way. Turn it on in `config.yaml`'s `gmail`
 block and add a bearer token (read + compose scope — never send):
@@ -287,7 +304,7 @@ example `SAMARITAN_NOTION_PM_OS_WORKSPACE` or `SAMARITAN_GMAIL_DEFAULT`.
 ## Tests
 
 ```bash
-pnpm test        # 550 tests
+pnpm test        # 618 tests
 pnpm typecheck
 ```
 

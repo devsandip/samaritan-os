@@ -1,24 +1,38 @@
-# Samaritan MCP Routing Guide (Static Reference)
+# Samaritan MCP routing guide (static reference)
 
-This file is a static routing pointer for coding and desktop assistants (Claude Code, Claude Desktop, Codex, Gemini CLI). It never contains live personal data.
+A static pointer for assistants (Claude Code, Claude desktop, Codex, Gemini
+CLI). It never contains live personal data; live state comes from
+`get_context`.
 
 ## Connection
 
-- **Stdio MCP command**: `pnpm --dir /Users/sandipdev/Developer/samaritan mcp`
-- **HTTP JSON-RPC endpoint**: `POST http://127.0.0.1:4173/api/mcp`
+- **Stdio**: `node /Users/sandipdev/Developer/samaritan/dist/cli/mcp.js` (run
+  `pnpm build` first). A thin proxy to the running daemon: it opens no database,
+  so the daemon must be up (`pnpm install-daemon`).
+- **HTTP**: `POST http://127.0.0.1:4173/api/mcp`, Streamable HTTP with JSON
+  responses. Loopback only; over the tailnet it needs a signed-in session.
 
-## Exposed Tools (8 Tools, Zero Approval Tools)
+Do not register `pnpm mcp`: pnpm prints its own lines on stdout before the
+server starts, and the client stops parsing.
 
-1. `get_context`: Returns Samaritan's active operational snapshot (pending Inbox count, active delegated tasks, upcoming calendar events, and per-source notification rules).
-2. `search`: Searches Samaritan Recall across the Obsidian vault, Notion decisions/insights mirrors, project journals, and audit trail, returning cited passages.
-3. `read_artifact`: Reads the metadata and text content of an artifact produced by a delegated task under `~/.samaritan/artifacts/<task-id>/`.
-4. `list_inbox`: Lists items currently waiting in Sandip's Samaritan Inbox (`pending`, `in_review`, `awaiting_confirmation`).
-5. `propose_action`: Submits an action item proposal (`decision`, `insight`, `task`, `person`, or `note`) into the Samaritan Inbox for Sandip to review. Never executes directly.
-6. `submit_task`: Submits a delegated background task (`general`, `coding`, `research`, or `operations` lane) to Samaritan's worker.
-7. `task_status`: Returns the current status, latest run, registered artifacts, and recent activity events for a delegated task.
-8. `answer_question`: Provides a clarifying answer to a delegated task currently in `needs_input` status and resumes the worker. Cannot approve Inbox action items.
+## Tools (eight, none of them approve anything)
 
-## Security Boundary
+1. `get_context`: Inbox count and preview, tasks in play, running work, the next
+   meetings, per-source notification rules.
+2. `search`: Recall over the vault, project journals and the audit trail, with
+   citations.
+3. `read_artifact`: an artifact a delegated task wrote, by id.
+4. `list_inbox`: items waiting for Sandip.
+5. `propose_action`: puts a decision, insight, task, person or note in the Inbox
+   for review. Nothing is filed until Sandip approves it.
+6. `submit_task`: delegates a background task. Returns at once with the queued
+   task; pass `request_id` to make a retry safe. Follow it with `task_status`.
+7. `task_status`: a task, its runs, artifacts and recent activity.
+8. `answer_question`: answers a delegated task's open clarifying question. It
+   accepts only a `task-question` on a task that is waiting, and is recorded as
+   the `assistant` actor. It cannot approve a proposal or restart a stopped task.
 
-- Connected assistants can read context, propose actions, submit background tasks, and answer worker clarification questions.
-- Approval tools (`respond`, `confirm`, `batch`) are excluded from MCP. Every external side effect requires human approval in the Samaritan Command Centre UI or Telegram bot.
+## Boundary
+
+Assistants read, propose, delegate and answer clarifications. Approvals happen
+only in the Samaritan UI or on Telegram, from Sandip's signed-in session.

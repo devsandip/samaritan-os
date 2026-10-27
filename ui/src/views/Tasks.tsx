@@ -16,6 +16,7 @@ import { EmptyState, ErrorBanner, ErrorStrip, SkeletonDetail, SkeletonRows } fro
 import { clockTime, relativeTime } from "../lib/format";
 import { navigate } from "../lib/router";
 import { useAsync } from "../lib/useAsync";
+import { usePoll } from "../lib/usePoll";
 
 const STATUS_BADGE: Record<TaskStatus, { label: string; variant: "auto" | "assist" | "guided" | "urgent" | "neutral" }> = {
   queued: { label: "queued", variant: "neutral" },
@@ -59,7 +60,7 @@ export function TasksView({
       const created = await api.createTask({ goal: trimmed, lane });
       setGoal("");
       reload();
-      onToast(`Delegated task started (${lane})`);
+      onToast(`Queued (${lane}); it runs in the background`);
       navigate(`/tasks/${encodeURIComponent(created.task.id)}`);
     } catch (err) {
       onToast(`Could not start task: ${(err as Error).message}`, "err");
@@ -72,9 +73,9 @@ export function TasksView({
     <>
       <h1 className="h-greet">Tasks</h1>
       <p className="h-sub">
-        Delegated background work running through the 5-method Worker Adapter. Artifacts stay
-        confined to <code>~/.samaritan/artifacts/&lt;task-id&gt;/</code>; external side effects
-        escalate to Inbox.
+        Work you hand off. Each task runs in the background on the Claude Agent SDK with no send or
+        write access: it reads memory, writes files under{" "}
+        <code>~/.samaritan/artifacts/&lt;task-id&gt;/</code>, and asks or proposes through the Inbox.
       </p>
 
       {error ? <ErrorBanner error={error} onRetry={reload} /> : null}
@@ -185,6 +186,12 @@ function TaskDetailPane({
   onToast: (message: string, variant?: "ok" | "err") => void;
 }) {
   const detail = useAsync(() => api.getTask(taskId), [taskId]);
+  const live = detail.data
+    ? ["queued", "running", "needs_input", "awaiting_review"].includes(detail.data.task.status)
+    : true;
+  // A task moves on its own; follow it while it is in play.
+  usePoll(detail.reload, 3_000, live);
+  const [retrying, setRetrying] = useState(false);
   const [answer, setAnswer] = useState("");
   const [submittingAnswer, setSubmittingAnswer] = useState(false);
   const [stopping, setStopping] = useState(false);
@@ -203,27 +210,35 @@ function TaskDetailPane({
   }
   if (!detail.data) return null;
 
-  const { task, runs, artifacts, events, action_items: actionItems } = detail.data;
+  const { task, runs, artifacts, events, open_question: openQuestionItem } = detail.data;
   const badge = STATUS_BADGE[task.status];
   const canStop =
     task.status === "running" || task.status === "queued" || task.status === "needs_input";
-
-  const latestQuestionEvent = [...events]
-    .reverse()
-    .find((ev) => ev.type === "question.asked");
+  const canRetry = task.status === "interrupted" || task.status === "failed";
   const questionText =
-    typeof latestQuestionEvent?.payload["question"] === "string"
-      ? latestQuestionEvent.payload["question"]
-      : "The worker paused and requested clarification before continuing.";
-  const openQuestionItem = actionItems?.find(
-    (item) => item.type === "task-question" && (item.status === "pending" || item.status === "in_review"),
-  );
+    typeof openQuestionItem?.custom["question"] === "string"
+      ? openQuestionItem.custom["question"]
+      : "The worker paused and asked for clarification before continuing.";
+
+  const handleRetry = async () => {
+    setRetrying(true);
+    try {
+      await api.retryTask(task.id);
+      onToast("Queued again");
+      detail.reload();
+      onUpdated();
+    } catch (err) {
+      onToast(`Retry failed: ${(err as Error).message}`, "err");
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   const handleStop = async () => {
     setStopping(true);
     try {
-      await api.cancelTask(task.id, "Cancelled by Sandip in Command Centre");
-      onToast("Task stopped and lease fenced");
+      const { task: stopped } = await api.cancelTask(task.id, "Stopped by Sandip in Command Centre");
+      onToast(stopped.status === "cancelled" ? "Task stopped" : `Task had already ${stopped.status}`);
       detail.reload();
       onUpdated();
     } catch (err) {
@@ -239,9 +254,13 @@ function TaskDetailPane({
     if (!trimmed || submittingAnswer) return;
     setSubmittingAnswer(true);
     try {
-      await api.answerTask(task.id, { answer: trimmed, expected_revision: task.revision });
+      await api.answerTask(task.id, {
+        answer: trimmed,
+        expected_revision: task.revision,
+        ...(openQuestionItem ? { question_id: openQuestionItem.id } : {}),
+      });
       setAnswer("");
-      onToast("Answer delivered, worker resumed");
+      onToast("Answer sent; the task resumes shortly");
       detail.reload();
       onUpdated();
     } catch (err) {
@@ -275,7 +294,12 @@ function TaskDetailPane({
         </h2>
         {canStop ? (
           <Button small pending={stopping} disabled={stopping} onClick={() => void handleStop()}>
-            Stop Task
+            Stop
+          </Button>
+        ) : null}
+        {canRetry ? (
+          <Button small pending={retrying} disabled={retrying} onClick={() => void handleRetry()}>
+            Retry
           </Button>
         ) : null}
       </div>
@@ -296,7 +320,16 @@ function TaskDetailPane({
         <ErrorStrip message={`Task failed: ${task.result_summary}`} />
       ) : null}
 
-      {task.status === "needs_input" ? (
+      {task.status === "awaiting_review" ? (
+        <div className="d-why">
+          The worker proposed items for you.{" "}
+          <button type="button" className="linkish" onClick={() => navigate("/inbox")}>
+            Review them in the Inbox
+          </button>
+        </div>
+      ) : null}
+
+      {task.status === "needs_input" && openQuestionItem ? (
         <form className="dcard" onSubmit={(e) => void handleAnswer(e)}>
           <h4>Clarification Needed (Worker Paused)</h4>
           <p className="detail-text" style={{ marginTop: 0 }}>
@@ -437,7 +470,7 @@ function TaskDetailPane({
                 </div>
                 <div className="sub">
                   {Object.keys(ev.payload).length > 0 ? (
-                    <code>{JSON.stringify(ev.payload)}</code>
+                    <code className="wrap">{JSON.stringify(ev.payload)}</code>
                   ) : null}
                 </div>
               </div>

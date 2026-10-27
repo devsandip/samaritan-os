@@ -299,6 +299,8 @@ CREATE TABLE tasks (
   id TEXT PRIMARY KEY,
   goal TEXT NOT NULL,
   lane TEXT NOT NULL DEFAULT 'general',       -- general|coding|research|operations
+  origin TEXT NOT NULL DEFAULT 'api',         -- ui|telegram|mcp|api
+  request_key TEXT UNIQUE,                    -- client idempotency key
   status TEXT NOT NULL,                       -- queued|running|needs_input|awaiting_review|succeeded|failed|cancelled|interrupted
   revision INTEGER NOT NULL DEFAULT 1,
   runner TEXT NOT NULL DEFAULT 'worker',
@@ -349,7 +351,7 @@ CREATE TABLE activity_events (
   task_id TEXT REFERENCES tasks(id),
   run_id TEXT REFERENCES runs(id),
   capability_id TEXT,
-  type TEXT NOT NULL,                         -- task.submitted|run.started|tool.called|artifact.created|question.asked|question.answered|action.proposed|run.completed|run.failed|run.cancelled|run.interrupted|hook.received
+  type TEXT NOT NULL,                         -- see ActivityEventType in src/types/task.ts
   payload_json TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
@@ -379,6 +381,45 @@ CREATE INDEX idx_action_items_run ON action_items(run_id) WHERE run_id IS NOT NU
 ALTER TABLE delivery_queue ADD COLUMN dedupe_key TEXT;
 CREATE UNIQUE INDEX idx_delivery_queue_dedupe
   ON delivery_queue(dedupe_key) WHERE dedupe_key IS NOT NULL;
+-- Telegram buttons travel with the queued message, and the sent message id is
+-- kept so a reply to a worker's question can be routed back to that question.
+ALTER TABLE delivery_queue ADD COLUMN reply_markup_json TEXT;
+ALTER TABLE delivery_queue ADD COLUMN telegram_message_id INTEGER;
+
+-- One row per Telegram button (D5, D9). callback_data carries only the random
+-- token; the row binds it to the exact item revision and payload it was sent
+-- for, so a stale button can never approve content that changed since.
+CREATE TABLE telegram_callbacks (
+  token TEXT PRIMARY KEY,
+  action TEXT NOT NULL,                       -- respond|mute
+  action_item_id TEXT,
+  response_id TEXT,
+  revision INTEGER,
+  payload_hash TEXT,
+  source_id TEXT,
+  created_at TEXT NOT NULL,
+  used_at TEXT
+);
+CREATE INDEX idx_telegram_callbacks_item ON telegram_callbacks(action_item_id);
+
+-- Check-or-create for provider writes that have no idempotency key of their
+-- own (TickTick). The row is written before the call; a row still 'pending'
+-- on the next attempt means the last outcome is unknown, and the adapter looks
+-- for its marker at the provider before it writes again.
+CREATE TABLE provider_intents (
+  idempotency_key TEXT PRIMARY KEY,
+  provider TEXT NOT NULL,
+  marker TEXT NOT NULL,
+  state TEXT NOT NULL,                        -- pending|committed
+  receipt TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+-- Calendar rows the meeting loop needs: the event's own link, and whether it
+-- is a meeting with other people (no brief or nudge for a solo focus block).
+ALTER TABLE calendar_events ADD COLUMN html_link TEXT;
+ALTER TABLE calendar_events ADD COLUMN has_attendees INTEGER NOT NULL DEFAULT 0;
 
 CREATE TABLE source_rules (
   source_id TEXT PRIMARY KEY,

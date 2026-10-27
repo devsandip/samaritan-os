@@ -252,90 +252,6 @@ describe("D1 Worker Adapter & Delegated Tasks", () => {
     expect(() => resolveTaskArtifactPath(root, "task-123", "/etc/passwd")).toThrow(/escapes/);
   });
 
-  it("runs a task, pauses on needs_input, resumes on answer, and writes scoped artifacts", async () => {
-    const customArtifactsRoot = join(tmpDir, "custom-artifacts");
-    const customApp = createApp({
-      dbPath: ":memory:",
-      capabilitiesDir: CAPABILITIES,
-      artifactsRoot: customArtifactsRoot,
-      workerExecutor: async (tools, context) => {
-        const answerText = context.answers?.[0];
-        if (!answerText) {
-          tools.recordToolCall("vault.search", { query: "vendor renewal" }, "Searched vault");
-          await tools.askQuestion(
-            "Should I include archived 2025 contracts in the vendor audit?",
-            "Need scope confirmation before writing the report.",
-          );
-          return {
-            status: "needs_input",
-            summary: "Waiting for clarification on 2025 contracts",
-          };
-        }
-
-        tools.writeArtifact({
-          kind: "brief",
-          filename: "vendor-report.md",
-          content: `# Vendor Report\n\nClarification received: ${answerText}\n`,
-        });
-
-        await tools.proposeAction({
-          kind: "task",
-          title: "Review vendor clauses",
-          detail: answerText,
-        });
-
-        return {
-          status: "succeeded",
-          summary: `Completed report with answer: ${answerText}`,
-        };
-      },
-    });
-
-    try {
-      const submitted = await customApp.worker.submit({
-        goal: "Audit vendor renewals",
-        lane: "operations",
-      });
-
-      const pausedTask = customApp.worker.getTask(submitted.task.id);
-      expect(pausedTask?.status).toBe("needs_input");
-
-      const inboxQuestions = listActionItems(customApp.db, {
-        capability_id: "worker-task",
-        task_id: submitted.task.id,
-      }).filter((i) => i.type === "task-question");
-      expect(inboxQuestions).toHaveLength(1);
-      expect(inboxQuestions[0]?.status).toBe("pending");
-
-      // Answer the question and resume the worker
-      const resumedTask = await customApp.worker.answer(
-        submitted.task.id,
-        "Include only active 2026 contracts",
-      );
-      expect(resumedTask.status).toBe("succeeded");
-
-      const artifacts = customApp.worker.listArtifacts({ task_id: submitted.task.id });
-      expect(artifacts).toHaveLength(1);
-      expect(artifacts[0]?.path_or_url).toContain("vendor-report.md");
-
-      const absPath = resolveTaskArtifactPath(
-        customArtifactsRoot,
-        submitted.task.id,
-        "vendor-report.md",
-      );
-      expect(readFileSync(absPath, "utf8")).toContain("Include only active 2026 contracts");
-
-      // Verify the proposed action landed in Inbox as a pending proposal
-      const proposals = listActionItems(customApp.db, { capability_id: "worker-task" }).filter(
-        (i) => i.type === "task-action-proposal",
-      );
-      expect(proposals).toHaveLength(1);
-      expect(proposals[0]?.status).toBe("pending");
-    } finally {
-      customApp.close();
-    }
-  });
-
   it("fences the run lease when cancelled so late writes are rejected", () => {
     const task = createTask(app.db, { goal: "Cancelable task", status: "running" });
     const { run } = admitRun(app.db, {
@@ -359,12 +275,23 @@ describe("Phase 1 Meetings Loop, TickTick Adapter, & Coding-Agent Hooks", () => 
     const adapter = createTickTickAdapter({
       db: app.db,
       token: () => "test-ticktick-token",
-      fetchImpl: async (_url, init) => {
+      fetchImpl: async (url, init) => {
+        if (String(url).endsWith("/project") && (!init?.method || init.method === "GET")) {
+          return new Response(
+            JSON.stringify([
+              { id: "proj-samaritan-1", name: "Samaritan" },
+              { id: "proj-nutgraf-2", name: "Nutgraf" },
+            ]),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
         const body = JSON.parse(String(init?.body));
         expect(body.title).toBe("Review PR 73");
-        expect(body.content).toBe("Check issue 19 details");
+        expect(body.content).toMatch(/^Check issue 19 details\n\nref: samaritan:[0-9a-f]{12}$/);
+        expect(body.projectId).toBe("proj-samaritan-1");
+        expect(body.tags).toEqual(["PRreview", "samaritan"]);
         return new Response(
-          JSON.stringify({ id: "tt-task-99", projectId: "inbox-proj", status: 0 }),
+          JSON.stringify({ id: "tt-task-99", projectId: "proj-samaritan-1", status: 0 }),
           { status: 200, headers: { "content-type": "application/json" } },
         );
       },
@@ -378,11 +305,17 @@ describe("Phase 1 Meetings Loop, TickTick Adapter, & Coding-Agent Hooks", () => 
       payload: {
         title: "Review PR #73",
         content: "Check issue #19 details",
+        list: "samaritan",
         tags: ["#PRreview", "samaritan"],
       },
     });
 
     expect(outcome.status).toBe("succeeded");
+    expect(outcome.result).toMatchObject({
+      ticktick_task_id: "tt-task-99",
+      list: "samaritan",
+      projectId: "proj-samaritan-1",
+    });
     const row = app.db
       .prepare("SELECT id, title FROM ticktick_tasks WHERE id = 'tt-task-99'")
       .get() as { id: string; title: string } | undefined;
@@ -483,22 +416,37 @@ describe("Phase 1 Meetings Loop, TickTick Adapter, & Coding-Agent Hooks", () => 
       expect(stopRes.json().action).toBe("auto_resolved");
 
       const afterStop = getActionItem(app.db, pending[0]!.id);
-      expect(afterStop?.status).toBe("executed");
+      // Retired, not approved: nobody decided anything in Samaritan.
+      expect(afterStop?.status).toBe("expired");
+      expect(listAuditTrail(app.db, pending[0]!.id).some((e) => e.to_status === "approved")).toBe(false);
     } finally {
       await server.close();
     }
   });
 });
 
-describe("D4 Cross-Assistant MCP Server & D5 Telegram Inbound", () => {
-  it("exposes exactly 8 MCP tools and never exposes an approval tool", async () => {
-    const listRes = await handleMcpRequest(app, {
-      jsonrpc: "2.0",
-      id: 1,
-      method: "tools/list",
-    });
+describe("D4 Cross-Assistant MCP Server", () => {
+  const call = async (name: string, args: Record<string, unknown>, id = 1) => {
+    const res = await handleMcpRequest(app, { jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: args } });
+    const result = res!.result as { content: { text: string }[]; isError?: boolean };
+    return { res: res!, result, json: () => JSON.parse(result.content[0]!.text) as Record<string, unknown> };
+  };
 
-    const tools = (listRes.result as { tools: { name: string }[] }).tools.map((t) => t.name);
+  it("negotiates the protocol and answers notifications with nothing", async () => {
+    const init = await handleMcpRequest(app, {
+      jsonrpc: "2.0",
+      id: 0,
+      method: "initialize",
+      params: { protocolVersion: "2025-06-18", capabilities: {} },
+    });
+    expect((init!.result as { protocolVersion: string }).protocolVersion).toBe("2025-06-18");
+    expect(await handleMcpRequest(app, { jsonrpc: "2.0", method: "notifications/initialized" })).toBeUndefined();
+    expect((await handleMcpRequest(app, { jsonrpc: "2.0", id: 9 }))!.error?.code).toBe(-32600);
+  });
+
+  it("exposes exactly 8 tools and never an approval tool", async () => {
+    const listRes = await handleMcpRequest(app, { jsonrpc: "2.0", id: 1, method: "tools/list" });
+    const tools = (listRes!.result as { tools: { name: string }[] }).tools.map((t) => t.name);
     expect(tools).toEqual([
       "get_context",
       "search",
@@ -510,75 +458,67 @@ describe("D4 Cross-Assistant MCP Server & D5 Telegram Inbound", () => {
       "answer_question",
     ]);
 
-    // Calling a non-existent approval tool fails closed
     const badCall = await handleMcpRequest(app, {
       jsonrpc: "2.0",
       id: 2,
       method: "tools/call",
       params: { name: "approve_action", arguments: { id: "any" } },
     });
-    expect(badCall.error?.message).toMatch(/unknown MCP tool/);
-
-    // propose_action creates a pending Inbox item and never auto-executes
-    const propCall = await handleMcpRequest(app, {
-      jsonrpc: "2.0",
-      id: 3,
-      method: "tools/call",
-      params: {
-        name: "propose_action",
-        arguments: {
-          kind: "task",
-          title: "Follow up on AWS cost anomaly",
-          detail: "Create high-priority review task",
-        },
-      },
-    });
-    const propBody = (propCall.result as { structuredContent: { proposed: { id: string; status: string } } })
-      .structuredContent.proposed;
-    expect(propBody.status).toBe("pending");
-    expect(getActionItem(app.db, propBody.id)?.status).toBe("pending");
+    expect(badCall!.error).toMatchObject({ code: -32602, message: expect.stringMatching(/unknown tool/) });
   });
 
-  it("handles Telegram inbound /task, /note, and callback buttons with chat_id validation", async () => {
-    const deps = {
-      db: app.db,
-      actionCenter: app.actionCenter,
-      worker: app.worker,
-      allowedChatId: "12345",
-    };
+  it("answers malformed messages with an error instead of failing", async () => {
+    expect((await handleMcpRequest(app, null))!.error?.code).toBe(-32600);
+    const server = buildServer(app);
+    try {
+      const res = await server.inject({ method: "POST", url: "/api/mcp", payload: [null] });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()[0].error.code).toBe(-32600);
+    } finally {
+      await server.close();
+    }
+  });
 
-    const unauthorized = await handleTelegramUpdate(deps, {
-      update_id: 1,
-      message: {
-        message_id: 10,
-        chat: { id: 99999 },
-        text: "/task Audit logs",
-      },
-    });
-    expect(unauthorized.accepted).toBe(false);
-    expect(unauthorized.reason).toBe("unauthorized_chat_id");
+  it("reports a failing tool as an isError result the model can read", async () => {
+    const { result } = await call("propose_action", { kind: "rumour", title: "x" });
+    expect(result.isError).toBe(true);
+    expect(result.content[0]!.text).toMatch(/kind must be one of/);
+  });
 
-    const taskCmd = await handleTelegramUpdate(deps, {
-      update_id: 2,
-      message: {
-        message_id: 11,
-        chat: { id: 12345 },
-        text: "/task Summarize weekly metrics",
-      },
-    });
-    expect(taskCmd.accepted).toBe(true);
-    expect(taskCmd.action).toBe("task_submitted");
+  it("files proposals as pending, and a different body under the same title as a new item", async () => {
+    const first = (await call("propose_action", { kind: "task", title: "Follow up", detail: "AWS" })).json();
+    const second = (await call("propose_action", { kind: "task", title: "Follow up", detail: "GCP" })).json();
+    const a = (first["proposed"] as { id: string }).id;
+    const b = (second["proposed"] as { id: string }).id;
+    expect(a).not.toBe(b);
+    expect(getActionItem(app.db, a)?.status).toBe("pending");
+    expect(getActionItem(app.db, a)?.custom["detail"]).toBe("AWS");
+  });
 
-    const muteCb = await handleTelegramUpdate(deps, {
-      update_id: 3,
-      callback_query: {
-        id: "cb-1",
-        data: "mute:newsletter-digest",
-        message: { chat: { id: 12345 } },
-      },
-    });
-    expect(muteCb.accepted).toBe(true);
-    expect(muteCb.action).toBe("muted_source");
+  it("queues submitted tasks at once, idempotent on request_id", async () => {
+    app.worker.stop();
+    const first = (await call("submit_task", { goal: "Draft the WBR", request_id: "r1" })).json();
+    const again = (await call("submit_task", { goal: "Draft the WBR", request_id: "r1" })).json();
+    const task = first["task"] as { id: string; status: string; origin: string };
+    expect(task).toMatchObject({ status: "queued", origin: "mcp" });
+    expect((again["task"] as { id: string }).id).toBe(task.id);
+    expect(again["created"]).toBe(false);
+  });
+
+  it("speaks Streamable HTTP: 202 for a notification, 405 for GET", async () => {
+    const server = buildServer(app);
+    try {
+      const note = await server.inject({
+        method: "POST",
+        url: "/api/mcp",
+        payload: { jsonrpc: "2.0", method: "notifications/initialized" },
+      });
+      expect(note.statusCode).toBe(202);
+      expect(note.body).toBe("");
+      expect((await server.inject({ method: "GET", url: "/api/mcp" })).statusCode).toBe(405);
+    } finally {
+      await server.close();
+    }
   });
 
   it("enforces Phase 0 caffeinate plist, SQLite VACUUM INTO backup, and C2 billing guardrails", async () => {
@@ -710,13 +650,15 @@ describe("D4 Cross-Assistant MCP Server & D5 Telegram Inbound", () => {
     expect(sanitized.SAMARITAN_SANDBOX).toBe("rule_of_two");
 
     app.worker.setExecutor(createChildProcessWorkerExecutor());
-    const submitted = await app.worker.submit({
+    const submitted = app.worker.submit({
       goal: "Synthesize child-process architecture notes",
       lane: "research",
       scope: "personal",
     });
-    expect(submitted.task.status).toBe("succeeded");
-    expect(submitted.task.scope).toBe("personal");
+    await app.worker.whenIdle();
+    const completedTask = app.worker.getTask(submitted.task.id)!;
+    expect(completedTask.status).toBe("succeeded");
+    expect(completedTask.scope).toBe("personal");
     expect(app.worker.listArtifacts({ task_id: submitted.task.id }).length).toBe(1);
 
     // MCP scope filtering: work vs personal

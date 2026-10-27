@@ -1,26 +1,34 @@
 /**
- * Worker Adapter and Delegated Task Service (PROPOSAL D1).
+ * Delegated tasks: the ledger side of "do this for me" (PROPOSAL D1, D3, D9).
  *
- * Implements the 5-method `WorkerAdapter` interface (`start`, `events`,
- * `answer`, `cancel`, `status`). Workers run with Rule-of-Two isolation: they
- * can read Recall, write files inside their scoped `~/.samaritan/artifacts/<task-id>/`
- * directory, ask a clarifying question (`task-question` in the Inbox), or
- * propose an `ActionItem` (`task-action-proposal` in the Inbox), but they hold
- * no external write/send credentials. Every mutation is fenced by the active
- * run's lease token.
+ * `submit()` writes the task and returns. Nothing runs inside the request that
+ * asked for it, so an MCP client, the phone and Telegram all get an answer in
+ * milliseconds and follow the task through Activity. A small in-process queue
+ * then admits one run per task revision, under a lease, and hands it to the
+ * executor: the Claude Agent SDK in a child process in production, a plain
+ * function in tests.
+ *
+ * What a run may do is fixed here, not by the runtime: read Recall, write files
+ * inside `<artifacts>/<task-id>/`, ask Sandip a question, propose an item for
+ * review. Each of those checks the lease first. A question or proposal is an
+ * ordinary Inbox item, so everything that needs Sandip stays in one Inbox, and
+ * answering a question goes through `ActionCenter.respond()` like any other
+ * decision, with its audit row and revision check.
+ *
+ * Honest outcomes over resumption: a run the daemon loses in a restart is
+ * marked `interrupted`, not silently re-run. A queued task that never started
+ * simply starts after the restart.
  */
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, normalize, resolve } from "node:path";
+import { dirname, normalize, resolve } from "node:path";
 import { ActionCenterError, type ActionCenter } from "../action-center/index.js";
-import { expandPath } from "../config/index.js";
+import { expandPath, loadConfig, type Config } from "../config/index.js";
 import { log } from "../logger.js";
 import type { RecallService } from "../recall/service.js";
-import {
-  getActionItem,
-  listActionItems,
-  transition,
-} from "../store/action-items.js";
+import { cancelRun, registerActiveRun, unregisterActiveRun } from "../run-layer/index.js";
+import { envVarFor, getSecret } from "../secrets.js";
+import { listActionItems } from "../store/action-items.js";
 import type { Db } from "../store/db.js";
 import {
   admitRun,
@@ -28,6 +36,7 @@ import {
   fenceRun,
   finishRun,
   getRun,
+  isLeaseValid,
   listRuns,
   StaleLeaseError,
 } from "../store/runs.js";
@@ -36,93 +45,54 @@ import {
   createTask,
   getArtifact,
   getTask,
+  getTaskByRequestKey,
   listActivityEvents,
   listArtifacts,
   listTasks,
   registerArtifact,
   updateTask,
 } from "../store/tasks.js";
-import {
-  cancelRun,
-  registerActiveRun,
-  unregisterActiveRun,
-} from "../run-layer/index.js";
 import type {
+  ActionItem,
   ActivityEvent,
+  Actor,
   Artifact,
-  ArtifactKind,
   DraftActionItem,
   RunRecord,
   Task,
   TaskLane,
+  TaskOrigin,
 } from "../types/index.js";
+import { createChildProcessExecutor } from "./child-executor.js";
+import {
+  WorkerAborted,
+  type WorkerAdapter,
+  type WorkerExecutor,
+  type WorkerProposal,
+  type WorkerRunContext,
+  type WorkerTools,
+} from "./types.js";
+
+export * from "./types.js";
 
 const logger = log("worker");
 
-export interface WorkerRunContext {
-  admission_key?: string;
-  answers?: string[];
-  inputs?: Record<string, unknown>;
-}
-
-export interface WorkerTools {
-  readonly task: Task;
-  readonly run: RunRecord;
-  readonly artifactDir: string;
-  recall(question: string): Promise<{ answer: string; citations: { kind: string; ref: string; excerpt?: string }[] }>;
-  recordToolCall(tool: string, args: Record<string, unknown>, summary?: string): void;
-  writeArtifact(input: {
-    filename: string;
-    content: string;
-    kind?: ArtifactKind;
-    media_type?: string;
-  }): Artifact;
-  askQuestion(question: string, contextSummary?: string): Promise<{ action_item_id: string }>;
-  proposeAction(proposal: {
-    kind: "decision" | "insight" | "task" | "person" | "note";
-    title: string;
-    detail?: string;
-    project?: string;
-    owner?: string;
-    due?: string;
-    evidence?: string;
-  }): Promise<{ action_item_id: string }>;
-  isCancelled(): boolean;
-}
-
-export interface WorkerExecutionOutcome {
-  status: "succeeded" | "needs_input" | "awaiting_review" | "failed";
-  summary: string;
-  cost_usd?: number;
-}
-
-export type WorkerExecutor = (
-  tools: WorkerTools,
-  context: WorkerRunContext,
-) => Promise<WorkerExecutionOutcome>;
-
-/**
- * The 5-method WorkerAdapter contract (PROPOSAL D1).
- */
-export interface WorkerAdapter {
-  start(task: Task, context?: WorkerRunContext): Promise<RunRecord>;
-  events(cursor?: number, taskId?: string): ActivityEvent[];
-  answer(questionOrTaskId: string, answerText: string, expectedRevision?: number): Promise<Task>;
-  cancel(runOrTaskId: string, reason?: string): Promise<RunRecord | undefined>;
-  status(runId: string): Promise<RunRecord | undefined>;
-}
+/** Open question states: still answerable from the Inbox, Tasks or Telegram. */
+const OPEN_QUESTION = ["pending", "in_review", "deferred"] as const;
 
 export interface WorkerServiceDeps {
   db: Db;
   actionCenter: ActionCenter;
   recall?: RecallService;
   artifactsRoot?: string;
+  /** Test seam. Production builds the Agent SDK child executor from config at run time. */
   executor?: WorkerExecutor;
+  config?: Config["worker"];
 }
 
 /**
  * Resolves a relative filename inside `<artifactsRoot>/<taskId>`, refusing any
- * path traversal outside the task's scoped directory.
+ * path that would land outside the task's own folder.
  */
 export function resolveTaskArtifactPath(
   artifactsRoot: string,
@@ -131,87 +101,15 @@ export function resolveTaskArtifactPath(
 ): string {
   const taskDir = resolve(artifactsRoot, taskId);
   const target = resolve(taskDir, normalize(relativePath));
-  if (target !== taskDir && !target.startsWith(`${taskDir}/`)) {
+  if (target === taskDir || !target.startsWith(`${taskDir}/`)) {
     throw new Error(`artifact path "${relativePath}" escapes task directory ${taskDir}`);
   }
   return target;
 }
 
-/**
- * Default built-in worker executor. Searches Recall for the task's goal, writes
- * a cited markdown brief into the task's scoped artifact folder, and completes.
- * If the goal explicitly asks a question or requests a proposal via inputs,
- * exercises those paths deterministically.
- */
-async function defaultWorkerExecutor(
-  tools: WorkerTools,
-  context: WorkerRunContext,
-): Promise<WorkerExecutionOutcome> {
-  const { task } = tools;
-  const askPrompt = context.inputs?.["ask_question"] as string | undefined;
-  if (askPrompt && (!context.answers || context.answers.length === 0)) {
-    await tools.askQuestion(
-      askPrompt,
-      String(context.inputs?.["context_summary"] ?? `Clarification needed for: ${task.goal}`),
-    );
-    return {
-      status: "needs_input",
-      summary: `Waiting for answer: ${askPrompt}`,
-    };
-  }
-
-  tools.recordToolCall("recall.query", { question: task.goal });
-  const recallRes = await tools.recall(task.goal);
-
-  const lines = [
-    `# Task Artifact: ${task.goal}`,
-    "",
-    `- **Task ID**: \`${task.id}\``,
-    `- **Lane**: \`${task.lane}\``,
-    `- **Revision**: \`v${task.revision}\``,
-    ...(context.answers?.length
-      ? ["", "## Clarifications Provided", ...context.answers.map((a) => `- ${a}`)]
-      : []),
-    "",
-    "## Findings",
-    recallRes.answer || "Completed local recall scan.",
-    "",
-    "## Citations",
-    ...(recallRes.citations.length
-      ? recallRes.citations.map((c) => `- **[${c.kind}]** \`${c.ref}\`: ${c.excerpt ?? ""}`)
-      : ["- No matching indexed passages."]),
-  ];
-
-  const artifact = tools.writeArtifact({
-    filename: `brief-rev-${task.revision}.md`,
-    content: lines.join("\n"),
-    kind: "brief",
-  });
-
-  const propose = context.inputs?.["propose_action"] as
-    | {
-        kind: "decision" | "insight" | "task" | "person" | "note";
-        title: string;
-        detail?: string;
-        project?: string;
-        owner?: string;
-        due?: string;
-        evidence?: string;
-      }
-    | undefined;
-
-  if (propose) {
-    await tools.proposeAction(propose);
-    return {
-      status: "awaiting_review",
-      summary: `Proposed ${propose.kind} "${propose.title}" for review in Inbox (artifact: ${artifact.path_or_url})`,
-    };
-  }
-
-  return {
-    status: "succeeded",
-    summary: `Generated cited brief (${recallRes.citations.length} citation(s)) at ${artifact.path_or_url}`,
-  };
+/** First instant of the current calendar month, local time, as ISO. */
+function monthStartIso(now = new Date()): string {
+  return new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 }
 
 export class WorkerService implements WorkerAdapter {
@@ -219,136 +117,368 @@ export class WorkerService implements WorkerAdapter {
   readonly #actionCenter: ActionCenter;
   readonly #recall: RecallService | undefined;
   readonly #artifactsRoot: string;
-  #executor: WorkerExecutor;
+  #executor: WorkerExecutor | undefined;
+  readonly #config: Config["worker"] | undefined;
+  readonly #active = new Map<string, AbortController>();
+  #pumpScheduled = false;
+  #stopped = false;
 
   constructor(deps: WorkerServiceDeps) {
     this.#db = deps.db;
     this.#actionCenter = deps.actionCenter;
     this.#recall = deps.recall;
-    this.#artifactsRoot =
-      deps.artifactsRoot ?? expandPath("~/.samaritan/artifacts");
-    this.#executor = deps.executor ?? defaultWorkerExecutor;
+    this.#artifactsRoot = deps.artifactsRoot ?? expandPath("~/.samaritan/artifacts");
+    this.#executor = deps.executor;
+    this.#config = deps.config;
   }
 
-  /** Test seam to swap the worker executor behavior at runtime. */
-  setExecutor(executor: WorkerExecutor): void {
+  get artifactsRoot(): string {
+    return this.#artifactsRoot;
+  }
+
+  setExecutor(executor: WorkerExecutor | undefined): void {
     this.#executor = executor;
   }
 
+  #cfg(): Config["worker"] {
+    return this.#config ?? loadConfig().worker;
+  }
+
+  // ---- Submission ----------------------------------------------------------
+
   /**
-   * Submits a new delegated task and starts its worker run unless `autoStart: false`.
+   * Durably admits a task and returns at once. A repeated `request_key` (an MCP
+   * client retrying, a Telegram redelivery) returns the original task.
    */
-  async submit(input: {
-    id?: string;
+  submit(input: {
     goal: string;
     lane?: TaskLane;
     scope?: "work" | "personal";
+    origin?: TaskOrigin;
+    request_key?: string;
     parent_task_id?: string | null;
-    admission_key?: string;
-    inputs?: Record<string, unknown>;
-    autoStart?: boolean;
-  }): Promise<{ task: Task; run?: RunRecord }> {
+  }): { task: Task; created: boolean; run?: RunRecord } {
+    if (input.request_key) {
+      const existing = getTaskByRequestKey(this.#db, input.request_key);
+      if (existing) return { task: existing, created: false };
+    }
     const task = createTask(this.#db, {
-      ...(input.id ? { id: input.id } : {}),
       goal: input.goal,
       ...(input.lane ? { lane: input.lane } : {}),
       ...(input.scope ? { scope: input.scope } : {}),
+      ...(input.origin ? { origin: input.origin } : {}),
+      ...(input.request_key ? { request_key: input.request_key } : {}),
       ...(input.parent_task_id !== undefined ? { parent_task_id: input.parent_task_id } : {}),
     });
-
-    if (input.autoStart === false) {
-      return { task };
-    }
-
-    const run = await this.start(task, {
-      ...(input.admission_key ? { admission_key: input.admission_key } : {}),
-      ...(input.inputs ? { inputs: input.inputs } : {}),
-    });
-
-    return { task: getTask(this.#db, task.id) ?? task, run };
+    this.#schedulePump();
+    return { task, created: true };
   }
 
-  async start(task: Task, context: WorkerRunContext = {}): Promise<RunRecord> {
-    const admissionKey =
-      context.admission_key ?? `task:${task.id}:rev-${task.revision}`;
-    const { admitted, run } = admitRun(this.#db, {
-      task_id: task.id,
-      runner: "worker",
-      admission_key: admissionKey,
-      lease_ttl_ms: 10 * 60_000,
+  /** Re-queues a task that is queued, interrupted or failed, at a new revision. */
+  start(taskId: string): Task {
+    const task = this.#requireTask(taskId);
+    if (task.status === "queued") {
+      this.#schedulePump();
+      return task;
+    }
+    if (task.status !== "interrupted" && task.status !== "failed") {
+      throw new ActionCenterError(
+        `task ${task.id} is ${task.status}; only an interrupted or failed task can be retried`,
+        "task_not_retryable",
+        409,
+      );
+    }
+    const requeued = updateTask(this.#db, task.id, {
+      status: "queued",
+      bumpRevision: true,
+      result_summary: "Retried",
     });
+    appendActivityEvent(this.#db, {
+      task_id: task.id,
+      type: "task.retried",
+      payload: { revision: requeued.revision },
+    });
+    this.#schedulePump();
+    return requeued;
+  }
 
-    if (!admitted) {
-      logger.info({ taskId: task.id, admissionKey, runId: run.id }, "worker run deduplicated");
-      return run;
+  /** Called once at daemon boot, after reconciliation: start what was queued. */
+  resumeQueued(): void {
+    this.#schedulePump();
+  }
+
+  /** Stops dispatching and interrupts live runs (daemon shutdown). */
+  stop(): void {
+    this.#stopped = true;
+    for (const controller of this.#active.values()) controller.abort("daemon shutting down");
+  }
+
+  /** Resolves once no run is active and nothing is waiting to be pumped. */
+  async whenIdle(): Promise<void> {
+    while (this.#active.size > 0 || this.#pumpScheduled) {
+      await new Promise((r) => setTimeout(r, 5));
+    }
+  }
+
+  // ---- Dispatch -------------------------------------------------------------
+
+  #schedulePump(): void {
+    if (this.#pumpScheduled || this.#stopped) return;
+    this.#pumpScheduled = true;
+    setImmediate(() => {
+      this.#pumpScheduled = false;
+      this.#pump();
+    });
+  }
+
+  #pump(): void {
+    if (this.#stopped) return;
+    const limit = this.#cfg().concurrency;
+    while (this.#active.size < limit) {
+      const next = listTasks(this.#db, { status: "queued", limit: 50 })
+        .filter((t) => !this.#active.has(t.id))
+        .sort((a, b) => a.updated_at.localeCompare(b.updated_at))[0];
+      if (!next) return;
+      const controller = new AbortController();
+      this.#active.set(next.id, controller);
+      void this.#execute(next, controller)
+        .catch((err) => logger.error({ taskId: next.id, err: String(err) }, "worker dispatch failed"))
+        .finally(() => {
+          this.#active.delete(next.id);
+          this.#schedulePump();
+        });
+    }
+  }
+
+  #fail(task: Task, summary: string): void {
+    updateTask(this.#db, task.id, { status: "failed", result_summary: summary });
+    appendActivityEvent(this.#db, {
+      task_id: task.id,
+      type: "task.failed",
+      payload: { reason: summary },
+    });
+  }
+
+  #resolveExecutor(task: Task): WorkerExecutor | undefined {
+    if (this.#executor) return this.#executor;
+    const cfg = this.#cfg();
+    const account = `anthropic:${cfg.account}`;
+    const apiKey = getSecret(account);
+    if (!apiKey) {
+      this.#fail(
+        task,
+        `No API key for unattended runs. Add a Console key with ` +
+          `"security add-generic-password -s samaritan -a ${account} -w", or set ${envVarFor(account)}.`,
+      );
+      return undefined;
+    }
+    return createChildProcessExecutor({
+      apiKey,
+      model: cfg.model,
+      maxTurns: cfg.max_turns,
+      runBudgetUsd: cfg.run_budget_usd,
+    });
+  }
+
+  /** Worker spend this calendar month, from the runs ledger. */
+  monthSpendUsd(now = new Date()): number {
+    const row = this.#db
+      .prepare<{ total: number | null }>(
+        "SELECT SUM(cost_usd) AS total FROM runs WHERE task_id IS NOT NULL AND started_at >= ?",
+      )
+      .get(monthStartIso(now));
+    return row?.total ?? 0;
+  }
+
+  /** What the next run needs to know: every answer so far, and the session to continue. */
+  #contextFor(task: Task): WorkerRunContext {
+    // after_cursor: 0 reads oldest first, which is the order answers were given in.
+    const events = listActivityEvents(this.#db, { task_id: task.id, after_cursor: 0, limit: 500 });
+    const answers = events
+      .filter((e) => e.type === "question.answered")
+      .map((e) => String(e.payload["answer"] ?? ""));
+    const lastAnswer = events.filter((e) => e.type === "question.answered").at(-1);
+    const lastRun = listRuns(this.#db, { task_id: task.id, limit: 1 })[0];
+    const resumable =
+      lastAnswer && lastRun?.remote_run_id && lastAnswer.created_at >= lastRun.started_at;
+    return {
+      answers,
+      ...(resumable ? { resume_session_id: lastRun.remote_run_id! } : {}),
+    };
+  }
+
+  async #execute(task: Task, controller: AbortController): Promise<void> {
+    const cfg = this.#cfg();
+    const spent = this.monthSpendUsd();
+    if (cfg.monthly_budget_usd <= 0 || spent >= cfg.monthly_budget_usd) {
+      this.#fail(
+        task,
+        `Monthly worker budget reached ($${spent.toFixed(2)} of $${cfg.monthly_budget_usd}). ` +
+          `Raise worker.monthly_budget_usd in config to run more this month.`,
+      );
+      return;
     }
 
-    updateTask(this.#db, task.id, { status: "running" });
+    const executor = this.#resolveExecutor(task);
+    if (!executor) return;
 
+    // Read before admitting: once this run exists it is the latest run, and the
+    // session to resume belongs to the one before it.
+    const context = this.#contextFor(task);
+    const { admitted, run } = admitRun(this.#db, {
+      task_id: task.id,
+      runner: this.#executor ? "worker" : "child-process",
+      admission_key: `task:${task.id}:rev-${task.revision}`,
+      lease_ttl_ms: cfg.timeout_ms + 60_000,
+    });
+    if (!admitted) {
+      // This revision already ran once. Running it again would be a silent
+      // retry; say so instead and let Sandip retry explicitly.
+      updateTask(this.#db, task.id, {
+        status: "interrupted",
+        result_summary: `Revision ${task.revision} already ran (run ${run.id}); retry to run again`,
+      });
+      return;
+    }
+
+    const running = updateTask(this.#db, task.id, { status: "running" });
     const taskDir = resolve(this.#artifactsRoot, task.id);
     mkdirSync(taskDir, { recursive: true });
 
     const leaseToken = run.lease_token!;
     const leaseGen = run.fencing_generation;
-    let cancelled = false;
-    let cancelReject: ((err: Error) => void) | undefined;
-    const cancelPromise = new Promise<never>((_, reject) => {
-      cancelReject = reject;
+    const lease = () => assertLeaseValid(this.#db, run.id, leaseToken, leaseGen);
+    let questionsAsked = 0;
+    let proposals = 0;
+
+    registerActiveRun(run.id, { abort: (reason) => controller.abort(reason) });
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort(`timed out after ${Math.round(cfg.timeout_ms / 1000)}s`);
+    }, cfg.timeout_ms);
+    timer.unref();
+
+    const tools = this.#toolsFor(running, run, taskDir, lease, controller.signal, {
+      onQuestion: () => questionsAsked++,
+      onProposal: () => proposals++,
     });
 
-    registerActiveRun(run.id, {
-      abort: (reason: string) => {
-        cancelled = true;
-        cancelReject?.(new StaleLeaseError(run.id, reason));
-      },
-    });
+    try {
+      const outcome = await executor(tools, context, controller.signal);
+      if (controller.signal.aborted) throw new WorkerAborted(String(controller.signal.reason), false);
+      lease();
+      finishRun(this.#db, run.id, leaseToken, {
+        status: outcome.status,
+        ...(outcome.status === "failed" ? { error: outcome.summary } : {}),
+        ...(outcome.cost_usd !== undefined ? { cost_usd: outcome.cost_usd } : {}),
+      });
+      const status =
+        outcome.status === "failed"
+          ? "failed"
+          : questionsAsked > 0
+            ? "needs_input"
+            : proposals > 0
+              ? "awaiting_review"
+              : "succeeded";
+      updateTask(this.#db, task.id, { status, result_summary: outcome.summary.slice(0, 2_000) });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const aborted = controller.signal.aborted || err instanceof WorkerAborted;
+      const shutdown = aborted && String(controller.signal.reason) === "daemon shutting down";
 
-    const tools: WorkerTools = {
-      task,
-      run,
-      artifactDir: taskDir,
-      isCancelled: () => cancelled,
-      recall: async (question: string) => {
-        assertLeaseValid(this.#db, run.id, leaseToken, leaseGen);
-        if (!this.#recall) {
-          return { answer: "", citations: [] };
+      if (aborted || err instanceof StaleLeaseError || !isLeaseValid(this.#db, run.id, leaseToken)) {
+        const fenceAs = shutdown ? "interrupted" : timedOut ? "timeout" : "cancelled";
+        fenceRun(this.#db, run.id, fenceAs, message);
+        if (!this.#executor) {
+          // A killed SDK run never reports what it spent. Count it at its
+          // ceiling so the monthly cap errs high, never low.
+          this.#db.prepare("UPDATE runs SET cost_usd = ? WHERE id = ?").run(cfg.run_budget_usd, run.id);
         }
-        const res = await this.#recall.query(question);
-        return {
-          answer: res.answer ?? "",
-          citations: res.citations,
-        };
-      },
-      recordToolCall: (tool: string, args: Record<string, unknown>, summary?: string) => {
-        assertLeaseValid(this.#db, run.id, leaseToken, leaseGen);
         appendActivityEvent(this.#db, {
           task_id: task.id,
           run_id: run.id,
+          type: "run.exited",
+          payload: { verified: err instanceof WorkerAborted && err.terminated, reason: message },
+        });
+        const current = getTask(this.#db, task.id);
+        if (current && current.status === "running") {
+          updateTask(this.#db, task.id, {
+            status: shutdown ? "interrupted" : timedOut ? "failed" : "cancelled",
+            result_summary: message,
+          });
+        }
+        return;
+      }
+
+      finishRun(this.#db, run.id, leaseToken, { status: "failed", error: message });
+      updateTask(this.#db, task.id, { status: "failed", result_summary: message.slice(0, 2_000) });
+      logger.warn({ taskId: task.id, runId: run.id, err: message }, "worker run failed");
+    } finally {
+      clearTimeout(timer);
+      unregisterActiveRun(run.id);
+    }
+  }
+
+  #toolsFor(
+    task: Task,
+    run: RunRecord,
+    taskDir: string,
+    lease: () => void,
+    signal: AbortSignal,
+    counters: { onQuestion: () => void; onProposal: () => void },
+  ): WorkerTools {
+    const db = this.#db;
+    const base = { task_id: task.id, run_id: run.id };
+    return {
+      task,
+      run,
+      artifactDir: taskDir,
+      isCancelled: () => signal.aborted,
+      recall: async (question) => {
+        lease();
+        if (!this.#recall) return { answer: "", citations: [] };
+        const res = await this.#recall.query(question);
+        lease();
+        return { answer: res.answer ?? "", citations: res.citations };
+      },
+      recordToolCall: (tool, args, summary) => {
+        lease();
+        appendActivityEvent(db, {
+          ...base,
           type: "tool.called",
           payload: { tool, args, ...(summary ? { summary } : {}) },
         });
       },
-      writeArtifact: (artInput) => {
-        assertLeaseValid(this.#db, run.id, leaseToken, leaseGen);
-        const absPath = resolveTaskArtifactPath(
-          this.#artifactsRoot,
-          task.id,
-          artInput.filename,
-        );
-        mkdirSync(dirname(absPath), { recursive: true });
-        writeFileSync(absPath, artInput.content, "utf8");
-        const hash = `sha256:${createHash("sha256").update(artInput.content).digest("hex")}`;
-        return registerArtifact(this.#db, {
-          task_id: task.id,
-          run_id: run.id,
-          kind: artInput.kind ?? "file",
-          path_or_url: absPath,
-          content_hash: hash,
-          ...(artInput.media_type ? { media_type: artInput.media_type } : {}),
-        });
+      recordProgress: (text) => {
+        lease();
+        appendActivityEvent(db, { ...base, type: "run.progress", payload: { text: text.slice(0, 280) } });
       },
-      askQuestion: async (question: string, contextSummary = "") => {
-        assertLeaseValid(this.#db, run.id, leaseToken, leaseGen);
+      recordSession: (sessionId) => {
+        lease();
+        db.prepare("UPDATE runs SET remote_run_id = ? WHERE id = ?").run(sessionId, run.id);
+      },
+      writeArtifact: (input) => {
+        lease();
+        const absPath = resolveTaskArtifactPath(this.#artifactsRoot, task.id, input.filename);
+        mkdirSync(dirname(absPath), { recursive: true });
+        writeFileSync(absPath, input.content, "utf8");
+        const artifact = registerArtifact(db, {
+          ...base,
+          kind: input.kind ?? "file",
+          path_or_url: absPath,
+          content_hash: `sha256:${createHash("sha256").update(input.content).digest("hex")}`,
+          ...(input.media_type ? { media_type: input.media_type } : {}),
+        });
+        appendActivityEvent(db, {
+          ...base,
+          type: "artifact.created",
+          payload: { artifact_id: artifact.id, filename: input.filename },
+        });
+        return artifact;
+      },
+      askQuestion: async (question, contextSummary = "") => {
+        lease();
         const draft: DraftActionItem = {
           capability_id: "worker-task",
           type: "task-question",
@@ -357,14 +487,14 @@ export class WorkerService implements WorkerAdapter {
           context: {
             what_happened: `Delegated task "${task.goal}" needs clarification`,
             source: { kind: "worker", id: task.id },
-            provenance: ["worker.askQuestion"],
-            why_flagged: "worker cannot proceed without your input",
+            provenance: ["worker.ask_question"],
+            why_flagged: "the worker cannot proceed sensibly without your answer",
             trigger_reason: "policy",
             confidence: 0.95,
             decision_needed: question,
             decision_surface: "inbox",
             execution_surface: "samaritan",
-            outcome_preview: `Sends your answer to task ${task.id} and resumes the worker`,
+            outcome_preview: "Sends your answer to the task, which then resumes",
           },
           custom: {
             task_id: task.id,
@@ -376,46 +506,33 @@ export class WorkerService implements WorkerAdapter {
           },
           dedupe_key: `worker-question:${task.id}:rev-${task.revision}`,
         };
-
-        const ingested = await this.#actionCenter.ingest("worker-task", [draft]);
-        const itemId = ingested.accepted[0]?.id ?? "";
-
-        appendActivityEvent(this.#db, {
-          task_id: task.id,
-          run_id: run.id,
+        const id = await this.#ingestOne(draft);
+        counters.onQuestion();
+        appendActivityEvent(db, {
+          ...base,
           type: "question.asked",
-          payload: { question, action_item_id: itemId, revision: task.revision },
+          payload: { question, action_item_id: id, revision: task.revision },
         });
-
-        updateTask(this.#db, task.id, {
-          status: "needs_input",
-          result_summary: `Question: ${question}`,
-        });
-
-        return { action_item_id: itemId };
+        return { action_item_id: id };
       },
-      proposeAction: async (proposal) => {
-        assertLeaseValid(this.#db, run.id, leaseToken, leaseGen);
+      proposeAction: async (proposal: WorkerProposal) => {
+        lease();
         const draft: DraftActionItem = {
           capability_id: "worker-task",
           type: "task-action-proposal",
           task_id: task.id,
           run_id: run.id,
           context: {
-            what_happened: `Worker task "${task.goal}" proposed a ${proposal.kind}`,
+            what_happened: `Delegated task "${task.goal}" proposed a ${proposal.kind}`,
             source: { kind: "worker", id: task.id },
-            provenance: ["worker.proposeAction"],
-            why_flagged: "delegated worker proposals always require review before execution",
+            provenance: ["worker.propose_action"],
+            why_flagged: "a delegated worker's proposals are always reviewed before anything is filed",
             trigger_reason: "policy",
             confidence: 0.85,
-            decision_needed: `Approve ${proposal.kind}: "${proposal.title}"?`,
+            decision_needed: `File this ${proposal.kind}: "${proposal.title}"?`,
             decision_surface: "inbox",
             execution_surface:
-              proposal.kind === "task"
-                ? "ticktick"
-                : proposal.kind === "note"
-                  ? "obsidian"
-                  : "notion",
+              proposal.kind === "task" ? "ticktick" : proposal.kind === "note" ? "obsidian" : "notion",
             outcome_preview: `Files "${proposal.title}" as a ${proposal.kind}`,
           },
           custom: {
@@ -429,80 +546,167 @@ export class WorkerService implements WorkerAdapter {
             task_id: task.id,
             run_id: run.id,
           },
-          dedupe_key: `worker-proposal:${task.id}:${proposal.kind}:${proposal.title}`,
+          dedupe_key: `worker-proposal:${task.id}:rev-${task.revision}:${proposal.kind}:${proposal.title}`,
         };
-
-        const ingested = await this.#actionCenter.ingest("worker-task", [draft]);
-        const itemId = ingested.accepted[0]?.id ?? "";
-
-        appendActivityEvent(this.#db, {
-          task_id: task.id,
-          run_id: run.id,
+        const id = await this.#ingestOne(draft);
+        counters.onProposal();
+        appendActivityEvent(db, {
+          ...base,
           type: "action.proposed",
-          payload: {
-            action_item_id: itemId,
-            kind: proposal.kind,
-            title: proposal.title,
-          },
+          payload: { action_item_id: id, kind: proposal.kind, title: proposal.title },
         });
-
-        updateTask(this.#db, task.id, {
-          status: "awaiting_review",
-          result_summary: `Proposed ${proposal.kind}: ${proposal.title}`,
-        });
-
-        return { action_item_id: itemId };
+        return { action_item_id: id };
       },
     };
-
-    try {
-      const outcome = await Promise.race([
-        this.#executor(tools, context),
-        cancelPromise,
-      ]);
-      assertLeaseValid(this.#db, run.id, leaseToken, leaseGen);
-
-      const finalRun = finishRun(this.#db, run.id, leaseToken, {
-        status: outcome.status === "failed" ? "failed" : "succeeded",
-        ...(outcome.status === "failed" ? { error: outcome.summary } : {}),
-        ...(outcome.cost_usd !== undefined ? { cost_usd: outcome.cost_usd } : {}),
-      });
-
-      updateTask(this.#db, task.id, {
-        status: outcome.status,
-        result_summary: outcome.summary,
-      });
-
-      return finalRun;
-    } catch (err) {
-      if (err instanceof StaleLeaseError || cancelled) {
-        const fenced = fenceRun(this.#db, run.id, "cancelled", (err as Error).message);
-        updateTask(this.#db, task.id, {
-          status: "cancelled",
-          result_summary: (err as Error).message,
-        });
-        return fenced ?? getRun(this.#db, run.id)!;
-      }
-
-      const message = err instanceof Error ? err.message : String(err);
-      try {
-        const failedRun = finishRun(this.#db, run.id, leaseToken, {
-          status: "failed",
-          error: message,
-        });
-        updateTask(this.#db, task.id, {
-          status: "failed",
-          result_summary: message,
-        });
-        return failedRun;
-      } catch {
-        const fenced = fenceRun(this.#db, run.id, "cancelled", message);
-        return fenced ?? getRun(this.#db, run.id)!;
-      }
-    } finally {
-      unregisterActiveRun(run.id);
-    }
   }
+
+  async #ingestOne(draft: DraftActionItem): Promise<string> {
+    const result = await this.#actionCenter.ingest(draft.capability_id, [draft]);
+    const accepted = result.accepted[0];
+    if (!accepted) {
+      throw new Error(
+        `the Inbox refused the item: ${result.rejected[0]?.errors.join("; ") ?? "unknown reason"}`,
+      );
+    }
+    return accepted.id;
+  }
+
+  // ---- Questions -----------------------------------------------------------
+
+  #openQuestion(taskId: string): ActionItem | undefined {
+    return listActionItems(this.#db, {
+      task_id: taskId,
+      type: "task-question",
+      status: [...OPEN_QUESTION],
+    })[0];
+  }
+
+  /**
+   * Answers a task's open clarifying question, by task id or by the question's
+   * Inbox item id. Only a `task-question` item on a task that is waiting for
+   * input qualifies: this can never approve a proposal or revive a stopped task.
+   * Given a question id, it must be the question that is open now, so a late
+   * reply to an earlier question is refused rather than applied to the next.
+   */
+  async answer(
+    taskOrQuestionId: string,
+    answer: string,
+    options: { actor?: Actor; expectedRevision?: number; onlyOrigin?: TaskOrigin } = {},
+  ): Promise<Task> {
+    let task = getTask(this.#db, taskOrQuestionId);
+    let namedQuestion: string | undefined;
+    if (!task) {
+      const item = listActionItems(this.#db, { type: "task-question", limit: 500 }).find(
+        (i) => i.id === taskOrQuestionId,
+      );
+      if (item?.task_id) {
+        task = getTask(this.#db, item.task_id);
+        namedQuestion = item.id;
+      }
+    }
+    if (!task) {
+      throw new ActionCenterError(
+        `no task or clarifying question "${taskOrQuestionId}"`,
+        "not_found",
+        404,
+      );
+    }
+    if (options.onlyOrigin && task.origin !== options.onlyOrigin) {
+      throw new ActionCenterError(
+        `task ${task.id} was not submitted over ${options.onlyOrigin}; Sandip answers it in Samaritan or Telegram`,
+        "not_yours",
+        403,
+      );
+    }
+    const question = this.#openQuestion(task.id);
+    if (task.status !== "needs_input" || !question) {
+      throw new ActionCenterError(
+        `task ${task.id} is ${task.status} and has no open question to answer`,
+        "not_waiting",
+        409,
+      );
+    }
+    if (namedQuestion && namedQuestion !== question.id) {
+      throw new ActionCenterError(
+        "that question was already answered or replaced; answer the current one",
+        "stale_question",
+        409,
+      );
+    }
+    if (options.expectedRevision !== undefined && options.expectedRevision !== task.revision) {
+      throw new ActionCenterError(
+        `task ${task.id} moved on (expected revision ${options.expectedRevision}, now ${task.revision})`,
+        "stale_revision",
+        409,
+      );
+    }
+
+    await this.#actionCenter.respond(question.id, {
+      response_id: "answer",
+      edited_payload: { ...question.custom, answer },
+      actor: options.actor ?? "sandip",
+      expected_revision: question.revision,
+    });
+    return this.#requireTask(task.id);
+  }
+
+  /**
+   * The execution side of an approved `task-question` (`samaritan.task.answer`).
+   * Check-or-create on the item id, because the registry may replay an attempt.
+   */
+  resumeWithAnswer(input: { task_id: string; answer: string; action_item_id: string }): Task {
+    const task = this.#requireTask(input.task_id);
+    const already = listActivityEvents(this.#db, {
+      task_id: task.id,
+      type: "question.answered",
+      limit: 500,
+    }).some((e) => e.payload["action_item_id"] === input.action_item_id);
+    if (already) return task;
+    if (task.status !== "needs_input") {
+      throw new Error(`task ${task.id} is ${task.status}, not waiting for an answer`);
+    }
+    const resumed = updateTask(this.#db, task.id, {
+      status: "queued",
+      bumpRevision: true,
+      result_summary: "Answered; resuming",
+    });
+    appendActivityEvent(this.#db, {
+      task_id: task.id,
+      type: "question.answered",
+      payload: {
+        answer: input.answer,
+        action_item_id: input.action_item_id,
+        revision: resumed.revision,
+      },
+    });
+    this.#schedulePump();
+    return resumed;
+  }
+
+  // ---- Stop ----------------------------------------------------------------
+
+  async cancel(taskOrRunId: string, reason = "stopped by Sandip"): Promise<Task | undefined> {
+    const run = getRun(this.#db, taskOrRunId);
+    const task = getTask(this.#db, run?.task_id ?? taskOrRunId);
+    if (!task) {
+      if (run) cancelRun(this.#db, run.id, reason);
+      return undefined;
+    }
+    if (["succeeded", "failed", "cancelled"].includes(task.status)) return task;
+
+    for (const live of listRuns(this.#db, { task_id: task.id, status: "running", limit: 5 })) {
+      cancelRun(this.#db, live.id, reason);
+    }
+    const question = this.#openQuestion(task.id);
+    if (question) {
+      await this.#actionCenter.respond(question.id, { response_id: "reject", actor: "system" });
+    }
+    const cancelled = updateTask(this.#db, task.id, { status: "cancelled", result_summary: reason });
+    appendActivityEvent(this.#db, { task_id: task.id, type: "task.cancelled", payload: { reason } });
+    return cancelled;
+  }
+
+  // ---- Reads ---------------------------------------------------------------
 
   events(cursor = 0, taskId?: string): ActivityEvent[] {
     return listActivityEvents(this.#db, {
@@ -511,107 +715,11 @@ export class WorkerService implements WorkerAdapter {
     });
   }
 
-  async answer(
-    questionOrTaskId: string,
-    answerText: string,
-    expectedRevision?: number,
-  ): Promise<Task> {
-    let task = getTask(this.#db, questionOrTaskId);
-    let questionItem = task
-      ? listActionItems(this.#db, {
-          task_id: task.id,
-          type: "task-question",
-          status: ["pending", "in_review"],
-        })[0]
-      : getActionItem(this.#db, questionOrTaskId);
-
-    if (!task && questionItem?.task_id) {
-      task = getTask(this.#db, questionItem.task_id);
-    }
-
-    if (!task) {
-      throw new ActionCenterError(
-        `task or question "${questionOrTaskId}" not found`,
-        "not_found",
-        404,
-      );
-    }
-
-    if (expectedRevision !== undefined && task.revision !== expectedRevision) {
-      throw new ActionCenterError(
-        `task ${task.id} revision mismatch (expected v${expectedRevision}, current v${task.revision})`,
-        "stale_revision",
-        409,
-      );
-    }
-
-    if (questionItem && (questionItem.status === "pending" || questionItem.status === "in_review")) {
-      transition(this.#db, {
-        id: questionItem.id,
-        to: "approved",
-        actor: "sandip",
-        reason: "answered worker question",
-        patch: {
-          custom: { ...questionItem.custom, answer: answerText },
-        },
-      });
-      transition(this.#db, {
-        id: questionItem.id,
-        to: "executed",
-        actor: "system",
-        reason: "answer delivered to worker",
-      });
-    }
-
-    const updated = updateTask(this.#db, task.id, {
-      status: "running",
-      bumpRevision: true,
-      result_summary: `Resumed with answer: ${answerText}`,
-    });
-
-    appendActivityEvent(this.#db, {
-      task_id: updated.id,
-      type: "question.answered",
-      payload: {
-        answer: answerText,
-        revision: updated.revision,
-        ...(questionItem ? { action_item_id: questionItem.id } : {}),
-      },
-    });
-
-    await this.start(updated, {
-      admission_key: `task:${updated.id}:rev-${updated.revision}`,
-      answers: [answerText],
-    });
-
-    return getTask(this.#db, updated.id) ?? updated;
-  }
-
-  async cancel(runOrTaskId: string, reason = "cancelled by user"): Promise<RunRecord | undefined> {
-    let run = getRun(this.#db, runOrTaskId);
-    if (!run) {
-      const taskRuns = listRuns(this.#db, { task_id: runOrTaskId, status: "running", limit: 1 });
-      run = taskRuns[0] ?? listRuns(this.#db, { task_id: runOrTaskId, limit: 1 })[0];
-    }
-
-    const taskId = run?.task_id ?? (getTask(this.#db, runOrTaskId) ? runOrTaskId : undefined);
-    const cancelledRun = run ? cancelRun(this.#db, run.id, reason) : undefined;
-
-    if (taskId) {
-      const task = getTask(this.#db, taskId);
-      if (task && task.status !== "succeeded" && task.status !== "cancelled") {
-        updateTask(this.#db, taskId, {
-          status: "cancelled",
-          result_summary: reason,
-        });
-      }
-    }
-
-    return cancelledRun;
-  }
-
-  async status(runId: string): Promise<RunRecord | undefined> {
-    return getRun(this.#db, runId);
+  status(taskOrRunId: string): { task: Task; runs: RunRecord[] } | undefined {
+    const run = getRun(this.#db, taskOrRunId);
+    const task = getTask(this.#db, run?.task_id ?? taskOrRunId);
+    if (!task) return undefined;
+    return { task, runs: listRuns(this.#db, { task_id: task.id, limit: 20 }) };
   }
 
   listTasks(filter: Parameters<typeof listTasks>[1] = {}): Task[] {
@@ -626,18 +734,27 @@ export class WorkerService implements WorkerAdapter {
     return listArtifacts(this.#db, filter);
   }
 
+  /** An artifact and, for files inside the artifact root, its text. */
   getArtifact(id: string): { artifact: Artifact; content?: string } | undefined {
     const artifact = getArtifact(this.#db, id);
     if (!artifact) return undefined;
+    const root = resolve(this.#artifactsRoot);
+    const path = resolve(artifact.path_or_url);
     let content: string | undefined;
-    if (artifact.kind !== "url" && existsSync(artifact.path_or_url)) {
+    if (artifact.kind !== "url" && path.startsWith(`${root}/`) && existsSync(path)) {
       try {
-        content = readFileSync(artifact.path_or_url, "utf8");
+        content = readFileSync(path, "utf8");
       } catch {
         content = undefined;
       }
     }
     return { artifact, ...(content !== undefined ? { content } : {}) };
+  }
+
+  #requireTask(id: string): Task {
+    const task = getTask(this.#db, id);
+    if (!task) throw new ActionCenterError(`task ${id} not found`, "not_found", 404);
+    return task;
   }
 }
 

@@ -34,19 +34,29 @@ export function envVarFor(account: string): string {
   return `SAMARITAN_${account.replace(/[^a-zA-Z0-9]+/g, "_").toUpperCase()}`;
 }
 
-const cache = new Map<string, string>();
+/**
+ * Found values are re-read every few minutes, so a rotated secret (the web
+ * sign-in token above all) takes effect without a restart. A miss is
+ * remembered briefly too: the API asks for `web:token` on every request, and
+ * spawning `security` each time would block the event loop.
+ */
+const FOUND_TTL_MS = 5 * 60_000;
+const MISSING_TTL_MS = 30_000;
+const cache = new Map<string, { value: string | undefined; expiresAt: number }>();
 
 export function getSecret(account: string): string | undefined {
   const cached = cache.get(account);
-  if (cached !== undefined) return cached;
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+  const remember = (value: string | undefined): string | undefined => {
+    cache.set(account, { value, expiresAt: Date.now() + (value ? FOUND_TTL_MS : MISSING_TTL_MS) });
+    return value;
+  };
 
   const fromEnv = process.env[envVarFor(account)];
-  if (fromEnv) {
-    cache.set(account, fromEnv);
-    return fromEnv;
-  }
+  if (fromEnv) return remember(fromEnv);
 
-  if (process.platform !== "darwin") return undefined;
+  if (process.platform !== "darwin") return remember(undefined);
 
   try {
     const value = execFileSync(
@@ -54,14 +64,12 @@ export function getSecret(account: string): string | undefined {
       ["find-generic-password", "-s", SERVICE, "-a", account, "-w"],
       { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
     ).trim();
-    if (!value) return undefined;
-    cache.set(account, value);
-    return value;
+    return remember(value || undefined);
   } catch {
     // `security` exits non-zero when the item is absent. That is a normal
     // "not configured yet" state, not an error worth a stack trace.
     logger.debug({ account }, "no keychain entry");
-    return undefined;
+    return remember(undefined);
   }
 }
 
@@ -78,5 +86,5 @@ export function hasSecret(account: string): boolean {
 /** Test seam. Never call from production code. */
 export function __setSecretForTesting(account: string, value: string | undefined): void {
   if (value === undefined) cache.delete(account);
-  else cache.set(account, value);
+  else cache.set(account, { value, expiresAt: Number.POSITIVE_INFINITY });
 }

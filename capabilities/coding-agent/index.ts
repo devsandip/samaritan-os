@@ -34,8 +34,6 @@ export async function run(context: RunContext): Promise<RunResult> {
     typeof payload["detail"] === "string" && payload["detail"]
       ? payload["detail"]
       : `Session ${sessionId} is waiting for input in ${cwd}.`;
-  const remoteUrl =
-    typeof payload["remote_url"] === "string" ? payload["remote_url"] : "";
 
   return {
     action_items: [
@@ -44,11 +42,7 @@ export async function run(context: RunContext): Promise<RunResult> {
         type: "coding-agent-waiting",
         context: {
           what_happened: summary,
-          source: {
-            kind: "coding-agent",
-            id: `${agent}:${sessionId}`,
-            ...(remoteUrl ? { link: remoteUrl } : {}),
-          },
+          source: { kind: "coding-agent", id: `${agent}:${sessionId}` },
           provenance: ["coding_agent.waiting", "coding-agent.run"],
           why_flagged: `${agent} session ${sessionId} is blocked waiting on your input (${hookEvent})`,
           trigger_reason: "policy",
@@ -56,9 +50,7 @@ export async function run(context: RunContext): Promise<RunResult> {
           decision_needed: `Unblock ${agent} in ${repo}`,
           decision_surface: "inbox",
           execution_surface: "terminal",
-          outcome_preview: remoteUrl
-            ? `Opens ${remoteUrl} or marks session ${sessionId} handled`
-            : `Marks session ${sessionId} in ${cwd} handled`,
+          outcome_preview: `Answer it in the waiting session in ${cwd}; this card clears when it resumes`,
         },
         custom: {
           agent,
@@ -68,7 +60,6 @@ export async function run(context: RunContext): Promise<RunResult> {
           repo,
           summary,
           detail,
-          remote_url: remoteUrl,
         },
         dedupe_key: `coding-agent:${agent}:${sessionId}`,
       },

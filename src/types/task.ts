@@ -22,11 +22,18 @@ export const TaskStatus = z.enum([
 ]);
 export type TaskStatus = z.infer<typeof TaskStatus>;
 
+/** Where a task was submitted from. The actor is derived from this, never from the request body. */
+export const TaskOrigin = z.enum(["ui", "telegram", "mcp", "api"]);
+export type TaskOrigin = z.infer<typeof TaskOrigin>;
+
 export const Task = z.object({
   id: z.string().min(1),
   goal: z.string().min(1),
   lane: TaskLane.default("general"),
   scope: DataScope.default("work"),
+  origin: TaskOrigin.default("api"),
+  /** Client idempotency key: a retried submission returns the original task. */
+  request_key: z.string().nullable().default(null),
   status: TaskStatus,
   revision: z.number().int().min(1).default(1),
   runner: z.string().min(1).default("worker"),
@@ -89,7 +96,12 @@ export type Artifact = z.infer<typeof Artifact>;
 
 export const ActivityEventType = z.enum([
   "task.submitted",
+  "task.retried",
+  "task.cancelled",
+  "task.failed",
   "run.started",
+  "run.progress",
+  "run.exited",
   "tool.called",
   "artifact.created",
   "question.asked",

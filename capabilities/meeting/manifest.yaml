@@ -23,7 +23,8 @@ entrypoint: index.ts
 trigger:
   mode: manual
   command: /meeting
-  on: [meeting.transcribed]
+  events:
+    - meeting.transcribed
 
 context:
   requires: [projects.active, people.known]

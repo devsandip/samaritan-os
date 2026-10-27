@@ -116,10 +116,14 @@ export function InboxView({
 
   const runBatch = async () => {
     if (!approveResponse || selected.size === 0) return;
-    const ids = [...selected];
+    // Each id goes with the revision on screen, so an item that changed since
+    // the list loaded is refused rather than approved unseen (D9).
+    const chosen = (items ?? [])
+      .filter((item) => selected.has(item.id))
+      .map((item) => ({ id: item.id, revision: item.revision }));
     setBusy(true);
     try {
-      const result = await api.batch(ids, approveResponse.id);
+      const result = await api.batch(chosen, approveResponse.id);
       const parts: string[] = [];
       if (result.applied.length) parts.push(`Approved ${result.applied.length}`);
       if (result.skipped.length) parts.push(`${result.skipped.length} held for review`);

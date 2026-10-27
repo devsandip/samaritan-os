@@ -85,7 +85,11 @@ export function ItemDetail({
 
   const resolved = catalogue.resolveItem(loaded);
   const layout = layoutFor(resolved);
-  const responses = responsesFor(loaded, resolved);
+  // A worker's question is answered with the form below, which carries the
+  // text; the bare "answer" button would approve it with nothing to say.
+  const responses = (responsesFor(loaded, resolved)).filter(
+    (r) => !(loaded.type === "task-question" && r.id === "answer"),
+  );
   const payload = preparePayload(draft);
   const edited = !deepEqual(preparePayload(loaded.custom), payload);
 
@@ -113,7 +117,7 @@ export function ItemDetail({
       const updated = await work();
       finish(updated, describe(updated));
     } catch (err) {
-      if (err instanceof ApiError && (err.status === 409 || err.code === "stale_approval")) {
+      if (err instanceof ApiError && err.code === "stale_approval") {
         setStaleApproval(true);
       }
       const message =
@@ -164,7 +168,7 @@ export function ItemDetail({
     setAnsweringWorker(true);
     setActionError(undefined);
     try {
-      await api.answerTask(loaded.task_id, { answer: answerText });
+      await api.answerTask(loaded.task_id, { answer: answerText, question_id: loaded.id });
       const refreshed = await api.getAction(loaded.id);
       setWorkerAnswer("");
       finish(refreshed, "Answered clarification and resumed worker task");
@@ -238,8 +242,7 @@ export function ItemDetail({
         <form className="dcard" onSubmit={(e) => void submitWorkerAnswer(e)}>
           <h4>Reply to Worker &amp; Resume Task</h4>
           <p className="detail-text" style={{ marginTop: 0, marginBottom: 8 }}>
-            Your answer will be passed directly to <code>worker.answer()</code> and the background
-            task will resume from its checkpoint.
+            Your answer is recorded on this item and the task picks up where it stopped.
           </p>
           <textarea
             className="draft short"

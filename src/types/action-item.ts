@@ -146,7 +146,8 @@ export function contextVariables(context: ActionItemContext): Record<ContextVari
   };
 }
 
-export const Actor = z.enum(["sandip", "policy", "system", "capability"]);
+/** `assistant`: a connected AI client acting over MCP. It can answer a worker's question, never approve. */
+export const Actor = z.enum(["sandip", "policy", "system", "capability", "assistant"]);
 export type Actor = z.infer<typeof Actor>;
 
 /** Append-only audit row (§9). Never updated, never deleted. */

@@ -54,6 +54,12 @@ interface ErrorBody {
   error?: { code?: string; message?: string };
 }
 
+/**
+ * Fired on any 401 so the app can show the sign-in screen wherever the request
+ * came from, instead of each view rendering its own "unauthorized" error.
+ */
+export const UNAUTHORIZED_EVENT = "samaritan:unauthorized";
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
@@ -82,6 +88,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     // the daemon: it is the dev proxy, or a tunnel, reporting that nothing
     // answered. Same practical meaning as a failed fetch, so it says the same.
     const upstreamDown = !parsed && response.status >= 500;
+    if (response.status === 401 && !path.startsWith("/api/auth/")) {
+      window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT));
+    }
     throw new ApiError(
       body.error?.message ?? `${response.status} ${response.statusText}`,
       response.status,
@@ -116,6 +125,12 @@ function query(filter: ListFilter): string {
   return qs ? `?${qs}` : "";
 }
 
+export interface AuthSession {
+  authenticated: boolean;
+  token_configured: boolean;
+  via: "session" | "bearer" | "local-open" | null;
+}
+
 export const api = {
   health: () => request<Health>("/healthz"),
 
@@ -132,6 +147,15 @@ export const api = {
       body: JSON.stringify({}),
     }),
 
+  session: () => request<AuthSession>("/api/auth/session"),
+
+  login: (token: string) =>
+    request<{ authenticated: boolean }>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    }),
+
+  logout: () => request<{ authenticated: boolean }>("/api/auth/logout", { method: "POST" }),
   listActions: (filter: ListFilter = {}) =>
     request<{ items: ActionItem[] }>(`/api/actions${query(filter)}`).then((r) => r.items),
 
@@ -155,11 +179,19 @@ export const api = {
       body: JSON.stringify({ actor: "sandip", ...body }),
     }),
 
-  /** Batch-approve for similar low-risk items (§12 step 23). Per-item outcomes. */
-  batch: (ids: string[], responseId: string) =>
+  /**
+   * Batch-approve for similar low-risk items (§12 step 23). Per-item outcomes.
+   * Each id carries the revision on screen, so nothing that changed since the
+   * list loaded is approved (D9).
+   */
+  batch: (items: { id: string; revision: number }[], responseId: string) =>
     request<BatchResult>("/api/actions/batch", {
       method: "POST",
-      body: JSON.stringify({ actor: "sandip", ids, response_id: responseId }),
+      body: JSON.stringify({
+        ids: items.map((i) => i.id),
+        revisions: Object.fromEntries(items.map((i) => [i.id, i.revision])),
+        response_id: responseId,
+      }),
     }),
 
   confirm: (
@@ -189,22 +221,27 @@ export const api = {
       artifacts: Artifact[];
       events: ActivityEvent[];
       action_items: ActionItem[];
+      open_question: ActionItem | null;
     }>(`/api/tasks/${encodeURIComponent(id)}`),
 
-  createTask: (body: { goal: string; lane?: TaskLane; priority?: Priority }) =>
-    request<{ task: Task; run: RunRecord }>("/api/tasks", {
+  /** Queues a task and returns at once; the run happens in the background. */
+  createTask: (body: { goal: string; lane?: TaskLane; request_key?: string }) =>
+    request<{ task: Task; created: boolean }>("/api/tasks", {
       method: "POST",
       body: JSON.stringify(body),
     }),
 
-  answerTask: (id: string, body: { answer: string; expected_revision?: number }) =>
+  retryTask: (id: string) =>
+    request<{ task: Task }>(`/api/tasks/${encodeURIComponent(id)}/retry`, { method: "POST" }),
+
+  answerTask: (id: string, body: { answer: string; question_id?: string; expected_revision?: number }) =>
     request<{ task: Task }>(`/api/tasks/${encodeURIComponent(id)}/answer`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
 
   cancelTask: (id: string, reason?: string) =>
-    request<{ task: Task | null; run: RunRecord | null }>(
+    request<{ task: Task }>(
       `/api/tasks/${encodeURIComponent(id)}/cancel`,
       {
         method: "POST",
@@ -216,7 +253,7 @@ export const api = {
     request<{ runs: RunRecord[] }>(`/api/runs${query(filter as ListFilter)}`).then((r) => r.runs),
 
   cancelRun: (id: string, reason?: string) =>
-    request<{ run: RunRecord | null }>(
+    request<{ run: RunRecord | null; stopped: boolean }>(
       `/api/runs/${encodeURIComponent(id)}/cancel`,
       {
         method: "POST",
@@ -255,6 +292,7 @@ export const api = {
     }),
 
   submitMeetingNotes: (body: {
+    event_id?: string;
     title?: string;
     date?: string;
     attendees?: string[];

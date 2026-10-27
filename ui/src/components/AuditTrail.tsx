@@ -17,6 +17,7 @@ const ACTOR_LABEL: Record<Actor, string> = {
   policy: "The policy engine",
   system: "Samaritan",
   capability: "The capability",
+  assistant: "A connected assistant",
 };
 
 const TERMINAL = new Set(["executed", "rejected", "expired"]);

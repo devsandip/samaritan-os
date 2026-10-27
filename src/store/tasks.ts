@@ -10,6 +10,7 @@ import {
   type ArtifactKind,
   Task,
   type TaskLane,
+  type TaskOrigin,
   type TaskStatus,
   nowIso,
 } from "../types/index.js";
@@ -19,6 +20,8 @@ export interface CreateTaskInput {
   goal: string;
   lane?: TaskLane;
   scope?: "work" | "personal";
+  origin?: TaskOrigin;
+  request_key?: string | null;
   status?: TaskStatus;
   runner?: string;
   parent_task_id?: string | null;
@@ -44,6 +47,8 @@ interface TaskRow {
   goal: string;
   lane: string;
   scope?: string;
+  origin?: string;
+  request_key?: string | null;
   status: string;
   revision: number;
   runner: string;
@@ -59,6 +64,8 @@ function rowToTask(row: TaskRow): Task {
     goal: row.goal,
     lane: row.lane,
     scope: row.scope ?? "work",
+    origin: row.origin ?? "api",
+    request_key: row.request_key ?? null,
     status: row.status,
     revision: row.revision,
     runner: row.runner,
@@ -71,6 +78,11 @@ function rowToTask(row: TaskRow): Task {
 
 export function getTask(db: Db, id: string): Task | undefined {
   const row = db.prepare<TaskRow>("SELECT * FROM tasks WHERE id = ?").get(id);
+  return row ? rowToTask(row) : undefined;
+}
+
+export function getTaskByRequestKey(db: Db, requestKey: string): Task | undefined {
+  const row = db.prepare<TaskRow>("SELECT * FROM tasks WHERE request_key = ?").get(requestKey);
   return row ? rowToTask(row) : undefined;
 }
 
@@ -112,6 +124,8 @@ export function createTask(db: Db, input: CreateTaskInput): Task {
     goal: input.goal,
     lane: input.lane ?? "general",
     scope: input.scope ?? "work",
+    origin: input.origin ?? "api",
+    request_key: input.request_key ?? null,
     status: input.status ?? "queued",
     revision: 1,
     runner: input.runner ?? "worker",
@@ -124,13 +138,16 @@ export function createTask(db: Db, input: CreateTaskInput): Task {
   return db.transaction(() => {
     db.prepare(
       `INSERT INTO tasks
-         (id, goal, lane, scope, status, revision, runner, parent_task_id, result_summary, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, goal, lane, scope, origin, request_key, status, revision, runner, parent_task_id,
+          result_summary, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       task.id,
       task.goal,
       task.lane,
       task.scope,
+      task.origin,
+      task.request_key,
       task.status,
       task.revision,
       task.runner,
@@ -143,7 +160,7 @@ export function createTask(db: Db, input: CreateTaskInput): Task {
     appendActivityEvent(db, {
       task_id: task.id,
       type: "task.submitted",
-      payload: { goal: task.goal, lane: task.lane, runner: task.runner },
+      payload: { goal: task.goal, lane: task.lane, origin: task.origin },
       created_at: now,
     });
 

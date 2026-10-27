@@ -2,7 +2,7 @@
  * Now / Dashboard (UI-SPEC §5.1, Command Centre D2) - "what's the state of my world"
  * in one screenful, including active delegated tasks and the Phase 1 Meetings Loop.
  */
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { api, type ApiError } from "../api/client";
 import type { ActionItem, CapabilityManifest, LoadProblem, Task } from "../api/types";
 import { EmptyState, ErrorBanner, Skeleton, SkeletonRows } from "../components/states";
@@ -11,6 +11,8 @@ import type { Catalogue } from "../lib/manifest";
 import { itemTitle } from "../lib/manifest";
 import { byPriorityThenNewest, clockTime, greeting, relativeTime } from "../lib/format";
 import { navigate } from "../lib/router";
+import { useAsync } from "../lib/useAsync";
+import { usePoll } from "../lib/usePoll";
 
 export function DashboardView({
   inbox,
@@ -49,11 +51,28 @@ export function DashboardView({
 
   const enabled = capabilities.filter((capability) => capability.enabled);
 
+  // Today, running work and source freshness come from one snapshot (D2).
+  const now = useAsync(() => api.now(), []);
+  usePoll(now.reload, 30_000);
+  const meetings = now.data?.meetings ?? [];
+  const running = now.data?.running ?? [];
+  const staleSources = (now.data?.sync_cursors ?? []).filter((c) => c.last_error);
+
   const [showMeetingForm, setShowMeetingForm] = useState(false);
+  const [meetingEventId, setMeetingEventId] = useState("");
   const [meetingTitle, setMeetingTitle] = useState("");
   const [meetingAttendees, setMeetingAttendees] = useState("");
   const [meetingNotes, setMeetingNotes] = useState("");
   const [submittingMeeting, setSubmittingMeeting] = useState(false);
+
+  // The after-meeting nudge links here as /now?meeting=<event id>.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("meeting");
+    if (id) {
+      setMeetingEventId(id);
+      setShowMeetingForm(true);
+    }
+  }, []);
 
   const submitMeeting = async (event: FormEvent) => {
     event.preventDefault();
@@ -65,17 +84,25 @@ export function DashboardView({
         .map((s) => s.trim())
         .filter(Boolean);
       const res = await api.submitMeetingNotes({
+        ...(meetingEventId ? { event_id: meetingEventId } : {}),
         ...(meetingTitle.trim() ? { title: meetingTitle.trim() } : {}),
         ...(attendees.length ? { attendees } : {}),
         notes: meetingNotes.trim(),
       });
+      if (res.status !== "ok") {
+        onToast(`Notes not processed: ${res.error ?? res.status}`, "err");
+        return;
+      }
+      setMeetingEventId("");
       setMeetingTitle("");
       setMeetingAttendees("");
       setMeetingNotes("");
       setShowMeetingForm(false);
       reload();
       onToast(
-        `Meeting note filed to Obsidian (${res.accepted.length} action item(s) surfaced)`,
+        res.accepted.length
+          ? `${res.accepted.length} item(s) to review in the Inbox`
+          : "Notes saved; nothing to file was found in them",
       );
     } catch (err) {
       onToast(`Meeting note failed: ${(err as Error).message}`, "err");
@@ -130,7 +157,23 @@ export function DashboardView({
 
       {showMeetingForm ? (
         <form className="card" onSubmit={(e) => void submitMeeting(e)}>
-          <h2>Capture Meeting Notes (Obsidian + Action Extraction)</h2>
+          <h2>Meeting notes</h2>
+          <select
+            className="fi"
+            style={{ marginBottom: 10, width: "100%" }}
+            value={meetingEventId}
+            onChange={(e) => setMeetingEventId(e.target.value)}
+          >
+            <option value="">Not from the calendar</option>
+            {meetingEventId && !meetings.some((m) => m.id === meetingEventId) ? (
+              <option value={meetingEventId}>The meeting from your nudge</option>
+            ) : null}
+            {meetings.map((m) => (
+              <option key={m.id} value={m.id}>
+                {clockTime(m.starts_at)} · {m.title}
+              </option>
+            ))}
+          </select>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
             <input
               className="fi"
@@ -164,6 +207,45 @@ export function DashboardView({
             </Button>
           </div>
         </form>
+      ) : null}
+
+      {meetings.length > 0 || running.length > 0 || staleSources.length > 0 ? (
+        <div className="card">
+          <h2>Today</h2>
+          {meetings.map((m) => (
+            <div key={m.id} className="lrow">
+              <StatusDot state="idle" label="meeting" />
+              <span style={{ flex: 1 }}>
+                <b>{clockTime(m.starts_at)}</b> {m.title}
+                {m.attendees.length ? <span className="tm"> · {m.attendees.join(", ")}</span> : null}
+              </span>
+            </div>
+          ))}
+          {running.map((r) => (
+            <div key={r.id} className="lrow">
+              <StatusDot state="idle" label="running" />
+              <span style={{ flex: 1 }}>
+                Running: {r.capability_id ?? "delegated task"}{" "}
+                <span className="tm">since {relativeTime(r.started_at)}</span>
+              </span>
+            </div>
+          ))}
+          {staleSources.map((c) => (
+            <div key={c.source} className="lrow">
+              <StatusDot state="err" label="source error" />
+              <span style={{ flex: 1 }}>
+                {c.source} last synced {c.last_success_at ? relativeTime(c.last_success_at) : "never"}:{" "}
+                <span className="tm">{c.last_error}</span>
+              </span>
+            </div>
+          ))}
+          {now.data ? (
+            <div className="mode-note">
+              Worker spend this month: ${now.data.worker.month_spend_usd.toFixed(2)} of $
+              {now.data.worker.monthly_budget_usd}
+            </div>
+          ) : null}
+        </div>
       ) : null}
 
       <div className={error ? "tiles dimmed" : "tiles"}>

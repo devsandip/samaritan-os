@@ -16,6 +16,7 @@ import { clockTime, relativeTime } from "../lib/format";
 import type { Catalogue } from "../lib/manifest";
 import { navigate } from "../lib/router";
 import { useAsync } from "../lib/useAsync";
+import { usePoll } from "../lib/usePoll";
 import { CompletedView } from "./Completed";
 
 export function ActivityView({
@@ -35,14 +36,21 @@ export function ActivityView({
 }) {
   const [tab, setTab] = useState<"stream" | "completed">("stream");
   const feed = useAsync(() => api.activity(100), []);
+  // Every running run, however old, so each one can be stopped.
+  const running = useAsync(() => api.listRuns({ status: "running", limit: 50 }), []);
+  usePoll(() => {
+    feed.reload();
+    running.reload();
+  }, 5_000, tab === "stream");
   const [stoppingRunId, setStoppingRunId] = useState<string | undefined>(undefined);
 
   const stopRun = async (runId: string) => {
     setStoppingRunId(runId);
     try {
-      await api.cancelRun(runId, "Stopped from Activity view");
-      onToast(`Stopped run ${runId} and fenced lease`);
+      const { stopped } = await api.cancelRun(runId, "Stopped from Activity view");
+      onToast(stopped ? "Stopped; its late output will be refused" : "That run had already finished");
       feed.reload();
+      running.reload();
     } catch (err) {
       onToast(`Could not stop run: ${(err as Error).message}`, "err");
     } finally {
@@ -74,7 +82,8 @@ export function ActivityView({
     );
   }
 
-  const runs = feed.data?.runs ?? [];
+  const live = running.data ?? [];
+  const runs = [...live, ...(feed.data?.runs ?? []).filter((r) => !live.some((l) => l.id === r.id))];
   const activityEvents = feed.data?.events ?? [];
   const seenEvents = feed.data?.seen_events ?? [];
 

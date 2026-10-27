@@ -1,0 +1,62 @@
+# The nudge after a meeting ends (PROPOSAL Phase 1).
+#
+# The calendar says a meeting with other people has ended. That does not prove
+# Sandip was there, so the card asks rather than assumes: add notes (pasted on
+# the laptop or phone, which resolves this card), say there are none, or be
+# reminded later. Nothing is filed from here; the notes go through `meeting`,
+# whose extracted items are each reviewed.
+
+id: meeting-followup
+name: Meeting Notes Nudge
+description: >-
+  After a meeting ends, asks for its notes so decisions and next steps get
+  extracted, or lets Sandip say there are none.
+version: 0.1.0
+owner: sandip
+enabled: true
+entrypoint: index.ts
+
+trigger:
+  mode: event
+  on: [calendar.meeting_ended]
+
+emits:
+  - type: meeting-notes-request
+    render:
+      layout: card
+      primary: meeting_title
+      secondary: prompt
+      badges: [ended_at, attendee_count]
+
+    custom_attributes:
+      event_id: string
+      meeting_title: string
+      ended_at: string
+      attendees: string
+      attendee_count: string
+      prompt: string
+      notes_url: string
+
+    responses:
+      - { id: no_notes, label: "No notes needed", outcome: discard }
+      - { id: defer, label: "Remind me in 1h", outcome: defer, defer_for: 1h }
+      - { id: notes_added, label: "Notes added", outcome: discard }
+
+    execution:
+      mode: guided
+      capability: guided.fallback
+
+    policy:
+      escalate_when: "true"
+
+    priority: normal
+    ttl: 24h
+
+requires_capabilities:
+  - guided.fallback
+
+delivery:
+  channels: [inbox, telegram]
+
+audit: true
+timeout_ms: 10000

@@ -23,6 +23,7 @@ import type { Synthesizer } from "./recall/synthesize.js";
 import { openDatabase, type Db } from "./store/db.js";
 import { migrate } from "./store/migrate.js";
 import { nowIso } from "./types/index.js";
+import { createTaskAnswerAdapter } from "./execution/adapters/task-answer.js";
 import { WorkerService, type WorkerExecutor } from "./worker/index.js";
 
 const logger = log("app");
@@ -64,6 +65,10 @@ export function createApp(options: CreateAppOptions = {}): App {
   // which action-item types degrade to guided (§10).
   const execution = new ExecutionRegistry(db);
   registerV0Adapters(execution, db);
+  // Answering a worker's question resumes the task. The worker is built below,
+  // after the Action Center it depends on, so the adapter resolves it late.
+  let worker: WorkerService | undefined;
+  execution.register(createTaskAnswerAdapter(() => worker));
 
   const routing = new RoutingResolver(db);
   const routingPath = options.routingPath ?? join(repoRoot(), "routing.yaml");
@@ -78,7 +83,23 @@ export function createApp(options: CreateAppOptions = {}): App {
   const { loaded, problems } = capabilities.reload();
   logger.info({ capabilities: loaded.length, problems: problems.length }, "registry loaded");
 
-  const delivery = createDelivery(db);
+  // Telegram buttons offer the item's first committing response (or, for a
+  // card that commits nothing, such as the meeting-notes nudge, its first
+  // answer) and its snooze. A worker's question gets neither: it is answered by
+  // replying to it.
+  const delivery = createDelivery(db, (item) => {
+    const responses = capabilities.getType(item.capability_id, item.type)?.spec.responses ?? [];
+    const approve =
+      item.type === "task-question"
+        ? undefined
+        : (responses.find((r) => r.outcome === "execute" || r.outcome === "guided") ??
+          responses.find((r) => r.outcome === "discard"));
+    const snooze = responses.find((r) => r.outcome === "defer");
+    return {
+      ...(approve ? { approve: { id: approve.id, label: approve.label } } : {}),
+      ...(snooze ? { snooze: { id: snooze.id, label: snooze.label } } : {}),
+    };
+  });
   const actionCenter = new ActionCenter({
     db,
     capabilities,
@@ -130,10 +151,11 @@ export function createApp(options: CreateAppOptions = {}): App {
       ? join(dirname(options.dbPath), "artifacts")
       : undefined);
 
-  const worker = new WorkerService({
+  worker = new WorkerService({
     db,
     actionCenter,
     recall,
+    config: config.worker,
     ...(defaultArtifactsRoot ? { artifactsRoot: defaultArtifactsRoot } : {}),
     ...(options.workerExecutor ? { executor: options.workerExecutor } : {}),
   });
@@ -149,6 +171,9 @@ export function createApp(options: CreateAppOptions = {}): App {
     eventBus,
     recall,
     worker,
-    close: () => db.close(),
+    close: () => {
+      worker?.stop();
+      db.close();
+    },
   };
 }

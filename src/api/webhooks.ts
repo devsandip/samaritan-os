@@ -28,6 +28,7 @@ import {
 } from "../events/listeners/slack-webhook.js";
 import { log } from "../logger.js";
 import { getSecret } from "../secrets.js";
+import { isRemote } from "./auth.js";
 
 const logger = log("webhooks");
 
@@ -74,6 +75,11 @@ export function registerWebhooks(server: FastifyInstance, app: App): void {
           logger.warn("rejected fireflies webhook: bad signature");
           return reply.code(401).send({ error: { code: "unauthorized", message: "bad signature" } });
         }
+      } else if (isRemote(request)) {
+        // Unverified is tolerable on loopback only; from the tailnet it is a stranger.
+        return reply.code(401).send({
+          error: { code: "unauthorized", message: "a signing secret is required for requests from outside this Mac" },
+        });
       } else {
         logger.warn(
           { account: cfg.account },

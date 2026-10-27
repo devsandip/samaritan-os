@@ -1,4 +1,5 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { loadConfig } from "../../src/config/index.js";
 import { fetchFirefliesTranscript } from "../../src/events/listeners/fireflies-client.js";
@@ -70,9 +71,10 @@ export function extractItemsFromNotes(rawNotes: string, defaultProject = ""): Me
       continue;
     }
 
-    const taskMatch = /^(?:task(?:\s+for\s+([a-z0-9_.-]+))?|todo|action|\[\s*\])\s*:?\s*(.+)$/i.exec(
-      line,
-    );
+    // The keyword needs its colon ("Task: ..."), so "Taskforce update" or
+    // "Actionable feedback" is prose, not a task. A checkbox needs none.
+    const taskMatch =
+      /^(?:(?:task(?:\s+for\s+([a-z0-9_.-]+))?|todo|action(?:\s+item)?)\s*:|\[\s*\])\s*(.+)$/i.exec(line);
     if (taskMatch?.[2]) {
       results.push({
         kind: "task",
@@ -99,6 +101,40 @@ export function extractItemsFromNotes(rawNotes: string, defaultProject = ""): Me
   return results;
 }
 
+function localDate(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function contentKey(title: string): string {
+  const normal = title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return createHash("sha256").update(normal).digest("hex").slice(0, 12);
+}
+
+/**
+ * Writes the meeting note, never over an existing one (the /meeting skill, or
+ * an earlier paste, may already have written it). Returns the vault-relative
+ * path, or undefined when the note could not be written, so no item links to a
+ * file that does not exist.
+ */
+function writeMeetingNote(topic: string, date: string, notes: string): string | undefined {
+  try {
+    const vaultRoot = loadConfig().paths.vault;
+    for (let n = 1; n < 20; n++) {
+      const suffix = n === 1 ? "" : ` (${n})`;
+      const relPath = join("Areas", "Meetings", `${date} - ${safeSlug(topic)}${suffix}.md`);
+      const absTarget = resolveInVault(vaultRoot, relPath);
+      if (existsSync(absTarget)) continue;
+      mkdirSync(dirname(absTarget), { recursive: true });
+      writeFileSync(absTarget, `# ${topic} (${date})\n\n${notes}\n`, { encoding: "utf8", flag: "wx" });
+      return relPath;
+    }
+  } catch {
+    // Fall through: the items are still worth reviewing without the note.
+  }
+  return undefined;
+}
+
 function safeSlug(topic: string): string {
   return (
     topic
@@ -114,7 +150,10 @@ export async function run(context: RunContext): Promise<RunResult> {
   const from = (key: string): unknown => context.inputs[key] ?? payload[key];
 
   let topic = text(from("meeting_topic") ?? from("title"), "Untitled meeting");
-  let date = text(from("meeting_date"), context.trigger.firedAt.slice(0, 10));
+  // A date is only ever YYYY-MM-DD here: it becomes part of a vault path.
+  const suppliedDate = text(from("meeting_date"));
+  let date = /^\d{4}-\d{2}-\d{2}$/.test(suppliedDate) ? suppliedDate : localDate(new Date(context.trigger.firedAt));
+  const eventId = text(from("event_id"));
   const defaultProject = text(from("project"));
   let rawNotes = text(from("notes") ?? from("transcript") ?? from("fireflies.transcript"));
 
@@ -134,20 +173,7 @@ export async function run(context: RunContext): Promise<RunResult> {
 
   let notePath = text(from("meeting_note_path"));
   if (!notePath && rawNotes.trim()) {
-    const relPath = join("Areas", "Meetings", `${date} - ${safeSlug(topic)}.md`);
-    try {
-      const vaultRoot = loadConfig().paths.vault;
-      const absTarget = resolveInVault(vaultRoot, relPath);
-      mkdirSync(dirname(absTarget), { recursive: true });
-      writeFileSync(
-        absTarget,
-        `# ${topic} (${date})\n\n${rawNotes.trim()}\n`,
-        "utf8",
-      );
-      notePath = relPath;
-    } catch {
-      notePath = relPath;
-    }
+    notePath = writeMeetingNote(topic, date, rawNotes.trim()) ?? "";
   }
 
   const raw = from("items");
@@ -167,7 +193,7 @@ export async function run(context: RunContext): Promise<RunResult> {
     };
   }
 
-  const action_items: DraftActionItem[] = items.map((item, index) => {
+  const action_items: DraftActionItem[] = items.map((item) => {
     const cleanTitle =
       item.kind === "task" ? sanitizeTickTickText(item.title) : item.title;
     return {
@@ -204,7 +230,10 @@ export async function run(context: RunContext): Promise<RunResult> {
         meeting_date: date,
         meeting_note_path: notePath,
       },
-      dedupe_key: `meeting:${date}:${topic}:${item.kind}:${index}`,
+      // Keyed on the item's own content, and on the calendar event when known,
+      // so re-pasting edited notes or adding the transcript later updates the
+      // same pending item instead of filing a second copy.
+      dedupe_key: `meeting:${eventId || `${date}:${topic}`}:${item.kind}:${contentKey(cleanTitle)}`,
     };
   });
 

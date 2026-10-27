@@ -39,6 +39,12 @@ export const ConfigSchema = z.object({
       port: z.number().int().min(1).max(65535).default(4173),
       /** §9: 127.0.0.1 only. Never 0.0.0.0. */
       host: z.string().default("127.0.0.1"),
+      /**
+       * The address the phone reaches this Mac on, e.g. the Tailscale Serve
+       * HTTPS name (D5). Links in Telegram use it; without it they point at
+       * 127.0.0.1, which only works on the Mac itself.
+       */
+      public_url: z.string().url().optional(),
     })
     .prefault({}),
 
@@ -65,6 +71,14 @@ export const ConfigSchema = z.object({
         .object({
           enabled: z.boolean().default(false),
           chat_id: z.string().optional(),
+          /**
+           * Sandip's own Telegram user id. Inbound updates must come from this
+           * sender, not merely this chat. Defaults to chat_id, which is the same
+           * number in a private chat with the bot.
+           */
+          user_id: z.string().optional(),
+          /** Long-poll Telegram for button presses and commands (D5 Phase 2). */
+          inbound: z.boolean().default(true),
         })
         .prefault({}),
     })
@@ -222,7 +236,27 @@ export const ConfigSchema = z.object({
       account: z.string().default("default"),
       calendar_id: z.string().default("primary"),
       poll_interval_ms: z.number().int().min(10_000).default(60_000),
-      prep_lead_minutes: z.number().int().min(5).max(120).default(20),
+      prep_lead_minutes: z.number().int().min(5).max(120).default(15),
+    })
+    .prefault({}),
+
+  worker: z
+    .object({
+      /**
+       * Delegated tasks run on the Claude Agent SDK in a child process (PROPOSAL
+       * D1). Unattended runs bill to a Console API key, never the interactive
+       * plan (C2): Keychain service "samaritan", account "anthropic:<this>".
+       * With no key the task fails with that instruction instead of running.
+       */
+      account: z.string().default("worker"),
+      model: z.string().default("claude-opus-5-5"),
+      max_turns: z.number().int().min(1).max(200).default(30),
+      /** Per-run ceiling the SDK enforces (`maxBudgetUsd`). */
+      run_budget_usd: z.number().positive().default(2),
+      /** Hard cap on worker spend per calendar month. 0 disables the worker. */
+      monthly_budget_usd: z.number().min(0).default(25),
+      timeout_ms: z.number().int().min(10_000).default(15 * 60_000),
+      concurrency: z.number().int().min(1).max(4).default(1),
     })
     .prefault({}),
 

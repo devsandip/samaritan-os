@@ -83,7 +83,7 @@ export function Sidebar({
       const created = await api.createTask({ goal: text, lane });
       setDraft("");
       onTaskCreated?.();
-      onToast?.(`Delegated task started (${lane})`);
+      onToast?.(`Queued (${lane}); it runs in the background`);
       navigate(`/tasks/${encodeURIComponent(created.task.id)}`);
     } catch (err) {
       onToast?.(`Could not start task: ${(err as Error).message}`, "err");

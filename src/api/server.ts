@@ -8,13 +8,19 @@
  */
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
+import Fastify, { type FastifyInstance } from "fastify";
 import fastifyStatic from "@fastify/static";
 import { z } from "zod";
 import { ActionCenterError } from "../action-center/index.js";
 import { createApp, type App, type CreateAppOptions } from "../app.js";
-import { repoRoot } from "../config/index.js";
-import { handleTelegramUpdate, type TelegramUpdate } from "../delivery/telegram-inbound.js";
+import { loadConfig, repoRoot } from "../config/index.js";
+import { acquireInstanceLock } from "../store/instance-lock.js";
+import { getSecret } from "../secrets.js";
+import {
+  handleTelegramUpdate,
+  TelegramPoller,
+  type TelegramUpdate,
+} from "../delivery/telegram-inbound.js";
 import {
   CalendarPoller,
   createGoogleCalendarSource,
@@ -42,12 +48,14 @@ import {
 import { currentVersion } from "../store/migrate.js";
 import { Scheduler } from "../scheduler/index.js";
 import { MoneyLockViolation } from "../guardrails.js";
-import { getSecret } from "../secrets.js";
+import { authGate, callerOf, checkLogin, configuredToken, sessionCookieHeader } from "./auth.js";
 import {
   getActionItem,
+  getActionItemByDedupeKey,
   listActionItems,
   listAuditTrail,
   IllegalTransitionError,
+  transition,
 } from "../store/action-items.js";
 import { getRun, listRuns } from "../store/runs.js";
 import {
@@ -107,6 +115,8 @@ const RespondBody = z.object({
 const BatchBody = z.object({
   ids: z.array(z.string().min(1)).min(1),
   response_id: z.string().min(1),
+  /** The revision on screen for each id. A committing batch needs one per item (D9). */
+  revisions: z.record(z.string(), z.coerce.number().int().min(1)).optional(),
   actor: z.enum(["sandip", "system", "policy", "capability"]).optional(),
 });
 
@@ -134,9 +144,8 @@ const TaskSubmitBody = z.object({
   goal: z.string().min(1),
   lane: TaskLane.default("general"),
   parent_task_id: z.string().nullable().optional(),
-  admission_key: z.string().min(1).optional(),
-  inputs: z.record(z.string(), z.unknown()).optional(),
-  auto_start: z.boolean().default(true),
+  /** Client idempotency key: resubmitting returns the original task. */
+  request_key: z.string().min(1).max(200).optional(),
 });
 
 const TaskListQuery = z.object({
@@ -146,10 +155,16 @@ const TaskListQuery = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 
-const TaskAnswerBody = z.object({
-  answer: z.string().min(1),
-  expected_revision: z.coerce.number().int().min(1).optional(),
-});
+const TaskAnswerBody = z
+  .object({
+    answer: z.string().min(1),
+    /** The question on screen. A later question will not take an answer meant for this one. */
+    question_id: z.string().min(1).optional(),
+    expected_revision: z.coerce.number().int().min(1).optional(),
+  })
+  .refine((b) => b.question_id !== undefined || b.expected_revision !== undefined, {
+    message: "name the question (question_id) or the task revision (expected_revision) you are answering",
+  });
 
 const CancelBody = z.object({
   reason: z.string().optional(),
@@ -178,6 +193,8 @@ const SourceRuleBody = z.object({
 });
 
 const MeetingNotesBody = z.object({
+  /** The calendar event these notes are for, when known (from the nudge link). */
+  event_id: z.string().min(1).optional(),
   meeting_topic: z.string().min(1).optional(),
   title: z.string().min(1).optional(),
   meeting_date: z.string().optional(),
@@ -199,6 +216,15 @@ const RecallQueryBody = z.object({
   scope: z.enum(["work", "personal", "all"]).optional(),
 });
 
+/** The local calendar day of an ISO timestamp (or a plain YYYY-MM-DD). */
+function localDay(value: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 function badRequest(error: z.ZodError) {
   return {
     error: {
@@ -210,55 +236,11 @@ function badRequest(error: z.ZodError) {
   };
 }
 
-function isLoopback(ip: string | undefined): boolean {
-  if (!ip) return true;
-  return ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
-}
-
-function extractSessionToken(request: FastifyRequest): string | undefined {
-  const auth = request.headers.authorization;
-  if (auth && auth.toLowerCase().startsWith("bearer ")) {
-    return auth.slice(7).trim();
-  }
-  const cookie = request.headers.cookie;
-  if (cookie) {
-    for (const part of cookie.split(";")) {
-      const [k, v] = part.trim().split("=");
-      if (k === "samaritan_session" && v) return decodeURIComponent(v);
-    }
-  }
-  return undefined;
-}
-
 export function buildServer(app: App): FastifyInstance {
   const server = Fastify({ logger: false });
 
-  // Non-loopback requests (e.g. Tailscale phone web) must present `web:token`
-  // when configured in Keychain. Loopback requests without `x-samaritan-require-auth`
-  // remain zero-config for local CLI and SPA usage (PROPOSAL G2).
-  server.addHook("onRequest", async (request, reply) => {
-    if (
-      request.url === "/healthz" ||
-      request.url === "/api/auth/login" ||
-      request.url === "/api/oauth/token" ||
-      request.url.startsWith("/.well-known/") ||
-      request.url.startsWith("/api/webhooks/")
-    ) {
-      return;
-    }
-    const configuredToken = getSecret("web:token");
-    const forceAuth = request.headers["x-samaritan-require-auth"] === "1";
-    const remote = !isLoopback(request.ip) || Boolean(request.headers["x-forwarded-for"]);
-
-    if (configuredToken && (remote || forceAuth)) {
-      const supplied = extractSessionToken(request);
-      if (!supplied || supplied !== configuredToken) {
-        return reply.code(401).send({
-          error: { code: "unauthorized", message: "valid bearer or session token required" },
-        });
-      }
-    }
-  });
+  // Who is calling is decided here, never by the request body (D5, D9).
+  server.addHook("onRequest", authGate);
 
   server.setErrorHandler((err, _request, reply) => {
     if (err instanceof ActionCenterError) {
@@ -495,10 +477,15 @@ export function buildServer(app: App): FastifyInstance {
 
   server.post("/api/oauth/token", async (request, reply) => {
     const body = (request.body ?? {}) as Record<string, unknown>;
+    const authHeader = request.headers.authorization;
+    const bearer =
+      authHeader && authHeader.toLowerCase().startsWith("bearer ")
+        ? authHeader.slice(7).trim()
+        : undefined;
     const secret =
       typeof body.client_secret === "string"
         ? body.client_secret
-        : extractSessionToken(request);
+        : bearer;
     const expectedMcp = getSecret("mcp:token");
     const expectedWeb = getSecret("web:token");
     const valid =
@@ -571,6 +558,7 @@ export function buildServer(app: App): FastifyInstance {
     // "sandip", never trusting a client-supplied actor override (PROPOSAL G2).
     return app.actionCenter.respond(request.params.id, {
       response_id: body.data.response_id,
+      require_binding: true,
       ...(body.data.edited_payload ? { edited_payload: body.data.edited_payload } : {}),
       ...(body.data.expected_payload_hash
         ? { expected_payload_hash: body.data.expected_payload_hash }
@@ -592,6 +580,8 @@ export function buildServer(app: App): FastifyInstance {
     return app.actionCenter.batchRespond({
       ids: body.data.ids,
       response_id: body.data.response_id,
+      ...(body.data.revisions ? { revisions: body.data.revisions } : {}),
+      require_binding: true,
       actor: "sandip",
     });
   });
@@ -707,31 +697,54 @@ export function buildServer(app: App): FastifyInstance {
   server.post("/api/auth/login", async (request, reply) => {
     const body = z.object({ token: z.string().min(1) }).safeParse(request.body ?? {});
     if (!body.success) return reply.code(400).send(badRequest(body.error));
-    const configured = getSecret("web:token");
-    if (configured && body.data.token !== configured) {
-      return reply.code(401).send({ error: { code: "unauthorized", message: "invalid token" } });
+    if (!configuredToken()) {
+      return reply.code(409).send({
+        error: {
+          code: "no_token",
+          message:
+            "no web:token is set. Add one with: security add-generic-password -s samaritan -a web:token -w",
+        },
+      });
     }
-    reply.header(
-      "Set-Cookie",
-      `samaritan_session=${encodeURIComponent(body.data.token)}; HttpOnly; SameSite=Lax; Path=/`,
-    );
-    return { authenticated: true, actor: "sandip" };
+    const session = checkLogin(body.data.token);
+    if (!session) {
+      return reply.code(401).send({ error: { code: "unauthorized", message: "that token is wrong" } });
+    }
+    reply.header("Set-Cookie", sessionCookieHeader(request, session));
+    return { authenticated: true };
   });
 
-  server.get("/api/auth/session", async () => ({
-    authenticated: true,
-    actor: "sandip",
-  }));
+  server.post("/api/auth/logout", async (request, reply) => {
+    reply.header("Set-Cookie", sessionCookieHeader(request, "", 0));
+    return { authenticated: false };
+  });
+
+  /** What the UI needs to decide whether to show the sign-in screen. */
+  server.get("/api/auth/session", async (request) => {
+    const caller = callerOf(request);
+    return {
+      authenticated: caller.kind === "human",
+      token_configured: Boolean(configuredToken()),
+      via: caller.kind === "human" ? caller.via : null,
+    };
+  });
 
   // ---- Now Snapshot --------------------------------------------------------
 
+  /** D2's Now view: today, what needs Sandip, what is running, how fresh each source is. */
   server.get("/api/now", async () => {
+    const now = new Date();
+    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
     const inbox = listActionItems(app.db, {
       status: ["pending", "in_review", "awaiting_confirmation"],
       limit: 50,
     });
-    const tasks = listTasks(app.db, { limit: 25 });
-    const runs = listRuns(app.db, { limit: 25 });
+    const inboxCount =
+      app.db
+        .prepare<{ n: number }>(
+          "SELECT COUNT(*) AS n FROM action_items WHERE status IN ('pending','in_review','awaiting_confirmation')",
+        )
+        .get()?.n ?? 0;
     const meetings = app.db
       .prepare<{
         id: string;
@@ -740,29 +753,38 @@ export function buildServer(app: App): FastifyInstance {
         ends_at: string | null;
         attendees: string | null;
         last_synced_at: string | null;
-      }>("SELECT * FROM calendar_events ORDER BY starts_at ASC LIMIT 10")
-      .all()
+      }>(
+        `SELECT * FROM calendar_events
+          WHERE COALESCE(ends_at, starts_at) >= ? AND starts_at < ?
+          ORDER BY starts_at ASC LIMIT 20`,
+      )
+      .all(now.toISOString(), endOfDay)
       .map((m) => ({
         ...m,
         attendees: m.attendees ? (JSON.parse(m.attendees) as string[]) : [],
       }));
-    const sourceRules = listSourceRules(app.db);
-    const syncCursors = app.db
-      .prepare<{
-        source: string;
-        cursor: string | null;
-        last_success_at: string | null;
-        last_error: string | null;
-      }>("SELECT * FROM sync_cursors ORDER BY source ASC")
-      .all();
-
     return {
       inbox,
-      tasks,
-      runs,
+      inbox_count: inboxCount,
+      tasks: listTasks(app.db, {
+        status: ["queued", "running", "needs_input", "awaiting_review", "interrupted"],
+        limit: 25,
+      }),
+      running: listRuns(app.db, { status: "running", limit: 25 }),
       meetings,
-      source_rules: sourceRules,
-      sync_cursors: syncCursors,
+      source_rules: listSourceRules(app.db),
+      sync_cursors: app.db
+        .prepare<{
+          source: string;
+          cursor: string | null;
+          last_success_at: string | null;
+          last_error: string | null;
+        }>("SELECT * FROM sync_cursors ORDER BY source ASC")
+        .all(),
+      worker: {
+        month_spend_usd: app.worker.monthSpendUsd(),
+        monthly_budget_usd: app.config.worker.monthly_budget_usd,
+      },
     };
   });
 
@@ -784,17 +806,17 @@ export function buildServer(app: App): FastifyInstance {
   server.post("/api/tasks", async (request, reply) => {
     const body = TaskSubmitBody.safeParse(request.body);
     if (!body.success) return reply.code(400).send(badRequest(body.error));
-    const submitted = await app.worker.submit({
+    // Durably queued before the 202; the run happens in the background (D1).
+    const submitted = app.worker.submit({
       goal: body.data.goal,
       lane: body.data.lane,
+      origin: "ui",
       ...(body.data.parent_task_id !== undefined
         ? { parent_task_id: body.data.parent_task_id }
         : {}),
-      ...(body.data.admission_key ? { admission_key: body.data.admission_key } : {}),
-      ...(body.data.inputs ? { inputs: body.data.inputs } : {}),
-      autoStart: body.data.auto_start,
+      ...(body.data.request_key ? { request_key: body.data.request_key } : {}),
     });
-    return reply.code(202).send(submitted);
+    return reply.code(submitted.created ? 202 : 200).send(submitted);
   });
 
   server.get<{ Params: { id: string } }>("/api/tasks/:id", async (request, reply) => {
@@ -806,30 +828,50 @@ export function buildServer(app: App): FastifyInstance {
     const artifacts = listArtifacts(app.db, { task_id: task.id, limit: 50 });
     const events = listActivityEvents(app.db, { task_id: task.id, limit: 100 });
     const actionItems = listActionItems(app.db, { task_id: task.id, limit: 50 });
-    return { task, runs, artifacts, events, action_items: actionItems };
+    const openQuestion = actionItems.find(
+      (i) => i.type === "task-question" && ["pending", "in_review", "deferred"].includes(i.status),
+    );
+    return {
+      task,
+      runs,
+      artifacts,
+      events,
+      action_items: actionItems,
+      open_question: openQuestion ?? null,
+    };
   });
 
   server.post<{ Params: { id: string } }>("/api/tasks/:id/answer", async (request, reply) => {
     const body = TaskAnswerBody.safeParse(request.body);
     if (!body.success) return reply.code(400).send(badRequest(body.error));
-    const updated = await app.worker.answer(
-      request.params.id,
-      body.data.answer,
-      body.data.expected_revision,
-    );
+    if (body.data.question_id) {
+      const question = getActionItem(app.db, body.data.question_id);
+      if (question?.task_id !== request.params.id) {
+        return reply.code(404).send({ error: { code: "not_found", message: "no such question on this task" } });
+      }
+    }
+    const updated = await app.worker.answer(body.data.question_id ?? request.params.id, body.data.answer, {
+      actor: "sandip",
+      ...(body.data.expected_revision !== undefined
+        ? { expectedRevision: body.data.expected_revision }
+        : {}),
+    });
     return { task: updated };
   });
 
   server.post<{ Params: { id: string } }>("/api/tasks/:id/cancel", async (request, reply) => {
     const body = CancelBody.safeParse(request.body ?? {});
     if (!body.success) return reply.code(400).send(badRequest(body.error));
-    const run = await app.worker.cancel(request.params.id, body.data.reason);
-    const task = app.worker.getTask(request.params.id);
-    if (!task && !run) {
+    const task = await app.worker.cancel(request.params.id, body.data.reason);
+    if (!task) {
       return reply.code(404).send({ error: { code: "not_found", message: "task not found" } });
     }
-    return { task, run };
+    return { task };
   });
+
+  server.post<{ Params: { id: string } }>("/api/tasks/:id/retry", async (request) => ({
+    task: app.worker.start(request.params.id),
+  }));
 
   server.get("/api/runs", async (request, reply) => {
     const query = RunsQuery.safeParse(request.query);
@@ -850,8 +892,10 @@ export function buildServer(app: App): FastifyInstance {
     if (!getRun(app.db, request.params.id)) {
       return reply.code(404).send({ error: { code: "not_found", message: "run not found" } });
     }
+    const before = getRun(app.db, request.params.id);
     const cancelled = cancelRun(app.db, request.params.id, body.data.reason);
-    return { run: cancelled };
+    // A run that had already ended is reported as such, not as "stopped".
+    return { run: cancelled, stopped: before?.status === "running" };
   });
 
   server.get<{ Params: { id: string } }>("/api/artifacts/:id", async (request, reply) => {
@@ -924,18 +968,36 @@ export function buildServer(app: App): FastifyInstance {
   server.post("/api/meetings/notes", async (request, reply) => {
     const body = MeetingNotesBody.safeParse(request.body);
     if (!body.success) return reply.code(400).send(badRequest(body.error));
-    const topic = body.data.meeting_topic ?? body.data.title ?? "Meeting Notes";
-    const date = body.data.meeting_date ?? body.data.date;
+    const meeting = body.data.event_id
+      ? app.db
+          .prepare<{ title: string; starts_at: string; attendees: string | null }>(
+            "SELECT title, starts_at, attendees FROM calendar_events WHERE id = ?",
+          )
+          .get(body.data.event_id)
+      : undefined;
+    const topic = body.data.meeting_topic ?? body.data.title ?? meeting?.title ?? "Meeting Notes";
+    const date = body.data.meeting_date ?? body.data.date ?? meeting?.starts_at;
+    const attendees =
+      body.data.attendees ?? (meeting?.attendees ? (JSON.parse(meeting.attendees) as string[]) : undefined);
     const report = await runCapability(app, "meeting", {
       inputs: {
         meeting_topic: topic,
-        ...(date ? { meeting_date: date } : {}),
-        ...(body.data.attendees ? { attendees: body.data.attendees } : {}),
+        ...(date ? { meeting_date: localDay(date) } : {}),
+        ...(attendees ? { attendees } : {}),
+        ...(body.data.event_id ? { event_id: body.data.event_id } : {}),
         notes: body.data.notes,
         ...(body.data.project ? { project: body.data.project } : {}),
       },
       force: true,
     });
+    // The notes arrived, so the nudge for this meeting has done its job.
+    if (body.data.event_id && report.status === "ok") {
+      const nudge = getActionItemByDedupeKey(app.db, "meeting-followup", `meeting-followup:${body.data.event_id}`);
+      if (nudge && ["pending", "in_review", "deferred"].includes(nudge.status)) {
+        await app.actionCenter.respond(nudge.id, { response_id: "notes_added", actor: "sandip" });
+      }
+    }
+    // Like a capability run: a failed run is a normal reply with the reason in the body.
     return reply.code(202).send(report);
   });
 
@@ -982,9 +1044,18 @@ export function buildServer(app: App): FastifyInstance {
 
   // ---- MCP JSON-RPC over HTTP & Telegram Inbound ---------------------------
 
-  server.post("/api/mcp", async (request) => {
-    const rpc = (request.body ?? {}) as JsonRpcRequest;
-    return handleMcpRequest(app, rpc);
+  // Streamable HTTP transport, JSON responses only (D4). The stdio entrypoint
+  // proxies here, so every assistant talks to the one running daemon.
+  server.post("/api/mcp", async (request, reply) => {
+    const body = request.body;
+    if (Array.isArray(body)) {
+      const replies = (
+        await Promise.all(body.map((m) => handleMcpRequest(app, m as JsonRpcRequest)))
+      ).filter((r) => r !== undefined);
+      return replies.length ? replies : reply.code(202).send();
+    }
+    const response = await handleMcpRequest(app, (body ?? {}) as JsonRpcRequest);
+    return response ?? reply.code(202).send();
   });
 
   server.post("/api/telegram/webhook", async (request, reply) => {
@@ -1006,6 +1077,9 @@ export function buildServer(app: App): FastifyInstance {
     );
     return reply.code(outcome.accepted ? 200 : 403).send(outcome);
   });
+  server.get("/api/mcp", async (_request, reply) =>
+    reply.code(405).header("allow", "POST").send({ error: { code: "method_not_allowed", message: "POST JSON-RPC to /api/mcp" } }),
+  );
 
   // ---- Events --------------------------------------------------------------
 
@@ -1123,7 +1197,27 @@ async function backgroundReindex(app: App): Promise<void> {
   }
 }
 
+/**
+ * A cancelled or moved meeting takes its pending brief and notes nudge with it,
+ * so the Inbox never holds a card about a meeting that is not happening then.
+ * Settled cards are history and are left alone.
+ */
+export function retireMeetingCards(app: App, eventId: string, reason: string): void {
+  for (const [capability, prefix] of [
+    ["meeting-prep", "meeting-prep"],
+    ["meeting-followup", "meeting-followup"],
+  ] as const) {
+    const item = getActionItemByDedupeKey(app.db, capability, `${prefix}:${eventId}`);
+    if (item && ["pending", "in_review", "deferred"].includes(item.status)) {
+      transition(app.db, { id: item.id, to: "expired", actor: "system", reason: `meeting ${reason}` });
+    }
+  }
+}
+
 export async function start(options: CreateAppOptions = {}): Promise<FastifyInstance> {
+  // Before anything touches the store: reconciliation below assumes no other
+  // daemon is working on this database.
+  const releaseLock = acquireInstanceLock(options.dbPath ?? loadConfig().paths.db);
   const app = createApp(options);
   const server = buildServer(app);
   const { host, port } = app.config.server;
@@ -1186,9 +1280,17 @@ export async function start(options: CreateAppOptions = {}): Promise<FastifyInst
         })
       : undefined,
     publish: (event) => app.eventBus.publish(event),
+    onRetired: (eventId, reason) => retireMeetingCards(app, eventId, reason),
     intervalMs: calendarCfg.poll_interval_ms,
     prepLeadMinutes: calendarCfg.prep_lead_minutes,
   });
+
+  // Telegram inbound (D5): a long poll, so no public webhook is ever needed.
+  const telegram = app.config.delivery.telegram;
+  const telegramPoller =
+    telegram.enabled && telegram.inbound
+      ? new TelegramPoller({ db: app.db, actionCenter: app.actionCenter, worker: app.worker })
+      : undefined;
 
   // Both before listen(): Fastify refuses addHook once the instance is
   // listening, and unref() keeps the timers from holding the process open.
@@ -1203,6 +1305,10 @@ export async function start(options: CreateAppOptions = {}): Promise<FastifyInst
     await watcher.stop();
     gmailPoller.stop();
     calendarPoller.stop();
+    telegramPoller?.stop();
+    // Live worker runs are interrupted, not cancelled: the next boot reports them.
+    app.worker.stop();
+    releaseLock();
   });
 
   // Boot reconciliation (§11) runs before the socket opens, deliberately. It
@@ -1216,6 +1322,16 @@ export async function start(options: CreateAppOptions = {}): Promise<FastifyInst
 
   await server.listen({ host, port });
 
+  if (!configuredToken()) {
+    logger.warn(
+      "no web:token in the Keychain: remote access is off, and any process on this Mac can approve. " +
+        "Set one with: security add-generic-password -s samaritan -a web:token -w",
+    );
+  }
+  // Tasks queued before the restart start now; ones that were running were
+  // marked interrupted by reconcile() above.
+  app.worker.resumeQueued();
+
   // Once on boot, so anything that came due while the process was down is
   // handled immediately rather than up to a minute later.
   await sweep(app);
@@ -1228,6 +1344,7 @@ export async function start(options: CreateAppOptions = {}): Promise<FastifyInst
   // socket and in-process listeners are already up when events arrive on the bus.
   await gmailPoller.start();
   await calendarPoller.start();
+  telegramPoller?.start();
 
   // Recall refreshes its index once now, in the background: the first run
   // downloads the local model and embeds the vault, which must not block the

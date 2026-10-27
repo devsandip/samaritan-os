@@ -497,6 +497,12 @@ export class ActionCenter {
       actor?: Actor;
       expected_payload_hash?: string;
       expected_revision?: number;
+      /**
+       * Refuse a committing response that names no revision (PROPOSAL D9). The
+       * API sets this for every human decision, so an approval always binds to
+       * the exact item that was on screen.
+       */
+      require_binding?: boolean;
     },
   ): Promise<ActionItem> {
     const { db } = this.deps;
@@ -535,6 +541,19 @@ export class ActionCenter {
           `or "${DISMISS_RESPONSE_ID}" to clear the item`,
         "response_unknown",
         409,
+      );
+    }
+
+    if (
+      input.require_binding &&
+      (response.outcome === "execute" || response.outcome === "guided") &&
+      input.expected_revision === undefined &&
+      input.expected_payload_hash === undefined
+    ) {
+      throw new ActionCenterError(
+        `approving ${item.id} needs the revision you reviewed (expected_revision)`,
+        "revision_required",
+        428,
       );
     }
 
@@ -600,6 +619,9 @@ export class ActionCenter {
     ids: string[];
     response_id: string;
     actor?: Actor;
+    /** Revision on screen per id; required per committing item when `require_binding`. */
+    revisions?: Record<string, number>;
+    require_binding?: boolean;
   }): Promise<BatchRespondResult> {
     const applied: BatchOutcome[] = [];
     const skipped: BatchOutcome[] = [];
@@ -613,9 +635,12 @@ export class ActionCenter {
           skipped.push({ id, result: "skipped", reason: gate.reason, rule: gate.rule });
           continue;
         }
+        const revision = input.revisions?.[id];
         const updated = await this.respond(id, {
           response_id: input.response_id,
           ...(input.actor ? { actor: input.actor } : {}),
+          ...(revision !== undefined ? { expected_revision: revision } : {}),
+          ...(input.require_binding ? { require_binding: true } : {}),
         });
         applied.push({ id, result: "applied", status: updated.status });
       } catch (err) {

@@ -298,7 +298,7 @@ describe("POST /api/actions/batch", () => {
     const response = await server.inject({
       method: "POST",
       url: "/api/actions/batch",
-      payload: { ids, response_id: "approve" },
+      payload: { ids, response_id: "approve", revisions: Object.fromEntries(ids.map((id) => [id, 1])) },
     });
 
     expect(response.statusCode).toBe(200);
@@ -329,7 +329,7 @@ describe("POST /api/actions/batch", () => {
     const response = await server.inject({
       method: "POST",
       url: "/api/actions/batch",
-      payload: { ids: [lowId, richId], response_id: "approve" },
+      payload: { ids: [lowId, richId], response_id: "approve", revisions: { [lowId]: 1, [richId]: 1 } },
     });
 
     const body = response.json() as {
@@ -338,6 +338,26 @@ describe("POST /api/actions/batch", () => {
     };
     expect(body.applied.map((a) => a.id)).toEqual([lowId]);
     expect(body.skipped).toEqual([{ id: richId, result: "skipped", reason: expect.any(String), rule: "risk:value_threshold" }]);
+  });
+
+  it("refuses to approve an item whose on-screen revision was not sent (D9)", async () => {
+    const id = await ingest("wrap:batch:unbound");
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/actions/batch",
+      payload: { ids: [id], response_id: "approve" },
+    });
+    const body = response.json() as { applied: unknown[]; errors: { id: string; reason: string }[] };
+    expect(body.applied).toEqual([]);
+    expect(body.errors[0]!.reason).toMatch(/needs the revision/);
+
+    const single = await server.inject({
+      method: "POST",
+      url: `/api/actions/${id}/respond`,
+      payload: { response_id: "approve" },
+    });
+    expect(single.statusCode).toBe(428);
+    expect((single.json() as { error: { code: string } }).error.code).toBe("revision_required");
   });
 
   it("400s an empty batch", async () => {

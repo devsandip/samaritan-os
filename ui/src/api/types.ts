@@ -29,7 +29,7 @@ export type RenderLayout = "card" | "form" | "document" | "diff";
 
 export type TriggerReason = "confidence" | "policy" | "value" | "risk" | "action_type";
 
-export type Actor = "sandip" | "policy" | "system" | "capability";
+export type Actor = "sandip" | "policy" | "system" | "capability" | "assistant";
 
 export interface ActionItemContext {
   what_happened: string;
@@ -68,8 +68,8 @@ export interface ActionItem {
   defer_until: string | null;
   task_id?: string | null;
   run_id?: string | null;
-  payload_hash?: string;
-  revision?: number;
+  payload_hash: string | null;
+  revision: number;
   created_at: string;
   updated_at: string;
 }
@@ -86,10 +86,13 @@ export type TaskStatus =
   | "cancelled"
   | "interrupted";
 
+export type TaskOrigin = "ui" | "telegram" | "mcp" | "api";
+
 export interface Task {
   id: string;
   goal: string;
   lane: TaskLane;
+  origin: TaskOrigin;
   status: TaskStatus;
   revision: number;
   runner: string;
@@ -165,19 +168,24 @@ export interface SyncCursor {
   last_error: string | null;
 }
 
+/** GET /api/now: today, what needs Sandip, and what is running (D2). */
 export interface NowSummary {
   inbox: ActionItem[];
+  inbox_count: number;
+  /** Tasks still in play: queued, running, waiting on Sandip, or interrupted. */
   tasks: Task[];
-  runs: RunRecord[];
+  running: RunRecord[];
+  /** The rest of today's meetings. */
   meetings: {
     id: string;
     title: string;
     starts_at: string;
     ends_at: string | null;
-    attendees: string;
+    attendees: string[];
   }[];
   source_rules: SourceRule[];
   sync_cursors: SyncCursor[];
+  worker: { month_spend_usd: number; monthly_budget_usd: number };
 }
 
 export interface ActionItemEvent {

@@ -90,12 +90,12 @@ export class EventBus {
     return result.changes === 1;
   }
 
-  /** Enabled capabilities subscribed to this event type whose filter passes. */
+  /** Enabled, event-mode capabilities subscribed to this event type whose filter passes. */
   #subscribers(event: SamaritanEvent): string[] {
     return this.#capabilities
       .all()
       .filter((c) => c.manifest.enabled)
-      .filter((c) => c.manifest.trigger.mode === "event" || c.manifest.trigger.mode === "manual")
+      .filter((c) => c.manifest.trigger.mode === "event")
       .filter((c) => (c.manifest.trigger.on ?? []).includes(event.type))
       .filter((c) => matchesFilter(c.manifest.trigger.filter, event.payload))
       .map((c) => c.manifest.id);

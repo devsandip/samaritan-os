@@ -363,8 +363,12 @@ export function fenceRun(
 
 /**
  * Boot reconciliation for `runs` and `tasks` (PROPOSAL G2).
- * Any run or task still marked `running` when the daemon starts is a remnant of
- * a prior process and is fenced + marked `interrupted`.
+ *
+ * A run still marked `running` belongs to a process that no longer exists: it
+ * is fenced and marked `interrupted`, and so is a task that was running it.
+ * That is the honest outcome. Re-running it silently could repeat whatever it
+ * already did, so a retry is Sandip's call. A `queued` task never started, so
+ * it is left queued and the worker picks it up after boot.
  */
 export function reconcileInterruptedRunsAndTasks(db: Db): { runs: number; tasks: number } {
   return db.transaction(() => {
@@ -374,16 +378,25 @@ export function reconcileInterruptedRunsAndTasks(db: Db): { runs: number; tasks:
     }
 
     const now = nowIso();
-    const taskRes = db
-      .prepare(
-        `UPDATE tasks
-            SET status = 'interrupted',
-                result_summary = COALESCE(result_summary, 'Interrupted by daemon restart'),
-                updated_at = ?
-          WHERE status IN ('running', 'queued')`,
-      )
-      .run(now);
+    const interrupted = db
+      .prepare<{ id: string }>("SELECT id FROM tasks WHERE status = 'running'")
+      .all();
+    db.prepare(
+      `UPDATE tasks
+          SET status = 'interrupted',
+              result_summary = 'Interrupted by a daemon restart; retry to run it again',
+              updated_at = ?
+        WHERE status = 'running'`,
+    ).run(now);
+    for (const { id } of interrupted) {
+      appendActivityEvent(db, {
+        task_id: id,
+        type: "run.interrupted",
+        payload: { reason: "daemon restarted while the task was running" },
+        created_at: now,
+      });
+    }
 
-    return { runs: stuckRuns.length, tasks: taskRes.changes };
+    return { runs: stuckRuns.length, tasks: interrupted.length };
   });
 }

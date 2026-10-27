@@ -1465,3 +1465,76 @@ input.fi {
   cursor: not-allowed;
 }
 
+
+/* ---- Phone width (D5): one column, nothing wider than the screen --------- */
+
+code.wrap,
+.audit .sub code,
+.lrow code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
+}
+
+@media (max-width: 600px) {
+  .tiles,
+  .agents,
+  .grid2 {
+    grid-template-columns: 1fr;
+  }
+  .main {
+    padding: 14px 12px 40px;
+    overflow-x: hidden;
+  }
+  .side .ask {
+    flex: 1 1 100%;
+  }
+  .lrow,
+  .frow {
+    flex-wrap: wrap;
+  }
+  .h-greet {
+    font-size: 19px;
+  }
+  .lanes {
+    flex-wrap: wrap;
+  }
+}
+
+/* ---- Sign-in -------------------------------------------------------------- */
+
+.login {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  padding: 16px;
+}
+.login-card {
+  width: min(360px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 22px;
+}
+.login-card .brand,
+.login-card .brand b {
+  color: var(--ink);
+}
+.login-error {
+  color: #b42318;
+  font-size: 13px;
+}
+
+button.linkish {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--core);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}

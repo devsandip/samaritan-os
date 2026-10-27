@@ -29,10 +29,10 @@ emits:
       repo: string
       summary: string
       detail: string
-      remote_url: string
 
+    # Nothing executes: the answer belongs in the terminal that is waiting.
     responses:
-      - { id: acknowledge, label: "Handled in terminal", outcome: execute }
+      - { id: acknowledge, label: "Handled in terminal", outcome: discard }
       - { id: defer, label: "Snooze 30m", outcome: defer, defer_for: 30m }
       - { id: reject, label: "Dismiss", outcome: discard }
 
