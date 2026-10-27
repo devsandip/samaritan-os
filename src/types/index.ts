@@ -4,3 +4,4 @@ export * from "./manifest.js";
 export * from "./action-item.js";
 export * from "./routing.js";
 export * from "./execution.js";
+export * from "./task.js";

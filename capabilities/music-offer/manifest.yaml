@@ -1,0 +1,65 @@
+id: music-offer
+name: Music & Live Event Offer Tracker
+description: Filters presale codes, concert announcements, and vinyl releases into guided ticket/hold reminders.
+version: 0.1.0
+owner: sandip
+enabled: true
+entrypoint: index.ts
+
+trigger:
+  mode: event
+  on:
+    - music.offer_received
+    - calendar.meeting_upcoming
+    - oura.daily_stress
+
+context:
+  inputs:
+    - offers
+
+emits:
+  - type: music-offer-card
+    priority: low
+    ttl: 72h
+    render:
+      layout: card
+      primary: artist_or_event
+      secondary: offer_summary
+      badges:
+        - venue
+        - presale_date
+    custom_attributes:
+      artist_or_event: string
+      venue: string
+      presale_date: string
+      presale_code: string
+      offer_summary: string
+      ticket_url: string
+    responses:
+      - id: open_presale
+        label: Open Ticket / Presale Link
+        outcome: guided
+      - id: snooze
+        label: Snooze 1d
+        outcome: defer
+        defer_for: 1d
+      - id: pass
+        label: Pass
+        outcome: discard
+    execution:
+      mode: guided
+      capability: guided.fallback
+      action_type: payment.make
+    policy:
+      escalate_when: "confidence >= 0"
+
+requires_capabilities:
+  - guided.fallback
+
+delivery:
+  channels:
+    - inbox
+  quiet_hours: "22:00-07:00"
+
+audit: true
+timeout_ms: 30000

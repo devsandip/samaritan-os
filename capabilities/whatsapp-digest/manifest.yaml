@@ -1,0 +1,60 @@
+id: whatsapp-digest
+name: WhatsApp Personal Digest
+description: Summarizes unanswered personal WhatsApp threads in guided mode (scope personal, never auto-sends).
+version: 0.1.0
+owner: sandip
+enabled: true
+entrypoint: index.ts
+
+trigger:
+  mode: scheduled
+  cron: "45 18 * * *"
+  catch_up: skip
+
+context:
+  inputs:
+    - threads
+
+emits:
+  - type: whatsapp-reply-nudge
+    priority: normal
+    ttl: 48h
+    render:
+      layout: card
+      primary: contact
+      secondary: suggested_reply
+      badges:
+        - chat_name
+    custom_attributes:
+      contact: string
+      chat_name: string
+      last_message: string
+      suggested_reply: string
+    responses:
+      - id: open_whatsapp
+        label: Copy & Open WhatsApp
+        outcome: guided
+      - id: snooze
+        label: Snooze 1d
+        outcome: defer
+        defer_for: 1d
+      - id: dismiss
+        label: Dismiss
+        outcome: discard
+    execution:
+      mode: guided
+      capability: guided.fallback
+      action_type: message.personal.send
+    policy:
+      escalate_when: "confidence >= 0"
+
+requires_capabilities:
+  - guided.fallback
+
+delivery:
+  channels:
+    - inbox
+  quiet_hours: "22:00-07:00"
+
+audit: true
+timeout_ms: 30000

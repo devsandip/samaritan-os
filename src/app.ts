@@ -6,7 +6,7 @@
  * daemon calls the same function and adds the scheduler and event listeners
  * around it.
  */
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { loadConfig, repoRoot, type Config } from "./config/index.js";
 import { ActionCenter } from "./action-center/index.js";
 import { createDelivery, type Delivery } from "./delivery/index.js";
@@ -23,6 +23,7 @@ import type { Synthesizer } from "./recall/synthesize.js";
 import { openDatabase, type Db } from "./store/db.js";
 import { migrate } from "./store/migrate.js";
 import { nowIso } from "./types/index.js";
+import { WorkerService, type WorkerExecutor } from "./worker/index.js";
 
 const logger = log("app");
 
@@ -36,6 +37,7 @@ export interface App {
   actionCenter: ActionCenter;
   eventBus: EventBus;
   recall: RecallService;
+  worker: WorkerService;
   close(): void;
 }
 
@@ -43,6 +45,8 @@ export interface CreateAppOptions {
   dbPath?: string;
   capabilitiesDir?: string;
   routingPath?: string;
+  artifactsRoot?: string;
+  workerExecutor?: WorkerExecutor;
   /**
    * Test seam: inject a deterministic embedder/synthesiser so Recall queries run
    * without the model download or a network call. Production leaves this unset
@@ -88,6 +92,16 @@ export function createApp(options: CreateAppOptions = {}): App {
     },
   });
 
+  // Recall answers questions over the vault, journals and audit trail. The
+  // embedder and synthesiser resolve from config, but both are injectable so a
+  // test drives real queries without a model download or a network call.
+  const recall = new RecallService({
+    db,
+    config,
+    ...(options.recall?.embedder ? { embedder: options.recall.embedder } : {}),
+    ...(options.recall?.synthesizer ? { synthesizer: options.recall.synthesizer } : {}),
+  });
+
   // The Event Bus fires event-mode capabilities through the same Run Layer a
   // scheduled or manual run uses, so an event fire is one more path into one
   // dispatcher, not a parallel one. It lives on the App (not just the daemon)
@@ -100,20 +114,28 @@ export function createApp(options: CreateAppOptions = {}): App {
         { db, capabilities, actionCenter },
         capabilityId,
         {
+          admissionKey: `event:${capabilityId}:${event.id}`,
           trigger: { mode: "event", firedAt: event.occurred_at ?? nowIso(), payload: event.payload },
+          recall: async (question: string) => {
+            return recall.query(question);
+          },
         },
       );
     },
   });
 
-  // Recall answers questions over the vault, journals and audit trail. The
-  // embedder and synthesiser resolve from config, but both are injectable so a
-  // test drives real queries without a model download or a network call.
-  const recall = new RecallService({
+  const defaultArtifactsRoot =
+    options.artifactsRoot ??
+    (options.dbPath && options.dbPath !== ":memory:"
+      ? join(dirname(options.dbPath), "artifacts")
+      : undefined);
+
+  const worker = new WorkerService({
     db,
-    config,
-    ...(options.recall?.embedder ? { embedder: options.recall.embedder } : {}),
-    ...(options.recall?.synthesizer ? { synthesizer: options.recall.synthesizer } : {}),
+    actionCenter,
+    recall,
+    ...(defaultArtifactsRoot ? { artifactsRoot: defaultArtifactsRoot } : {}),
+    ...(options.workerExecutor ? { executor: options.workerExecutor } : {}),
   });
 
   return {
@@ -126,6 +148,7 @@ export function createApp(options: CreateAppOptions = {}): App {
     actionCenter,
     eventBus,
     recall,
+    worker,
     close: () => db.close(),
   };
 }

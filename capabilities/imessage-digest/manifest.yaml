@@ -1,0 +1,59 @@
+id: imessage-digest
+name: iMessage Unanswered Digest
+description: Surfaces unanswered personal iMessage threads in guided mode (read-only chat.db, scope personal, never auto-sends).
+version: 0.1.0
+owner: sandip
+enabled: true
+entrypoint: index.ts
+
+trigger:
+  mode: scheduled
+  cron: "30 18 * * *"
+  catch_up: skip
+
+context:
+  inputs:
+    - threads
+
+emits:
+  - type: imessage-reply-nudge
+    priority: normal
+    ttl: 48h
+    render:
+      layout: card
+      primary: sender
+      secondary: suggested_reply
+      badges:
+        - last_message
+    custom_attributes:
+      sender: string
+      last_message: string
+      suggested_reply: string
+    responses:
+      - id: open_messages
+        label: Copy & Open Messages
+        outcome: guided
+      - id: snooze
+        label: Snooze 1d
+        outcome: defer
+        defer_for: 1d
+      - id: dismiss
+        label: Dismiss
+        outcome: discard
+    execution:
+      mode: guided
+      capability: guided.fallback
+      action_type: message.personal.send
+    policy:
+      escalate_when: "confidence >= 0"
+
+requires_capabilities:
+  - guided.fallback
+
+delivery:
+  channels:
+    - inbox
+  quiet_hours: "22:00-07:00"
+
+audit: true
+timeout_ms: 30000

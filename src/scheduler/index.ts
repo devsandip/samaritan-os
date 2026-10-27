@@ -78,6 +78,7 @@ interface ScheduledTrigger {
   nextFireAt: string | null;
   enabled: boolean;
   catchUp: CatchUpMode;
+  maxStalenessMinutes: number | undefined;
 }
 
 const DEFAULT_INTERVAL_MS = 60_000;
@@ -126,6 +127,7 @@ export class Scheduler {
       nextFireAt: row.nextFireAt,
       enabled: row.enabled === 1,
       catchUp: catchUpOf(row.manifestJson),
+      maxStalenessMinutes: maxStalenessOf(row.manifestJson),
     }));
   }
 
@@ -186,7 +188,13 @@ export class Scheduler {
         const scheduledFor = trigger.nextFireAt;
         this.#arm(trigger.capabilityId, nextFireAfter(schedule, at));
 
-        if (trigger.enabled && trigger.catchUp === "run_once") {
+        const ageMinutes = (at.getTime() - Date.parse(scheduledFor)) / 60_000;
+        const stale =
+          trigger.maxStalenessMinutes !== undefined &&
+          !Number.isNaN(ageMinutes) &&
+          ageMinutes > trigger.maxStalenessMinutes;
+
+        if (trigger.enabled && trigger.catchUp === "run_once" && !stale) {
           logger.info(
             { capability: trigger.capabilityId, scheduledFor },
             "replaying a scheduled run missed while down",
@@ -198,9 +206,9 @@ export class Scheduler {
             reason: "catch_up",
           });
         } else {
-          // §11: a missed trigger with no run_once opt-in is recorded and skipped.
+          // §11: a missed trigger with no run_once opt-in (or past max_staleness_minutes) is recorded and skipped.
           logger.warn(
-            { capability: trigger.capabilityId, scheduledFor, catch_up: trigger.catchUp },
+            { capability: trigger.capabilityId, scheduledFor, catch_up: trigger.catchUp, stale },
             "missed_trigger",
           );
         }
@@ -302,5 +310,15 @@ function catchUpOf(manifestJson: string): CatchUpMode {
     return mode === "run_once" ? "run_once" : "skip";
   } catch {
     return "skip";
+  }
+}
+
+function maxStalenessOf(manifestJson: string): number | undefined {
+  try {
+    const manifest = JSON.parse(manifestJson) as Partial<CapabilityManifest>;
+    const mins = manifest.trigger?.max_staleness_minutes;
+    return typeof mins === "number" && mins > 0 ? mins : undefined;
+  } catch {
+    return undefined;
   }
 }

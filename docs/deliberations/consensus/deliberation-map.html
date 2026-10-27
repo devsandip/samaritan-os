@@ -1,0 +1,798 @@
+<title>Samaritan Deliberation Map</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a working record of a three-party negotiation. Summary first, then
+   four stages read top to bottom, then the instruments (grid, disputes,
+   profiles, coverage). Three agent hues are the only saturated colors besides
+   the status set. */
+:root {
+  --bg: #f4f6f9;
+  --surface: #ffffff;
+  --sunk: #eaeef3;
+  --ink: #18202c;
+  --muted: #586274;
+  --line: #d8dee7;
+  --claude: #c2410c;
+  --claude-soft: #fbe6da;
+  --codex: #0f766e;
+  --codex-soft: #d6efec;
+  --gemini: #6d28d9;
+  --gemini-soft: #e9e0fb;
+  --ok: #15803d;
+  --ok-soft: #dcf2e3;
+  --part: #a16207;
+  --part-soft: #f6ecd2;
+  --bad: #b91c1c;
+  --bad-soft: #f8dcdc;
+  --none: #8a93a3;
+  --focus: #2563eb;
+  --display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --body: "Atkinson Hyperlegible", "Helvetica Neue", Arial, system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f131a; --surface: #161c26; --sunk: #1d2430; --ink: #e5e9f0; --muted: #a0a9b8; --line: #2b3342;
+    --claude: #fb8a5a; --claude-soft: #3a2218; --codex: #4fd1c1; --codex-soft: #123230;
+    --gemini: #b49af7; --gemini-soft: #2a2140;
+    --ok: #4ade80; --ok-soft: #14301f; --part: #e3b341; --part-soft: #352a10;
+    --bad: #f87171; --bad-soft: #3a1717; --none: #6c7584; --focus: #7aa2ff;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f131a; --surface: #161c26; --sunk: #1d2430; --ink: #e5e9f0; --muted: #a0a9b8; --line: #2b3342;
+  --claude: #fb8a5a; --claude-soft: #3a2218; --codex: #4fd1c1; --codex-soft: #123230;
+  --gemini: #b49af7; --gemini-soft: #2a2140;
+  --ok: #4ade80; --ok-soft: #14301f; --part: #e3b341; --part-soft: #352a10;
+  --bad: #f87171; --bad-soft: #3a1717; --none: #6c7584; --focus: #7aa2ff;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--body); font-size: 16px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.wrap { max-width: 1120px; margin: 0 auto; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2rem, 5vw, 3.1rem); line-height: 1.05; font-weight: 700; }
+h2 { font-size: clamp(1.4rem, 3vw, 1.9rem); line-height: 1.15; font-weight: 700; }
+h3 { font-size: 1.08rem; line-height: 1.25; font-weight: 700; }
+p { margin: 0; }
+.muted { color: var(--muted); }
+.mono { font-family: var(--mono); font-size: 0.82em; }
+.label { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+
+/* header */
+header.top { padding-block: 40px 20px; display: grid; gap: 18px; }
+.lede { max-width: 68ch; font-size: 1.06rem; }
+.facts { display: flex; flex-wrap: wrap; gap: 8px 22px; padding-block: 12px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.fact { display: flex; align-items: baseline; gap: 8px; }
+.fact b { font-family: var(--display); font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px; }
+.who { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 0.9rem; padding: 2px 10px 2px 8px; border-radius: 999px; white-space: nowrap; }
+.who::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
+.who.claude { color: var(--claude); background: var(--claude-soft); }
+.who.codex { color: var(--codex); background: var(--codex-soft); }
+.who.gemini { color: var(--gemini); background: var(--gemini-soft); }
+.who.all { color: var(--ink); background: var(--sunk); }
+.who.all::before { background: linear-gradient(90deg, var(--claude) 0 33%, var(--codex) 33% 66%, var(--gemini) 66%); }
+
+nav.jump { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 10px; margin-bottom: 8px; border-bottom: 1px solid var(--line); }
+nav.jump ul { list-style: none; margin: 0; padding: 0; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+nav.jump a { display: block; padding: 6px 12px; border-radius: 999px; text-decoration: none; font-size: 0.9rem; color: var(--muted); white-space: nowrap; border: 1px solid var(--line); background: var(--surface); }
+nav.jump a:hover { color: var(--ink); border-color: var(--muted); }
+
+section.block { padding-block: 40px 8px; display: grid; gap: 18px; scroll-margin-top: 64px; }
+.intro { max-width: 70ch; }
+
+/* answer card */
+.answer { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px; display: grid; gap: 14px; }
+.answer ol { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
+.sig { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding-top: 12px; border-top: 1px dashed var(--line); }
+.hash { font-family: var(--mono); font-size: 0.74rem; color: var(--muted); overflow-wrap: anywhere; }
+
+/* timeline */
+.stage { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.stage-head { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; padding: 18px 20px 14px; border-bottom: 1px solid var(--line); }
+.stage-no { grid-row: span 2; font-family: var(--display); font-size: 2.1rem; line-height: 1; color: var(--muted); font-variant-numeric: tabular-nums; }
+.stage-time { font-family: var(--mono); font-size: 0.78rem; color: var(--muted); }
+.lanes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.lane { padding: 16px 18px; display: grid; gap: 8px; align-content: start; border-right: 1px solid var(--line); min-width: 0; }
+.lane:last-child { border-right: 0; }
+.lane ul { margin: 0; padding-left: 1.1em; display: grid; gap: 5px; font-size: 0.94rem; }
+.lane .quote { font-style: italic; color: var(--muted); font-size: 0.92rem; border-left: 3px solid currentColor; padding-left: 10px; }
+.lane.claude .quote { border-color: var(--claude); }
+.lane.codex .quote { border-color: var(--codex); }
+.lane.gemini .quote { border-color: var(--gemini); }
+.outcome { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--line); background: var(--sunk); }
+.outcome > div { padding: 14px 18px; display: grid; gap: 6px; align-content: start; min-width: 0; font-size: 0.93rem; }
+.outcome ul { margin: 0; padding-left: 1.1em; display: grid; gap: 4px; }
+.outcome .label.ok { color: var(--ok); }
+.outcome .label.bad { color: var(--bad); }
+.outcome .label.mid { color: var(--part); }
+
+/* convergence */
+.conv { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 18px; align-items: start; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: grid; gap: 12px; min-width: 0; }
+.chart svg { width: 100%; height: auto; display: block; }
+.chart text { fill: var(--muted); font-family: var(--mono); font-size: 11px; }
+.chart .val { fill: var(--ink); font-family: var(--display); font-size: 15px; font-weight: 700; }
+.grid-scroll { overflow-x: auto; }
+table.pos { border-collapse: separate; border-spacing: 3px; font-size: 0.86rem; min-width: 620px; }
+table.pos th { font-family: var(--mono); font-weight: 600; font-size: 0.7rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); text-align: center; padding: 2px 4px; }
+table.pos th.row { text-align: left; text-transform: none; letter-spacing: 0; font-family: var(--body); font-size: 0.86rem; color: var(--ink); white-space: nowrap; padding-right: 10px; }
+table.pos th.round { border-bottom: 2px solid var(--line); }
+table.pos td { padding: 0; }
+.cell { width: 34px; height: 30px; border-radius: 7px; border: 1.5px solid transparent; display: grid; place-items: center; cursor: pointer; font-family: var(--mono); font-size: 0.78rem; font-weight: 600; background: var(--sunk); color: var(--muted); }
+.cell.a { background: var(--ok-soft); color: var(--ok); border-color: var(--ok); }
+.cell.p { background: repeating-linear-gradient(135deg, var(--part-soft) 0 5px, var(--surface) 5px 8px); color: var(--part); border-color: var(--part); }
+.cell.d { background: var(--bad-soft); color: var(--bad); border-color: var(--bad); }
+.cell.n { background: transparent; color: var(--none); border: 1.5px dashed var(--none); }
+.cell.sel { outline: 3px solid var(--focus); outline-offset: 1px; }
+.cell.fin { width: 46px; }
+.agent-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+.keyrow { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.84rem; color: var(--muted); align-items: center; }
+.keyrow .cell { width: 22px; height: 18px; cursor: default; display: inline-grid; vertical-align: middle; margin-right: 4px; font-size: 0.66rem; }
+.detail { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: grid; gap: 12px; min-width: 0; }
+.detail-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.dcol { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.dcard { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 0.9rem; display: grid; gap: 4px; }
+.dcard .st { font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.st.a { color: var(--ok); } .st.p { color: var(--part); } .st.d { color: var(--bad); } .st.n { color: var(--none); }
+.final { border: 1.5px solid var(--ok); background: var(--ok-soft); border-radius: 10px; padding: 12px 14px; font-size: 0.94rem; }
+
+/* disputes */
+.filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip { font: inherit; font-size: 0.86rem; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.disputes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.dispute { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.dispute .meta { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; font-size: 0.82rem; }
+.kind { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.07em; text-transform: uppercase; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--line); color: var(--muted); }
+.kind.fact { color: var(--part); border-color: var(--part); }
+.kind.design { color: var(--focus); border-color: var(--focus); }
+.stances { display: grid; gap: 6px; font-size: 0.9rem; }
+.stance { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 8px; align-items: baseline; }
+.stance .nm { font-weight: 700; font-size: 0.82rem; }
+.nm.claude { color: var(--claude); } .nm.codex { color: var(--codex); } .nm.gemini { color: var(--gemini); }
+.moved { font-size: 0.9rem; border-top: 1px dashed var(--line); padding-top: 8px; display: grid; gap: 4px; }
+.res { font-size: 0.92rem; font-weight: 700; }
+.chg { font-size: 0.82rem; color: var(--muted); }
+
+/* profiles */
+.profiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.profile { background: var(--surface); border: 1px solid var(--line); border-top: 4px solid var(--line); border-radius: 12px; padding: 18px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.profile.claude { border-top-color: var(--claude); }
+.profile.codex { border-top-color: var(--codex); }
+.profile.gemini { border-top-color: var(--gemini); }
+.profile ul { margin: 0; padding-left: 1.1em; display: grid; gap: 5px; font-size: 0.92rem; }
+.bars { display: grid; gap: 6px; }
+.bar-row { display: grid; grid-template-columns: 56px minmax(0, 1fr) 52px; gap: 8px; align-items: center; font-size: 0.8rem; }
+.bar-track { height: 10px; background: var(--sunk); border-radius: 5px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 5px; }
+.bar-row .n { font-family: var(--mono); text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* coverage */
+.cov-wrap { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.cov { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.cov-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; font-size: 0.9rem; }
+.cov-list li { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 8px; align-items: baseline; }
+.badge { font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 6px; border-radius: 5px; text-align: center; white-space: nowrap; }
+.badge.yes { color: var(--ok); background: var(--ok-soft); }
+.badge.part { color: var(--part); background: var(--part-soft); }
+.badge.no { color: var(--bad); background: var(--bad-soft); }
+.badge.drop { color: var(--muted); background: var(--sunk); }
+.score { display: flex; gap: 10px; flex-wrap: wrap; font-size: 0.82rem; color: var(--muted); }
+.brief { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 12px; }
+.brief-groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 18px; }
+.brief-groups h3 { font-size: 0.95rem; }
+.gaps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.gap { border: 1.5px solid var(--bad); background: var(--bad-soft); border-radius: 12px; padding: 14px 16px; display: grid; gap: 6px; align-content: start; min-width: 0; font-size: 0.92rem; }
+.gap.partial { border-color: var(--part); background: var(--part-soft); }
+.gap h3 { font-size: 1rem; }
+.fixline { font-size: 0.86rem; }
+.foot { padding-block: 32px 0; color: var(--muted); font-size: 0.86rem; display: grid; gap: 6px; }
+
+@media (max-width: 900px) {
+  .conv { grid-template-columns: minmax(0, 1fr); }
+  .profiles, .cov-wrap { grid-template-columns: minmax(0, 1fr); }
+  .brief-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .lanes, .outcome, .detail-grid { grid-template-columns: minmax(0, 1fr); }
+  .lane { border-right: 0; border-bottom: 1px solid var(--line); }
+  .disputes, .gaps { grid-template-columns: minmax(0, 1fr); }
+  .brief-groups { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .cell { transition: transform 0.12s ease; }
+  .cell:hover { transform: scale(1.08); }
+  .bar-fill { transition: width 0.6s ease; }
+}
+</style>
+
+<div class="wrap">
+<header class="top">
+  <span class="label">Deliberation record &middot; 20 October 2026 &middot; docs/deliberations</span>
+  <h1>Three models, one plan for your agentic command centre</h1>
+  <p class="lede">You gave Claude, ChatGPT (as Codex) and Gemini the same brief and told them to argue until they agreed. This page shows how each one approached it, where they differed and why, how each disagreement ended, and whether the final plan covers everything each of them raised.</p>
+  <div class="facts" aria-label="Key facts">
+    <div class="fact"><b>46 min</b><span class="muted">10:36 to 11:22 IST</span></div>
+    <div class="fact"><b>3</b><span class="muted">rounds plus a setup phase</span></div>
+    <div class="fact"><b>20</b><span class="muted">disputes resolved (12 design, 8 facts)</span></div>
+    <div class="fact"><b>1 &rarr; 14</b><span class="muted">of 14 decisions settled, round 1 to final</span></div>
+    <div class="fact"><b>9</b><span class="muted">items missing or thin in the final plan</span></div>
+  </div>
+  <div class="legend"><span class="who claude">Claude</span><span class="who codex">Codex (ChatGPT)</span><span class="who gemini">Gemini</span></div>
+</header>
+
+<nav class="jump" aria-label="Sections">
+  <ul>
+    <li><a href="#answer">The answer</a></li>
+    <li><a href="#rounds">Round by round</a></li>
+    <li><a href="#convergence">Positions</a></li>
+    <li><a href="#disputes">Disputes</a></li>
+    <li><a href="#approaches">How each thought</a></li>
+    <li><a href="#coverage">Coverage and gaps</a></li>
+  </ul>
+</nav>
+
+<section class="block" id="answer">
+  <h2>What they agreed</h2>
+  <div class="answer">
+    <p><b>Build on Samaritan.</b> Do not adopt OpenClaw or Hermes as the core and do not start over. All three reached this independently in round 1; the rest of the work was detail.</p>
+    <ol>
+      <li>Samaritan is the one place you see tasks and give approvals. One Inbox, one Telegram bot, one audit trail.</li>
+      <li>Tool-using work runs on the Claude Agent SDK behind a five-method worker interface, so Hermes or OpenClaw can replace it later if a real gap appears.</li>
+      <li>New views: Now, Activity (every agent run, with a working Stop), Tasks (Cowork-style jobs), per-source notification rules, and an Ask/Delegate bar.</li>
+      <li>One small MCP server (about eight tools, none that approve) so Claude Code, Claude desktop, Codex and Gemini CLI reach the same memory and inbox.</li>
+      <li>Thornhill stays the phone controller and drops its own planner and bot. Nutgraf and MailMCP stay as services.</li>
+      <li>Current Mac first. Phase 0 makes the daemon safe to run unattended; Phase 1 is your meeting workflow.</li>
+    </ol>
+    <div class="sig">
+      <span class="label">Signed v2</span>
+      <span class="who claude">11:14</span><span class="who codex">11:15</span><span class="who gemini">11:16</span>
+      <span class="hash">body SHA-256 3ed4a57c41a47477967b6ef1b5dd331991def78855f688d4fab857afc388069d</span>
+    </div>
+  </div>
+</section>
+
+<section class="block" id="rounds">
+  <h2>Round by round</h2>
+  <p class="intro muted">Each stage shows what each model did, then what they agreed on, where they split, and what moved them. Times come from the files' timestamps on your Mac.</p>
+  <div id="stages" style="display:grid;gap:16px"></div>
+</section>
+
+<section class="block" id="convergence">
+  <h2>How positions moved</h2>
+  <p class="intro muted">Fourteen decisions, each model's position in round 1 and round 2, then the final plan. Green means the position matched the final plan. Hatched means the same direction with different details. Red means a materially different position. Dashed means the model did not address it. Select any square to read the position.</p>
+  <div class="conv">
+    <div class="panel chart">
+      <span class="label">Decisions settled by all three</span>
+      <svg id="convChart" viewBox="0 0 360 210" role="img" aria-label="Decisions settled by all three: 1 in round 1, 11 in round 2, 14 in the final plan. Same direction: 11, 14, 14."></svg>
+      <div class="keyrow"><span><span class="agent-dot" style="background:var(--ok)"></span>all three match the final plan</span><span><span class="agent-dot" style="background:var(--muted)"></span>all three pointing the same way</span></div>
+    </div>
+    <div class="panel">
+      <div class="keyrow">
+        <span><span class="cell a">&#10003;</span>matches final</span>
+        <span><span class="cell p">~</span>same direction</span>
+        <span><span class="cell d">&#215;</span>different</span>
+        <span><span class="cell n">&middot;</span>not addressed</span>
+      </div>
+      <div class="grid-scroll"><table class="pos" id="posTable"></table></div>
+    </div>
+  </div>
+  <div class="detail" id="posDetail" aria-live="polite"></div>
+</section>
+
+<section class="block" id="disputes">
+  <h2>Every disagreement, and how it ended</h2>
+  <p class="intro muted">Design disputes are where the models wanted different things. Fact corrections are where one model got a fact wrong and another caught it with a source. Filter by who raised the point or who changed their mind.</p>
+  <div class="filters" id="dispFilters" role="group" aria-label="Filter disputes"></div>
+  <div class="disputes" id="dispList"></div>
+</section>
+
+<section class="block" id="approaches">
+  <h2>How each model approached the problem</h2>
+  <p class="intro muted">Same brief, same repos, three different instincts. The quotes are from their own round files.</p>
+  <div class="profiles" id="profiles"></div>
+</section>
+
+<section class="block" id="coverage">
+  <h2>Does the final plan cover what each model raised?</h2>
+  <p class="intro muted">Each concern a model raised in its rounds, checked against the signed v2 text. "Withdrawn" means its author gave it up after critique. The red boxes below are omissions: nobody argued against them, they just did not make it into v2.</p>
+  <div class="cov-wrap" id="covAgents"></div>
+  <div class="brief">
+    <h3>Your brief, item by item</h3>
+    <div class="score" id="briefScore"></div>
+    <div class="brief-groups" id="briefGroups"></div>
+  </div>
+  <h3>The gaps</h3>
+  <div class="gaps" id="gapList"></div>
+</section>
+
+<footer class="foot">
+  <p>Source files: <span class="mono">samaritan/docs/deliberations/</span>: PROTOCOL.md, COORDINATION.md, each model's STATUS, messages-to-peers, round-1 to round-3 files and notes, and consensus/PROPOSAL.md (v1 and v2).</p>
+  <p>Compiled by Claude, one of the three participants, after sign-off on 20 October 2026. Positions are summarised from each model's own files; where Claude's own reasoning is described, it is held to the same standard as the others, errors included.</p>
+</footer>
+</div>
+
+<script>
+const A = { claude: "Claude", codex: "Codex", gemini: "Gemini" };
+const AG = ["claude", "codex", "gemini"];
+
+const STAGES = [
+  {
+    no: "0", name: "Setup: agreeing how to disagree", time: "10:36 to 10:46 IST",
+    summary: "Before any research, the three had to find each other and agree on rules. Claude wrote PROTOCOL.md first; the others adopted it with changes.",
+    lanes: {
+      claude: { did: ["Wrote PROTOCOL.md: one folder per model, a STATUS file each, the same round template, decision IDs D1 to D10, and a sign-off rule.", "Proposed that two models could move on if the third went silent for 6 hours.", "Checked Codex's code findings against the source and found healthAI's Oura and Hevy adapters are mocks."] },
+      codex: { did: ["Adopted the protocol but rejected the 6-hour rule: you asked them to wait for all three.", "Recorded your direct answers: meeting workflow first, current Mac as host. Later recorded your rule to write only inside the deliberations folder.", "Posted code findings early: Telegram flush() is never called, a timeout does not stop a run, OpenClaw has a Workboard, healthAI has real code."] },
+      gemini: { did: ["Wrote COORDINATION.md, a status table for all three.", "Marked its own round 1 complete before the file existed; corrected after Claude pointed it out.", "Then adopted PROTOCOL.md's format and decision IDs."] }
+    },
+    agreed: ["One folder each, STATUS files as the signal, the same decision IDs.", "Your answers apply to everyone."],
+    split: ["Whether silence lets the others move on (Codex said no)."],
+    moved: ["Claude withdrew the 6-hour rule (amendment A1). Answers you gave any one model go in a shared file."]
+  },
+  {
+    no: "1", name: "Independent research", time: "Finished: Codex 10:45, Gemini 10:48, Claude 10:50 IST",
+    summary: "Each wrote its own recommendation without reading the others. All three independently landed on the same core: keep Samaritan, use the Agent SDK, fold Thornhill's planner into Samaritan.",
+    lanes: {
+      claude: { quote: "What is missing is plumbing, not a platform.", did: ["Read Samaritan, Thornhill, Nutgraf and five neighbouring repos; researched OpenClaw, Hermes, Anthropic billing, client MCP support.", "Proposed C1 (one brain), an activity ledger across every runtime, Claude Code hooks for waiting sessions, Rule of Two for message readers, Max monthly API credits for billing.", "Also proposed an 'auto-approve after N minutes' tier, later dropped.", "Got three facts wrong: Hermes approvals 'off by default', Gemini's agent 'US only', ChatGPT 'public HTTPS only'."] },
+      codex: { quote: "Use an existing agent harness for delegated work rather than inventing a tool-use loop.", did: ["Audited the code most deeply: loopback-trusted actor, non-cancelling timeout, unflushed queue, import-task is one model call.", "Separated delegated task, run and action item; wrote a recovery blueprint (leases, fencing, admission keys, exact-revision approvals).", "Hedged on the runtime: proposed a two-day OpenClaw trial before committing.", "Put the meeting workflow before the durable daemon."] },
+      gemini: { quote: "Samaritan is built to maximize trusted delegation.", did: ["Inventoried six half-built pieces to reuse: scrask-bot, job_tracker, healthAI, MailMCP, Nutgraf, Thornhill.", "Proposed G1 (merge Thornhill's brain) and G2 (fix list, including a UTC date bug).", "Mapped your day into 11 timed beats.", "Bolder product ideas: an MCP tool that approves, a context file rewritten every 15 minutes, Oura stress polling, Samaritan-side podcast audio, watching Claude transcript files."] }
+    },
+    agreed: ["Samaritan is the core; neither OpenClaw nor Hermes as the outer system.", "Claude Agent SDK as the first worker.", "Thornhill becomes the phone executor.", "Current Mac, meeting workflow first, API before phone automation."],
+    split: ["Whether to trial OpenClaw first (Codex).", "Whether assistants may approve items (Gemini).", "Live vs static shared context file (Gemini).", "Approval on a countdown (Claude).", "Daemon before or after the meeting slice (Codex).", "How big the new schema should be."],
+    moved: ["Nothing yet: round 1 was blind by design."]
+  },
+  {
+    no: "2", name: "Cross-critique", time: "Finished: Codex 10:53, Claude 10:53, Gemini 10:55 IST",
+    summary: "Each read the other two and pushed back with evidence. Most disputes closed here, mostly by the model that proposed the idea giving it up.",
+    lanes: {
+      claude: { quote: "The restart test will not separate the candidates.", did: ["Adopted Codex's task/run/action split, artifact store, payload-bound approvals and fencing; Gemini's command bar.", "Corrected its own D4: Codex desktop and CLI do read local MCP servers.", "Argued against the up-front trial (Hermes runs do not survive a restart either, so durability is Samaritan's job regardless), against the approve tool and the live context file.", "Proposed Phase 0 daemon before the meeting slice; offered to draft the consensus."] },
+      codex: { quote: "There is strong architectural agreement, but I do not yet claim three-way sign-off.", did: ["Dropped the mandatory OpenClaw trial and narrowed its schema to a target model.", "Corrected Claude and Gemini with primary sources: Hermes defaults, Gemini Spark in India, ChatGPT local MCP, the overstated audit-trigger claim.", "Rejected the approve tool and the countdown tier: silence never approves.", "Clarified 'one brain' as an ownership rule, not one database."] },
+      gemini: { quote: "A timer expiring must never silently trigger an external side effect.", did: ["Dropped its approve tool, transcript watching and Oura polling; adopted HTTP hooks and child-process fencing.", "Pushed back on Codex: skip the trial now; cut ten records to four tables reusing the Inbox.", "Pushed back on Claude's countdown tier."] }
+    },
+    agreed: ["No approve tool for assistants; a static context file.", "No trial before the meeting milestone.", "No approval by silence.", "Billing: API key with a cap for unattended runs; plan limits for interactive.", "Task, run and action item are separate records."],
+    split: ["Exact schema (Gemini's 4 tables vs Codex's records).", "Which runtime to trial later, if ever (Claude said Hermes first).", "Phase order details."],
+    moved: ["Codex found an existing sync_cursors table and proposed activity_events instead of Gemini's source_cursors; Gemini agreed."]
+  },
+  {
+    no: "3", name: "Consensus and sign-off", time: "10:56 to 11:22 IST",
+    summary: "Claude drafted the shared proposal. Gemini signed v1. Codex accepted every decision but asked for six fixes. v2 took all six and all three signed the same text, checked by hash.",
+    lanes: {
+      claude: { did: ["Drafted PROPOSAL.md v1, folding in Codex's corrections and Gemini's schema, and noting that sync_cursors, delivery_queue and executions already exist.", "Conceded the countdown tier and the Hermes-first trial.", "Wrote v2 with all six of Codex's amendments; verified Codex and Gemini hook docs and the Max credits page before citing them.", "Recomputed Codex's SHA-256 to confirm all three signed the same text; marked v2 final."] },
+      codex: { quote: "The architecture is accepted; the v1 wording needs the amendments above.", did: ["Reviewed v1 line by line and asked for six fixes: fairer build-vs-adopt wording, precise Hermes restart semantics, an activity_events table covering task messages, Phase 1 promising things only Phase 2 built, child processes are not a sandbox, and primary sources.", "Signed v2 with a hash of the agreed text."] },
+      gemini: { did: ["Signed v1 immediately with no reservations.", "Endorsed all six of Codex's amendments.", "Re-signed v2."] }
+    },
+    agreed: ["Every row, D1 to D10 plus one brain, fixes first, billing and schema."],
+    split: ["None on decisions. Codex blocked sign-off on wording and sequencing accuracy until v2."],
+    moved: ["v1 said Phase 1 takes notes over Telegram and checks the phone, but both were scheduled for Phase 2. Codex caught it; v2 moved a basic phone view into Phase 1 and Telegram note intake to Phase 2."]
+  }
+];
+
+// rows: [id, label, R1 {c,x,g}, R2 {c,x,g}, final]
+const POS = [
+  { id: "D1", name: "Agent runtime",
+    r1: { claude: ["a", "SDK inside Samaritan's run layer; no OpenClaw or Hermes core; Hermes maybe later as a worker."], codex: ["p", "SDK behind a runner interface, but trial OpenClaw for up to two days before committing."], gemini: ["a", "Samaritan kernel with SDK or CLI workers; optional Hermes runner; OpenClaw rejected as core."] },
+    r2: { claude: ["p", "Trial only after Phase 2, Hermes first, because a restart test cannot separate the candidates."], codex: ["a", "Mandatory trial dropped; SDK by default, swap only if a concrete gap appears."], gemini: ["a", "WorkerAdapter plus SDK in child processes; no trial before Phase 1."] },
+    fin: "SDK behind a five-method worker adapter in child processes. No trial before the meeting milestone; if a gap appears, the gap decides which runtime to try." },
+  { id: "D2", name: "Command centre",
+    r1: { claude: ["p", "Extend the UI with Now, Activity and Tasks views and per-source rules."], codex: ["p", "Extend the UI with delegated tasks, runs, activity and controls; keep task, run and action item separate."], gemini: ["p", "Dispatch bar, live runs and Claude-session strip, mute switchboard."] },
+    r2: { claude: ["a", "Adopted Codex's three-record split and Gemini's Ask/Delegate bar."], codex: ["a", "Now, Tasks, Activity, Settings; separate records."], gemini: ["a", "Now/Activity, Tasks composer, notification rules; Inbox stays the review surface."] },
+    fin: "Now, Inbox, Activity, Tasks and Settings, plus an Ask/Delegate bar. Mute silences delivery, never the job." },
+  { id: "D3", name: "Second brain",
+    r1: { claude: ["p", "Vault holds every generated artifact; Notion, TickTick and SQLite as today."], codex: ["a", "Keep source ownership; SQLite for operations; registered artifacts with stable paths."], gemini: ["a", "Obsidian for prose, Notion for tables, SQLite ledger plus recall index."] },
+    r2: { claude: ["a", "Adopted Codex's artifact store; anything you would read is exported to the vault."], codex: ["a", "Same, with configurable storage for raw files."], gemini: ["a", "Same split; raw run output outside git."] },
+    fin: "One owner per kind of data: vault, Notion, TickTick, Samaritan SQLite; raw run output in ~/.samaritan/artifacts." },
+  { id: "D4", name: "Cross-assistant context",
+    r1: { claude: ["p", "MCP server of up to ten tools and a static pointer file. Said ChatGPT needs public HTTPS (wrong for Codex desktop and CLI)."], codex: ["a", "About six tools, no approval tool, a static routing document, test each client."], gemini: ["d", "Six tools including samaritan_act, which approves items; a BRAIN_INDEX.md rewritten every 15 minutes with live personal data."] },
+    r2: { claude: ["a", "About seven tools, no approve tool, static file; corrected the ChatGPT claim."], codex: ["a", "Assistants propose, humans approve; local and hosted clients tested separately."], gemini: ["a", "Dropped the approve tool; read and propose tools only; static routing doc."] },
+    fin: "About eight tools, including answer_question for clarifications only. No approve tool. A static routing document pointed to from each assistant's global instructions file." },
+  { id: "D5", name: "Surfaces",
+    r1: { claude: ["p", "Laptop UI, phone PWA over Tailscale, one Telegram bot. No authentication model."], codex: ["a", "One backend, responsive phone web, Telegram, one revision check so two surfaces cannot both execute."], gemini: ["p", "SPA, PWA at a Tailscale URL, one bot. Codex later noted a URL is not authentication."] },
+    r2: { claude: ["a", "Actor derived from an authenticated session, not the request."], codex: ["a", "Same."], gemini: ["a", "Same, with explicit auth."] },
+    fin: "One backend; authenticated phone web in Phase 1; Telegram outbound in Phase 1 and two-way in Phase 2." },
+  { id: "D6", name: "Hosting",
+    r1: { claude: ["a", "Current Mac, launchd, Tailscale."], codex: ["a", "Current Mac, launchd, private access, freshness checks."], gemini: ["a", "Current Mac, launchd and caffeinate; AWS services stay."] },
+    r2: { claude: ["a", "Added Codex's Keychain-after-reboot test."], codex: ["a", "Same."], gemini: ["a", "Same."] },
+    fin: "Current Mac under launchd with backups and outage visibility; MailMCP and Nutgraf stay on AWS." },
+  { id: "D7", name: "Integrations",
+    r1: { claude: ["a", "API first; a per-source table; Oura stress is daily; WhatsApp bridges risk a ban."], codex: ["a", "API or MCP, then browser, then phone; meeting sources first."], gemini: ["p", "API first, but 30-minute Oura stress polling, podcast audio inside Samaritan, Hevy routine overwritten on approval."] },
+    r2: { claude: ["a", "Same, plus a TickTick adapter in Phase 1."], codex: ["a", "Same, with live connectors verified before claiming them."], gemini: ["a", "Dropped Oura polling; WhatsApp read-only from the agent phone."] },
+    fin: "Official API first, Mac second, phone third, unofficial last; phase per source." },
+  { id: "D8", name: "Phone (Thornhill)",
+    r1: { claude: ["a", "Thornhill becomes the executor; its brain and bot fold into Samaritan."], codex: ["p", "Keep the working WebDriverAgent route; asked whether Thornhill should share task identity."], gemini: ["a", "Retire Thornhill's brain and bot; executor behind a phone adapter."] },
+    r2: { claude: ["a", "Same."], codex: ["a", "Same, and Thornhill may stay an independent service."], gemini: ["a", "Same."] },
+    fin: "Thornhill keeps its device pool, locks and routines, shares Samaritan's IDs, and sends its stop points to Samaritan's Inbox." },
+  { id: "D9", name: "Trust and safety",
+    r1: { claude: ["p", "Policy, money lock, Rule of Two, plus an 'auto-approve after N minutes' tier."], codex: ["a", "Exact-payload approvals, scoped workers, recovery, verified writes."], gemini: ["p", "Quarantine untrusted text, but the approve tool undercut it and it overstated the audit guarantee."] },
+    r2: { claude: ["a", "Payload-bound approvals, fencing, authenticated approver; countdown tier no longer proposed."], codex: ["a", "Silence never approves; scoped credentials."], gemini: ["a", "No auto-approve on silence; child-process fencing."] },
+    fin: "Rule of Two for anything reading untrusted text; exact-revision human approvals; fenced cancellation; child processes plus restricted tools and credentials, since a process is not a sandbox." },
+  { id: "D10", name: "Build sequence",
+    r1: { claude: ["p", "Phase 0 daemon, Phase 1 meetings plus coding alerts, estimates in sessions."], codex: ["p", "Meeting slice before the supervised daemon; effort ranges, no dates."], gemini: ["p", "Fixed day ranges (days 1 to 20); recall search only in Phase 4."] },
+    r2: { claude: ["p", "Merged order, but Phase 1 promised Telegram notes and a phone check that only Phase 2 built."], codex: ["p", "Prerequisites first; minimal retrieval inside the meeting milestone."], gemini: ["p", "Week 1 daemon and meetings, week 2 UI and MCP."] },
+    fin: "Phase 0 safe daemon (2 to 3 days); Phase 1 meetings with cited context and phone view (about a week); Phase 2 tasks, Activity, MCP (1 to 2 weeks); then one domain at a time." },
+  { id: "C1", name: "One brain",
+    r1: { claude: ["a", "C1: Samaritan is the only planner, task store, inbox and bot."], codex: ["p", "Raised it as a question."], gemini: ["a", "G1: merge Thornhill's task store into Samaritan."] },
+    r2: { claude: ["a", "Merged with G1."], codex: ["a", "One authority for you, not one database."], gemini: ["a", "Adopted Codex's ownership wording."] },
+    fin: "One user-facing planner, inbox and bot; services keep their own storage and correlate by ID." },
+  { id: "G2", name: "Fix before unattended",
+    r1: { claude: ["p", "Flush and a real Stop folded into Phase 0, not named as prerequisites."], codex: ["a", "Found the flush and timeout defects; recovery before unattended work."], gemini: ["a", "G2: AbortSignal, flush caller, UTC date bug."] },
+    r2: { claude: ["a", "Adopted G2 plus child-process cancellation."], codex: ["a", "Expanded to restart recovery and actor identity."], gemini: ["a", "Same."] },
+    fin: "Real cancellation with fencing, flush caller, local-date fix, server-derived actor, restart recovery." },
+  { id: "C2", name: "Billing",
+    r1: { claude: ["a", "Console API key funded by Max monthly credits, with a cap (low confidence)."], codex: ["p", "API billing; would not rely on unverified subscription claims."], gemini: ["n", "Not addressed."] },
+    r2: { claude: ["a", "Asked the others to verify the October 7 credits."], codex: ["a", "Verified the official article; API key with a cap."], gemini: ["a", "API key with per-run and daily caps."] },
+    fin: "Plan limits for interactive work; API key with a hard cap for unattended runs, using Max credits if eligible." },
+  { id: "S", name: "New schema",
+    r1: { claude: ["n", "No schema proposed."], codex: ["p", "A target set of ten records."], gemini: ["p", "Add a tasks table with Thornhill's lifecycle."] },
+    r2: { claude: ["p", "Adopt Codex's records in Phase 2."], codex: ["p", "Treat the records as a target; simplest schema first."], gemini: ["p", "Four tables including source_cursors, plus columns on action_items."] },
+    fin: "Four tables: tasks, runs (with admission keys), artifacts, activity_events. Reuse sync_cursors, delivery_queue, executions." }
+];
+
+const DISPUTES = [
+  { kind: "design", title: "Trial OpenClaw before committing?", raised: "codex", conceded: ["codex", "claude"], opened: "R1", closed: "R3",
+    st: { codex: "Spend up to two days comparing the SDK with OpenClaw on the same scenarios.", claude: "Later, and Hermes first: its run API maps onto the worker interface and its runs do not survive restart, so the restart test cannot pick a winner.", gemini: "Skip it; ship the meeting workflow first." },
+    moved: "Both peers rejected an up-front trial; Codex agreed that no runtime removes code from the meeting slice. Codex then argued the gap, not a preference, should pick the candidate.",
+    res: "No trial before the meeting milestone. If the SDK hits a real gap, that gap decides whether Hermes or OpenClaw is tried." },
+  { kind: "design", title: "Should assistants be able to approve items?", raised: "gemini", conceded: ["gemini"], opened: "R1", closed: "R2",
+    st: { gemini: "Include samaritan_act so any assistant can approve, edit or defer.", codex: "Assistants propose; only an authenticated human approves.", claude: "A prompt injected into any chat could approve a send. Drop it." },
+    moved: "Two independent objections on the same ground: self-approval removes the human from the loop.",
+    res: "No approve tool. answer_question allowed for clarifications only." },
+  { kind: "design", title: "A shared context file with live data?", raised: "gemini", conceded: ["gemini"], opened: "R1", closed: "R3",
+    st: { gemini: "BRAIN_INDEX.md rewritten every 15 minutes with calendar, decisions and recent actions, loaded by every assistant.", claude: "That puts personal and employer context into every coding session and goes stale.", codex: "Keep it about routing and capabilities, not the contents of your life." },
+    moved: "Privacy and staleness arguments from both peers.",
+    res: "Static routing document; live state on demand through get_context." },
+  { kind: "design", title: "Approve automatically after N minutes of silence?", raised: "claude", conceded: ["claude"], opened: "R1", closed: "R3",
+    st: { claude: "An 'auto-approve unless I object' tier for low-risk items.", codex: "Silence is not approval. Pre-authorize low-risk work by policy.", gemini: "If you miss a notification in a meeting, a timer must never cause a side effect." },
+    moved: "Both peers objected with the same failure case.",
+    res: "Unanswered items stay pending or expire. Low-risk items are pre-authorized by policy." },
+  { kind: "design", title: "Meeting slice before or after the daemon?", raised: "codex", conceded: ["codex"], opened: "R1", closed: "R2",
+    st: { codex: "Meeting workflow first, supervised host and durable runs second.", claude: "The pre-meeting brief and post-meeting nudge are scheduled; they need a running daemon first.", gemini: "Daemon and fixes first, meetings in week 1." },
+    moved: "The dependency argument: scheduled steps need a scheduler.",
+    res: "Phase 0 makes a minimal safe daemon; Phase 1 is the meeting workflow; deeper durability follows." },
+  { kind: "design", title: "How big should the new schema be?", raised: "codex", conceded: ["codex", "gemini"], opened: "R1", closed: "R3",
+    st: { codex: "Ten records: tasks, messages, runs, events, artifacts, questions, approvals, receipts, cursors, outbox.", gemini: "Four tables; reuse the Inbox for questions and approvals.", claude: "Adopt Codex's records later; noted three of them already exist." },
+    moved: "Code reading: sync_cursors, delivery_queue and executions already exist. Codex showed a mutable runs row cannot hold a task conversation.",
+    res: "tasks, runs, artifacts, activity_events; reuse existing tables; more only when needed." },
+  { kind: "design", title: "Detect waiting Claude Code sessions by reading transcripts?", raised: "gemini", conceded: ["gemini"], opened: "R1", closed: "R2",
+    st: { gemini: "Watch ~/.claude/projects/*.jsonl and process state.", claude: "Use the documented Notification hooks; transcripts are an internal format.", codex: "Use supported hooks, with stale-session reconciliation." },
+    moved: "Claude's evidence of official hook matchers (permission_prompt, idle_prompt, agent_needs_input).",
+    res: "HTTP hooks. Codex and Gemini CLI have hooks too, verified in round 3." },
+  { kind: "design", title: "Poll Oura every 30 minutes for stress?", raised: "gemini", conceded: ["gemini"], opened: "R1", closed: "R2",
+    st: { gemini: "Poll daily_stress and offer music when it spikes.", codex: "The API exposes a daily summary, not a live signal.", claude: "Data arrives after the phone syncs, sometimes hours late." },
+    moved: "Both checked the Oura schema independently.",
+    res: "No real-time stress trigger. Music offered before important meetings." },
+  { kind: "design", title: "Generate newsletter audio inside Samaritan?", raised: "gemini", conceded: ["gemini"], opened: "R1", closed: "R3",
+    st: { gemini: "A commute-podcast capability with its own text-to-speech.", claude: "Nutgraf already plans its own audio; Samaritan should link to it.", codex: "Nutgraf owns ranking and audio through a service contract." },
+    moved: "Ownership: one service per job.",
+    res: "Nutgraf owns audio; Samaritan links to it." },
+  { kind: "design", title: "Overwrite the Hevy routine on approval?", raised: "gemini", conceded: ["gemini"], opened: "R1", closed: "R2",
+    st: { gemini: "Approve and the routine is updated.", codex: "Write a copy of today's routine; never overwrite the plan.", claude: "Agreed with Codex." },
+    moved: "Reversibility.",
+    res: "A copy for today, never an overwrite." },
+  { kind: "design", title: "Is 'one brain' one database?", raised: "gemini", conceded: ["gemini", "claude"], opened: "R1", closed: "R2",
+    st: { gemini: "One SQLite store, one bot, one approval gate.", claude: "Samaritan is the only planner and task store.", codex: "One authority for you, not one physical database. Services keep their own state." },
+    moved: "Nutgraf (DynamoDB), MailMCP and Thornhill already hold state; merging would add coupling.",
+    res: "One user-facing authority; services correlate by ID." },
+  { kind: "design", title: "Phase 1 promised what only Phase 2 built", raised: "codex", conceded: ["claude"], opened: "R3", closed: "R3",
+    st: { claude: "v1 put notes over Telegram and a phone check into Phase 1.", codex: "Telegram inbound and phone web were scheduled for Phase 2.", gemini: "Endorsed the fix." },
+    moved: "Codex read v1 against itself.",
+    res: "Basic authenticated phone view moved into Phase 1; Telegram note intake stays in Phase 2." },
+  { kind: "fact", title: "Hermes approvals are off by default", raised: "codex", conceded: ["claude", "gemini"], opened: "R1", closed: "R2",
+    st: { claude: "Said off by default (from a third-party guide).", gemini: "Said it gates only its own memory and skill writes.", codex: "Official docs: smart mode by default, deny for unattended runs." },
+    moved: "Primary source beat a secondary one. Claude re-checked and confirmed.",
+    res: "Corrected in v1 and v2." },
+  { kind: "fact", title: "What happens to a Hermes run on restart", raised: "codex", conceded: ["claude"], opened: "R2", closed: "R3",
+    st: { claude: "Runs do not survive a restart.", codex: "The API keeps run identities and marks them interrupted; the turn stops, the record does not.", gemini: "Endorsed the precise wording." },
+    moved: "A distinction between the process and the record.",
+    res: "v2: active runs are marked interrupted, not resumed; your task still belongs to Samaritan." },
+  { kind: "fact", title: "Gemini's agent is US only", raised: "codex", conceded: ["claude"], opened: "R1", closed: "R2",
+    st: { claude: "Custom MCP only through Spark, US only (one secondary source).", codex: "Google announced Spark for AI Pro in India on 29 July 2026.", gemini: "No position." },
+    moved: "Google's India blog post.",
+    res: "Gemini app is 'test in Phase 4', not excluded." },
+  { kind: "fact", title: "ChatGPT can only reach public HTTPS servers", raised: "codex", conceded: ["claude"], opened: "R1", closed: "R2",
+    st: { claude: "Said ChatGPT needs a public server.", codex: "Codex desktop and CLI read local MCP config; only ChatGPT web needs a remote plugin.", gemini: "Listed ChatGPT desktop among local clients." },
+    moved: "OpenAI's MCP docs.",
+    res: "Local server covers Claude Code, Claude desktop, Codex and Gemini CLI." },
+  { kind: "fact", title: "OpenClaw's advisory count as a reason", raised: "codex", conceded: ["claude"], opened: "R1", closed: "R3",
+    st: { claude: "Cited 722 advisories, 14 critical, as a reason against OpenClaw.", codex: "A third-party count of mostly fixed issues; use the official trust model.", gemini: "No position." },
+    moved: "Fair comparison: features and fit, not raw counts.",
+    res: "Removed from v2; the case rests on integration cost and fit." },
+  { kind: "fact", title: "Database triggers guard every status change", raised: "codex", conceded: ["gemini"], opened: "R1", closed: "R2",
+    st: { gemini: "Triggers abort any action_items change without an audit row.", codex: "Triggers only protect the audit table; the pairing is an application transaction.", claude: "Folded the precise wording into v2." },
+    moved: "Reading src/store/migrations.ts.",
+    res: "v2 D9 states the guarantee exactly." },
+  { kind: "fact", title: "A child process is a sandbox", raised: "codex", conceded: ["claude", "gemini"], opened: "R3", closed: "R3",
+    st: { claude: "Child processes for cancellation and isolation.", codex: "They give termination, not isolation from your files, Keychain or network.", gemini: "Endorsed." },
+    moved: "Codex's round 3 review.",
+    res: "Workers also get restricted tools, paths, credentials and write routes." },
+  { kind: "fact", title: "Gemini's source_cursors table", raised: "claude", conceded: ["gemini"], opened: "R2", closed: "R3",
+    st: { gemini: "Add a source_cursors table.", claude: "sync_cursors, delivery_queue and executions already exist in migration 1.", codex: "Found the same and proposed activity_events instead." },
+    moved: "Both checked the migrations file independently.",
+    res: "Reuse existing tables." }
+];
+
+const PROFILES = [
+  { a: "claude", frame: "A consolidation problem, not a runtime problem. You already built the hard part; what is missing is plumbing.",
+    open: "Set up the shared protocol, decision IDs and sign-off rule before researching.",
+    strengths: ["Swept neighbouring repos; flagged the Thornhill overlap and the Cowork tool-count failure to peers early", "Web research on runtimes, billing and client MCP support", "Checked peers' code claims before accepting them", "Drafted the consensus; verified sign-off by hash"],
+    gave: ["Approve-on-countdown tier", "Hermes-first trial", "Three wrong facts: Hermes defaults, Gemini in India, ChatGPT reach", "v1 Phase 1 dependencies", "Timestamps that ran 30 minutes fast"],
+    kb: [24.7, 14.3, 2.5] },
+  { a: "codex", frame: "Build the operating machinery. Separate the goal, the attempt and the decision, and make every failure honest.",
+    open: "Adopted the protocol but challenged its silence rule; recorded your answers and your scope rule.",
+    strengths: ["Deepest code audit: three real defects (unflushed queue, non-cancelling timeout, request-supplied actor)", "Recovery design: leases, fencing, admission keys, exact-revision approvals", "Most source corrections of the others", "Six amendments that made v2 accurate; hash-checked sign-off"],
+    gave: ["Mandatory OpenClaw trial", "Ten-record schema, cut to four tables", "Meeting slice before the daemon"],
+    kb: [52.3, 14.0, 8.1] },
+  { a: "gemini", frame: "Wire together the six half-built pieces you already own, and map them onto your actual day.",
+    open: "Built a coordination table for all three; adopted the protocol's format.",
+    strengths: ["Inventory of reusable code: scrask-bot, job_tracker, healthAI, MailMCP", "11-beat day-in-the-life plan", "G1 brain merge and G2 fix list, including a date bug", "Ask/Delegate bar and mute switchboard; fastest to sign"],
+    gave: ["Assistant approve tool", "Live context file", "Oura polling, in-house audio, transcript watching, Hevy overwrite", "Overstated audit guarantee; a table that already existed"],
+    kb: [25.7, 17.9, 10.1] }
+];
+
+// Coverage: each concern a model raised, status in v2
+const COV = {
+  claude: [
+    ["yes", "One brain: Thornhill's planner and bot fold in"],
+    ["yes", "Activity view across every runtime"],
+    ["yes", "Alerts when a coding session waits for you"],
+    ["yes", "Small MCP toolset, because Cowork drops arguments on large ones"],
+    ["yes", "Rule of Two for message and email readers"],
+    ["yes", "Billing route with a cap; Max credits"],
+    ["yes", "Static context file, no approve tool"],
+    ["yes", "Daemon before the meeting slice"],
+    ["yes", "Nutgraf needs a machine credential"],
+    ["yes", "Oura stress is daily; WhatsApp ban risk"],
+    ["part", "Hevy webhook to trigger the post-workout plan (in notes, not in v2)"],
+    ["drop", "Approve on a countdown"],
+    ["drop", "Hermes first if a trial happens"]
+  ],
+  codex: [
+    ["yes", "Task, run and action item kept separate"],
+    ["yes", "Leases, fencing, admission keys"],
+    ["yes", "Authenticated actor; exact-revision approvals"],
+    ["yes", "Real cancellation; flush; restart recovery"],
+    ["yes", "Five-meeting acceptance test"],
+    ["yes", "Cited retrieval inside the meeting milestone"],
+    ["yes", "Mute is not disable; freshness and outage view"],
+    ["yes", "Budgets and skipping unchanged inputs"],
+    ["part", "Reconcile a provider write with an unknown outcome (only in the target blueprint)"],
+    ["no", "Keep work and personal data in separate scopes"],
+    ["no", "One owner per schedule, so Claude scheduled tasks and Samaritan never both fire"],
+    ["no", "Skip or refresh a missed brief instead of sending it late"],
+    ["no", "Office-arrival trigger from a Shortcut on your daily phone"],
+    ["no", "Screenshots to calendar through scrask-bot, with review"],
+    ["drop", "Up-front OpenClaw trial"]
+  ],
+  gemini: [
+    ["yes", "G1: merge Thornhill's brain"],
+    ["yes", "G2: fixes before unattended runs"],
+    ["yes", "Ask/Delegate bar and mute switchboard"],
+    ["yes", "Reuse MailMCP and job_tracker"],
+    ["yes", "Four-table schema reusing the Inbox"],
+    ["yes", "Day-in-the-life beats mapped to phases"],
+    ["part", "Reuse healthAI's coaching logic (Oura and Hevy covered, the app is not mentioned)"],
+    ["no", "Screenshot to calendar with scrask-bot"],
+    ["no", "Local transcription for calls no bot can join"],
+    ["drop", "Assistant approve tool"],
+    ["drop", "Live BRAIN_INDEX file"],
+    ["drop", "Oura polling, in-house audio, transcript watching"]
+  ]
+};
+
+const BRIEF = [
+  { g: "Work", items: [
+    ["yes", "Meeting notes, decisions, tasks", "Phase 1"],
+    ["yes", "Context before every meeting", "Phase 1"],
+    ["part", "Send out minutes", "Drafts only"],
+    ["no", "Schedule from messages and screenshots; auto-arrange calendar", "Gap"],
+    ["yes", "Tasks from pending items; undated backlog nudges", "Phase 3"],
+    ["part", "Write and review PRDs", "Generic Tasks only"],
+    ["yes", "Recall past decisions", "Phase 1 to 2"],
+    ["yes", "Email triage and drafts", "Phase 3"],
+    ["yes", "Product health from PostHog", "Phase 3"]
+  ]},
+  { g: "Personal", items: [
+    ["yes", "Important WhatsApp and iMessage", "Phase 3 to 4"],
+    ["yes", "Bills and spending", "Phase 3"],
+    ["yes", "Payment reminders", "Phase 3, guided"]
+  ]},
+  { g: "Coding", items: [
+    ["yes", "WBR from journals", "Phase 3"],
+    ["yes", "Claude Code sessions waiting for you", "Phase 1"]
+  ]},
+  { g: "Job search", items: [
+    ["yes", "New jobs ranked against your profile", "Phase 3"],
+    ["no", "Upcoming interviews", "Gap"],
+    ["yes", "Respond to recruiters", "Phase 3, drafts"]
+  ]},
+  { g: "Day in the life", items: [
+    ["yes", "Sleep score adjusts the Hevy workout", "Phase 3"],
+    ["part", "Day plan after the workout", "No workout trigger"],
+    ["part", "First 3 to 5 things on reaching office", "No arrival trigger"],
+    ["part", "Newsletters read out on the commute", "Waits on Nutgraf audio"],
+    ["yes", "Nudge to write notes after meetings", "Phase 1"],
+    ["part", "Stress from Oura offers music", "Not possible in real time"],
+    ["yes", "High-energy music before key meetings", "Phase 4"]
+  ]},
+  { g: "Requirements and questions", items: [
+    ["yes", "One dashboard of all agent activity", "Phase 2"],
+    ["yes", "Act, mute, talk to the agent from it", "Phase 1 to 2"],
+    ["yes", "Laptop, phone and Telegram", "Phase 1 to 2"],
+    ["yes", "Give tasks as in Cowork", "Phase 2"],
+    ["yes", "OpenClaw, Hermes or build", "Decided"],
+    ["yes", "Claude, ChatGPT, Gemini know where files are", "Phase 2"],
+    ["yes", "Use Samaritan, Thornhill, Nutgraf", "Decided"]
+  ]}
+];
+
+const GAPS = [
+  { t: "Calendar from messages and screenshots", who: ["gemini", "codex"], src: "Brief, Work item 2", d: "Gemini and Codex both proposed reusing scrask-bot for screenshot-to-calendar with review. v2 never mentions it, and nothing auto-arranges the calendar.", fix: "Phase 3 capability: scrask-bot extraction into the Inbox; calendar holds are assisted, never auto-accepted." },
+  { t: "Upcoming interviews", who: ["codex"], src: "Brief, Job search item 2", d: "Codex's integration matrix covered it (calendar plus recruiter threads plus job_tracker). v2 has job matches and recruiter drafts but no interview tracking or prep.", fix: "Add to the Phase 3 job capability: interview events trigger a prep brief." },
+  { t: "Work and personal data kept apart", who: ["codex"], src: "codex/build-blueprint.md", d: "One inbox should not mean one search across employer and personal data. v2 is silent on scopes.", fix: "Tag sources by account scope; filter recall and MCP results by scope." },
+  { t: "One owner per schedule", who: ["codex"], src: "codex/build-blueprint.md", d: "You already run Claude scheduled tasks. If Samaritan adds its own cron for the same jobs, things fire twice. v2 does not plan the migration.", fix: "Phase 0: inventory existing scheduled tasks; import or retire each one." },
+  { t: "Stale and unknown outcomes", who: ["codex"], src: "codex/build-blueprint.md", d: "A morning brief missed overnight should be skipped or refreshed, not sent at noon. A write that timed out after maybe succeeding needs a check before retry. v2 only says 'restart recovery'.", fix: "Add time windows to scheduled outputs and an unknown-outcome state to executions." },
+  { t: "Arrival and post-workout triggers", who: ["codex", "claude"], src: "Brief, Day in the life 2 and 3", d: "Your day plan is meant to follow the workout and the first-hour list to follow reaching office. v2 has the plans but not the triggers: a Hevy webhook and an iOS Shortcut location trigger.", fix: "Phase 3: Hevy webhook and a Shortcut that calls the HTTP API." },
+  { t: "PRD writing and review", who: ["claude"], src: "Brief, Work item 4", d: "Only covered by the generic Tasks view. No capability with project context, versioned feedback or a review surface.", fix: "A Phase 3 capability using the document layout Samaritan already renders." },
+  { t: "Calls no bot can join", who: ["gemini"], src: "gemini/QUESTIONS.md", d: "Gemini asked whether ad-hoc calls need local transcription. The merged question list dropped it, so the meeting workflow assumes Fireflies, Granola or typed notes.", fix: "Ask you; if yes, a local transcriber feeds the same meeting capability." },
+  { t: "Reuse of healthAI", who: ["gemini"], src: "gemini/round-1.md 7.2", d: "Its coaching prompts and UI could seed the Oura and Hevy work; v2 does not mention the app.", fix: "Note it as a source for the Phase 3 health proposals.", partial: true }
+];
+
+/* ---------- render ---------- */
+const el = (t, cls, html) => { const e = document.createElement(t); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const whoChip = a => `<span class="who ${a}">${A[a]}</span>`;
+
+// stages
+const stagesEl = document.getElementById("stages");
+STAGES.forEach(s => {
+  const st = el("article", "stage");
+  const head = el("div", "stage-head");
+  head.innerHTML = `<div class="stage-no">${s.no}</div><div style="display:grid;gap:4px;min-width:0"><span class="stage-time">${s.time}</span><h3>${esc(s.name)}</h3><p class="muted" style="font-size:.95rem">${esc(s.summary)}</p></div>`;
+  st.appendChild(head);
+  const lanes = el("div", "lanes");
+  AG.forEach(a => {
+    const l = s.lanes[a]; const lane = el("div", "lane " + a);
+    lane.innerHTML = whoChip(a) + (l.quote ? `<p class="quote">"${esc(l.quote)}"</p>` : "") + "<ul>" + l.did.map(x => `<li>${esc(x)}</li>`).join("") + "</ul>";
+    lanes.appendChild(lane);
+  });
+  st.appendChild(lanes);
+  const oc = el("div", "outcome");
+  oc.innerHTML = `<div><span class="label ok">Agreed</span><ul>${s.agreed.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>
+    <div><span class="label bad">Split on</span><ul>${s.split.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>
+    <div><span class="label mid">What moved them</span><ul>${s.moved.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>`;
+  st.appendChild(oc);
+  stagesEl.appendChild(st);
+});
+
+// chart
+(function chart() {
+  const svg = document.getElementById("convChart");
+  const rounds = [["Round 1", 1, 11], ["Round 2", 11, 14], ["Final", 14, 14]];
+  const x0 = 46, x1 = 340, y0 = 176, yTop = 22, max = 14;
+  const y = v => y0 - (v / max) * (y0 - yTop);
+  let s = "";
+  [0, 7, 14].forEach(v => { s += `<line x1="${x0}" x2="${x1}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-width="1"/><text x="${x0 - 8}" y="${y(v) + 4}" text-anchor="end">${v}</text>`; });
+  const xs = rounds.map((r, i) => x0 + 34 + i * ((x1 - x0 - 68) / 2));
+  const line = (k, color, dash) => {
+    const pts = rounds.map((r, i) => `${xs[i]},${y(r[k])}`).join(" ");
+    s += `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.5" ${dash ? 'stroke-dasharray="5 4"' : ""} stroke-linejoin="round"/>`;
+    rounds.forEach((r, i) => { s += `<circle cx="${xs[i]}" cy="${y(r[k])}" r="${k === 1 ? 5 : 4}" fill="${k === 1 ? color : "var(--surface)"}" stroke="${color}" stroke-width="2"/>`; });
+  };
+  line(2, "var(--muted)", true);
+  line(1, "var(--ok)", false);
+  rounds.forEach((r, i) => {
+    s += `<text x="${xs[i]}" y="${y0 + 20}" text-anchor="middle">${r[0]}</text>`;
+    s += `<text class="val" x="${xs[i]}" y="${y(r[1]) + (r[1] === r[2] ? -12 : 22)}" text-anchor="middle">${r[1]}</text>`;
+  });
+  svg.innerHTML = s;
+})();
+
+// positions table
+const tbl = document.getElementById("posTable");
+const detail = document.getElementById("posDetail");
+const mark = { a: "&#10003;", p: "~", d: "&#215;", n: "&middot;" };
+const stName = { a: "Matches final", p: "Same direction", d: "Different", n: "Not addressed" };
+let selected = null;
+function head() {
+  const r1 = `<tr><th></th><th class="round" colspan="3">Round 1</th><th class="round" colspan="3">Round 2</th><th class="round">Final</th></tr>`;
+  const r2 = `<tr><th></th>${[0, 1].map(() => AG.map(a => `<th><span class="agent-dot" style="background:var(--${a})"></span>${A[a].slice(0, 2)}</th>`).join("")).join("")}<th>All</th></tr>`;
+  return r1 + r2;
+}
+let rows = "";
+POS.forEach((p, i) => {
+  rows += `<tr><th class="row" scope="row"><span class="mono muted">${p.id}</span> ${esc(p.name)}</th>`;
+  ["r1", "r2"].forEach(r => AG.forEach(a => {
+    const [s] = p[r][a];
+    rows += `<td><button class="cell ${s}" data-i="${i}" data-r="${r}" data-a="${a}" aria-label="${p.id} ${r === "r1" ? "round 1" : "round 2"} ${A[a]}: ${stName[s]}">${mark[s]}</button></td>`;
+  }));
+  rows += `<td><button class="cell a fin" data-i="${i}" data-r="fin" aria-label="${p.id} final plan">&#10003;</button></td></tr>`;
+});
+tbl.innerHTML = `<thead>${head()}</thead><tbody>${rows}</tbody>`;
+function showDetail(i, r, a) {
+  const p = POS[i];
+  document.querySelectorAll("#posTable .cell").forEach(c => c.classList.remove("sel"));
+  const btn = tbl.querySelector(`.cell[data-i="${i}"][data-r="${r}"]${a ? `[data-a="${a}"]` : ""}`);
+  if (btn) btn.classList.add("sel");
+  const col = rr => AG.map(ag => {
+    const [s, t] = p[rr][ag];
+    const hl = rr === r && ag === a ? ` style="outline:2px solid var(--focus)"` : "";
+    return `<div class="dcard"${hl}><span class="nm ${ag}" style="font-weight:700;font-size:.82rem">${A[ag]}</span><span class="st ${s}">${stName[s]}</span><span>${esc(t)}</span></div>`;
+  }).join("");
+  detail.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:8px 14px;align-items:baseline"><span class="mono muted">${p.id}</span><h3>${esc(p.name)}</h3></div>
+    <div class="detail-grid"><div class="dcol"><span class="label">Round 1</span>${col("r1")}</div><div class="dcol"><span class="label">Round 2</span>${col("r2")}</div><div class="dcol"><span class="label">Final plan (v2)</span><div class="final">${esc(p.fin)}</div></div></div>`;
+}
+tbl.addEventListener("click", e => { const b = e.target.closest(".cell"); if (!b) return; showDetail(+b.dataset.i, b.dataset.r, b.dataset.a); });
+showDetail(3, "r1", "gemini");
+
+// disputes
+const filters = [["all", "All 20"], ["design", "Design (12)"], ["fact", "Fact corrections (8)"], ["raised:claude", "Raised by Claude"], ["raised:codex", "Raised by Codex"], ["raised:gemini", "Raised by Gemini"], ["conceded:claude", "Claude changed its mind"], ["conceded:codex", "Codex changed its mind"], ["conceded:gemini", "Gemini changed its mind"]];
+const fEl = document.getElementById("dispFilters"); const dList = document.getElementById("dispList");
+let fSel = "all";
+try { const v = localStorage.getItem("dm-filter"); if (v && filters.some(f => f[0] === v)) fSel = v; } catch (e) {}
+function renderDisputes() {
+  fEl.innerHTML = filters.map(([k, l]) => `<button class="chip" aria-pressed="${k === fSel}" data-k="${k}">${l}</button>`).join("");
+  const list = DISPUTES.filter(d => {
+    if (fSel === "all") return true;
+    if (fSel === "design" || fSel === "fact") return d.kind === fSel;
+    const [t, a] = fSel.split(":");
+    return t === "raised" ? d.raised === a : d.conceded.includes(a);
+  });
+  dList.innerHTML = list.map(d => `<article class="dispute">
+      <div class="meta"><span class="kind ${d.kind}">${d.kind === "fact" ? "Fact correction" : "Design"}</span><span class="mono muted">${d.opened} &rarr; ${d.closed}</span><span class="muted">raised by</span>${whoChip(d.raised)}</div>
+      <h3>${esc(d.title)}</h3>
+      <div class="stances">${AG.map(a => `<div class="stance"><span class="nm ${a}">${A[a]}</span><span>${esc(d.st[a])}</span></div>`).join("")}</div>
+      <div class="moved"><span class="label">What moved it</span><span>${esc(d.moved)}</span></div>
+      <p class="res">${esc(d.res)}</p>
+      <p class="chg">Changed position: ${d.conceded.map(a => A[a]).join(" and ")}</p>
+    </article>`).join("");
+}
+fEl.addEventListener("click", e => { const b = e.target.closest(".chip"); if (!b) return; fSel = b.dataset.k; try { localStorage.setItem("dm-filter", fSel); } catch (err) {} renderDisputes(); });
+renderDisputes();
+
+// profiles
+const maxKb = 52.3;
+document.getElementById("profiles").innerHTML = PROFILES.map(p => `<article class="profile ${p.a}">
+    ${whoChip(p.a)}
+    <p style="font-family:var(--display);font-size:1.1rem;line-height:1.3">${esc(p.frame)}</p>
+    <div style="display:grid;gap:4px"><span class="label">Opening move</span><span style="font-size:.93rem">${esc(p.open)}</span></div>
+    <div style="display:grid;gap:4px"><span class="label">What it brought</span><ul>${p.strengths.map(s => `<li>${esc(s)}</li>`).join("")}</ul></div>
+    <div style="display:grid;gap:4px"><span class="label">What it got wrong or gave up</span><ul>${p.gave.map(s => `<li>${esc(s)}</li>`).join("")}</ul></div>
+    <div class="bars"><span class="label">Written per round, KB. Round 1 includes notes; Claude's round 3 excludes the 18 KB shared proposal it drafted</span>
+      ${p.kb.map((k, i) => `<div class="bar-row"><span class="muted">Round ${i + 1}</span><div class="bar-track"><div class="bar-fill" style="width:${(k / maxKb * 100).toFixed(1)}%;background:var(--${p.a})"></div></div><span class="n">${k.toFixed(1)}</span></div>`).join("")}
+    </div>
+  </article>`).join("");
+
+// coverage per agent
+const badge = { yes: ["yes", "Covered"], part: ["part", "Partly"], no: ["no", "Not in plan"], drop: ["drop", "Withdrawn"] };
+document.getElementById("covAgents").innerHTML = AG.map(a => {
+  const items = COV[a]; const c = k => items.filter(i => i[0] === k).length;
+  return `<div class="cov">${whoChip(a)}
+    <div class="score"><span>${c("yes")} covered</span><span>${c("part")} partly</span><span>${c("no")} not in plan</span><span>${c("drop")} withdrawn</span></div>
+    <ul class="cov-list">${items.map(([s, t]) => `<li><span class="badge ${badge[s][0]}">${badge[s][1]}</span><span>${esc(t)}</span></li>`).join("")}</ul></div>`;
+}).join("");
+
+// brief
+const all = BRIEF.flatMap(g => g.items); const bc = k => all.filter(i => i[0] === k).length;
+document.getElementById("briefScore").innerHTML = `<span><b style="color:var(--ink)">${all.length}</b> items in your brief</span><span>${bc("yes")} covered</span><span>${bc("part")} partly</span><span>${bc("no")} not in plan</span>`;
+document.getElementById("briefGroups").innerHTML = BRIEF.map(g => `<div style="display:grid;gap:8px;align-content:start;min-width:0"><h3>${esc(g.g)}</h3>
+  <ul class="cov-list">${g.items.map(([s, t, ph]) => `<li><span class="badge ${badge[s][0]}">${badge[s][1]}</span><span>${esc(t)} <span class="muted" style="font-size:.82rem">&middot; ${esc(ph)}</span></span></li>`).join("")}</ul></div>`).join("");
+
+// gaps
+document.getElementById("gapList").innerHTML = GAPS.map(g => `<article class="gap${g.partial ? " partial" : ""}">
+  <div class="meta" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">${g.who.map(whoChip).join("")}<span class="mono muted" style="font-size:.74rem">${esc(g.src)}</span></div>
+  <h3>${esc(g.t)}</h3><p>${esc(g.d)}</p><p class="fixline"><b>Fix:</b> ${esc(g.fix)}</p></article>`).join("");
+</script>

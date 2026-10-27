@@ -1,0 +1,17 @@
+{
+  "iso_week": "2026-W44",
+  "highlights": [
+    "Completed Samaritan Command Centre core runtime, 5-view UI, and cross-assistant MCP server.",
+    "Integrated incremental Google Calendar syncToken polling and Fireflies GraphQL consumer."
+  ],
+  "decisions": [
+    "Enforced milestone-by-milestone GitHub Issue tracking across all ~/Developer repositories.",
+    "Locked payment.make to guided mode and stripped external write tokens from worker child processes."
+  ],
+  "direction_changes": [
+    "Was single-surface web dashboard, now 5-view Command Centre with bidirectional Telegram and MCP."
+  ],
+  "needs_revisit": [
+    "Evaluate Thornhill live call latency after initial utility support calls."
+  ]
+}

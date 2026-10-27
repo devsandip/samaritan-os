@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-27",
+  "project_name": "wndr.ist",
+  "metrics": [
+    { "name": "Daily Active Users", "value": 1420, "delta_pct": 8 },
+    { "name": "Trip Compass Completion Rate", "value": 61, "delta_pct": -19 }
+  ],
+  "anomalies": [
+    {
+      "metric": "Trip Compass Completion Rate",
+      "delta_pct": -19,
+      "summary": "Step 2 itinerary generation latency spiked to 4.8s on mobile Safari."
+    }
+  ]
+}

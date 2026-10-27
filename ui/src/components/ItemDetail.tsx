@@ -1,24 +1,27 @@
 /**
  * The Inbox detail pane: chrome (§4.3) + schema-driven body (§4) + responses
- * (§4.6) + audit trail (§5.4).
+ * (§4.6) + audit trail (§5.4) + Command Centre exact-revision hash guard.
  *
  * It refetches the item by id rather than reusing the list row, because the list
  * is a snapshot and a response has to be sent against current state (a stale
- * `responses[]` produces a 400 the user cannot explain). The cost is one request
- * per selection, which is nothing on loopback.
+ * `responses[]` produces a 400 the user cannot explain). Every approve/confirm
+ * binds `expected_payload_hash` and `expected_revision` so a concurrent re-ingest
+ * raises a 409 (`stale_approval`) instead of approving modified parameters.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { ApiError, api } from "../api/client";
 import type { ActionItem, ResponseSpec } from "../api/types";
 import { ActionBar, isEditResponse } from "./ActionBar";
 import { AuditTrail } from "./AuditTrail";
 import { DetailHeader } from "./DetailHeader";
+import { Button } from "./primitives";
 import { ErrorBanner, ErrorStrip, SkeletonDetail } from "./states";
 import { ItemBody } from "../renderers";
 import type { Catalogue } from "../lib/manifest";
 import { itemTitle, layoutFor, responsesFor } from "../lib/manifest";
 import { changedFields, cloneDraft, deepEqual, preparePayload } from "../lib/payload";
 import { clockTime, titleCase } from "../lib/format";
+import { navigate } from "../lib/router";
 import { INBOX_STATUSES } from "../lib/transitions";
 import { useAsync } from "../lib/useAsync";
 
@@ -51,19 +54,23 @@ export function ItemDetail({
   const [editing, setEditing] = useState(false);
   const [pendingId, setPendingId] = useState<string | undefined>(undefined);
   const [actionError, setActionError] = useState<string | undefined>(undefined);
+  const [staleApproval, setStaleApproval] = useState(false);
   const [confirmation, setConfirmation] = useState<Confirmation | undefined>(undefined);
+  const [workerAnswer, setWorkerAnswer] = useState("");
+  const [answeringWorker, setAnsweringWorker] = useState(false);
 
   const loaded = item.data;
-  const stamp = loaded ? `${loaded.id}:${loaded.updated_at}` : "";
+  const stamp = loaded ? `${loaded.id}:${loaded.updated_at}:${loaded.revision ?? 1}` : "";
 
-  // Resetting on `updated_at` and not just on id means a re-ingest that
-  // supersedes the item while it is open discards the stale draft rather than
-  // letting Sandip approve text that no longer matches the source (§5.1).
+  // Resetting on `updated_at` and `revision` means a re-ingest that supersedes
+  // the item while it is open discards the stale draft rather than letting
+  // Sandip approve text that no longer matches the source (§5.1).
   useEffect(() => {
     if (!loaded) return;
     setDraft(cloneDraft(loaded.custom));
     setEditing(false);
     setActionError(undefined);
+    setStaleApproval(false);
     setConfirmation(undefined);
     setPendingId(undefined);
   }, [stamp, loaded]);
@@ -101,10 +108,14 @@ export function ItemDetail({
   const run = async (key: string, work: () => Promise<ActionItem>, describe: (u: ActionItem) => string) => {
     setPendingId(key);
     setActionError(undefined);
+    setStaleApproval(false);
     try {
       const updated = await work();
       finish(updated, describe(updated));
     } catch (err) {
+      if (err instanceof ApiError && (err.status === 409 || err.code === "stale_approval")) {
+        setStaleApproval(true);
+      }
       const message =
         err instanceof ApiError ? err.message : `Unexpected failure: ${String(err)}`;
       setActionError(message);
@@ -121,6 +132,8 @@ export function ItemDetail({
           // Only send a payload when something actually changed: otherwise the
           // audit trail records an edit that never happened.
           ...(edited || (editing && isEditResponse(response)) ? { edited_payload: payload } : {}),
+          ...(loaded.payload_hash ? { expected_payload_hash: loaded.payload_hash } : {}),
+          ...(loaded.revision !== undefined ? { expected_revision: loaded.revision } : {}),
         }),
       (updated) => {
         const fields = changedFields(loaded.custom, payload);
@@ -144,14 +157,63 @@ export function ItemDetail({
       },
     );
 
+  const submitWorkerAnswer = async (event: FormEvent) => {
+    event.preventDefault();
+    const answerText = workerAnswer.trim();
+    if (!answerText || !loaded.task_id) return;
+    setAnsweringWorker(true);
+    setActionError(undefined);
+    try {
+      await api.answerTask(loaded.task_id, { answer: answerText });
+      const refreshed = await api.getAction(loaded.id);
+      setWorkerAnswer("");
+      finish(refreshed, "Answered clarification and resumed worker task");
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : String(err);
+      setActionError(message);
+    } finally {
+      setAnsweringWorker(false);
+    }
+  };
+
   const title = itemTitle(loaded, resolved, draft);
 
   return (
     <div className="detail-inner">
       <DetailHeader item={loaded} resolved={resolved} title={title} />
 
+      {loaded.task_id ? (
+        <div className="d-meta" style={{ marginTop: "-6px" }}>
+          <button
+            type="button"
+            className="link"
+            style={{ fontSize: "12px", color: "var(--core)", fontWeight: 600, background: "none", border: 0, padding: 0, cursor: "pointer" }}
+            onClick={() => navigate(`/tasks/${encodeURIComponent(loaded.task_id!)}`)}
+          >
+            Open parent task ({loaded.task_id})
+          </button>
+        </div>
+      ) : null}
+
       {item.error ? (
         <ErrorStrip message={`Couldn't refresh this item: ${item.error.message}`} onRetry={item.reload} />
+      ) : null}
+
+      {staleApproval ? (
+        <div className="banner" role="alert">
+          <div className="msg">
+            <div>
+              <b>409 Conflict (stale_approval):</b> This item was updated while you were reviewing
+              it (revision or payload hash changed).
+            </div>
+            <div className="detail-text">
+              {actionError ?? "Reload the latest revision to inspect the updated parameters before approving."}
+            </div>
+          </div>
+          <Button small variant="primary" onClick={() => item.reload()}>
+            Reload Revision
+          </Button>
+        </div>
       ) : null}
 
       {loaded.status === "failed" ? (
@@ -172,7 +234,36 @@ export function ItemDetail({
         onChange={onChange}
       />
 
-      {actionError ? <ErrorStrip message={actionError} /> : null}
+      {loaded.type === "task-question" && loaded.task_id && INBOX_STATUSES.includes(loaded.status) ? (
+        <form className="dcard" onSubmit={(e) => void submitWorkerAnswer(e)}>
+          <h4>Reply to Worker &amp; Resume Task</h4>
+          <p className="detail-text" style={{ marginTop: 0, marginBottom: 8 }}>
+            Your answer will be passed directly to <code>worker.answer()</code> and the background
+            task will resume from its checkpoint.
+          </p>
+          <textarea
+            className="draft short"
+            rows={3}
+            placeholder="Type your clarification for the worker..."
+            value={workerAnswer}
+            disabled={answeringWorker}
+            onChange={(e) => setWorkerAnswer(e.target.value)}
+          />
+          <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+            <Button
+              type="submit"
+              variant="good"
+              small
+              pending={answeringWorker}
+              disabled={answeringWorker || !workerAnswer.trim()}
+            >
+              Send Answer &amp; Resume Worker
+            </Button>
+          </div>
+        </form>
+      ) : null}
+
+      {actionError && !staleApproval ? <ErrorStrip message={actionError} /> : null}
 
       {confirmation ? (
         <div className="confirm-line" role="status" aria-live="polite">
@@ -196,7 +287,15 @@ export function ItemDetail({
             setEditing(false);
           }}
           onConfirm={() =>
-            void run("confirm", () => api.confirm(loaded.id), () => "Marked as done")
+            void run(
+              "confirm",
+              () =>
+                api.confirm(loaded.id, {
+                  ...(loaded.payload_hash ? { expected_payload_hash: loaded.payload_hash } : {}),
+                  ...(loaded.revision !== undefined ? { expected_revision: loaded.revision } : {}),
+                }),
+              () => "Marked as done",
+            )
           }
           onReopen={() =>
             void run(
@@ -220,6 +319,16 @@ export function ItemDetail({
         <div className="mode-note">
           Provenance: {loaded.context.provenance.join(" → ") || "not recorded"} · dedupe key{" "}
           <code>{loaded.dedupe_key}</code>
+          {loaded.revision !== undefined ? (
+            <>
+              {" · "}rev <code>r{loaded.revision}</code>
+            </>
+          ) : null}
+          {loaded.payload_hash ? (
+            <>
+              {" · "}hash <code>{loaded.payload_hash.slice(0, 12)}</code>
+            </>
+          ) : null}
         </div>
       </div>
     </div>

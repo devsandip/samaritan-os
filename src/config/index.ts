@@ -188,6 +188,79 @@ export const ConfigSchema = z.object({
       account: z.string().default("webhook"),
     })
     .prefault({}),
+
+  slack: z
+    .object({
+      /**
+       * §2.2 Slack Events API webhook listener. Off by default. Signing secret
+       * lives in Keychain under `slack:<account>`.
+       */
+      enabled: z.boolean().default(false),
+      account: z.string().default("signing"),
+    })
+    .prefault({}),
+
+  ticktick: z
+    .object({
+      /**
+       * TickTick Open API v1 (PROPOSAL Phase 1). Off by default so unit tests
+       * and unconfigured installs use the guided staging fallback. Token lives in
+       * Keychain under `ticktick:<account>`.
+       */
+      enabled: z.boolean().default(false),
+      account: z.string().default("default"),
+    })
+    .prefault({}),
+
+  calendar: z
+    .object({
+      /**
+       * Google Calendar incremental sync (PROPOSAL Phase 1). Off by default.
+       * Token lives in Keychain under `gcal:<account>`.
+       */
+      enabled: z.boolean().default(false),
+      account: z.string().default("default"),
+      calendar_id: z.string().default("primary"),
+      poll_interval_ms: z.number().int().min(10_000).default(60_000),
+      prep_lead_minutes: z.number().int().min(5).max(120).default(20),
+    })
+    .prefault({}),
+
+  billing: z
+    .object({
+      /**
+       * PROPOSAL-v1 C2: Unattended daemon runs on a Console API key with a hard
+       * monthly cap and per-run cost tracking.
+       */
+      monthly_cap_usd: z.number().min(0).default(25),
+      per_run_cap_usd: z.number().min(0).default(2),
+      skip_unchanged_inputs: z.boolean().default(true),
+    })
+    .prefault({}),
+
+  nutgraf: z
+    .object({
+      enabled: z.boolean().default(false),
+      url: z.string().default("https://sandip.dev/nutgraf/api"),
+      account: z.string().default("machine"),
+    })
+    .prefault({}),
+
+  posthog: z
+    .object({
+      enabled: z.boolean().default(false),
+      project_id: z.string().default(""),
+      account: z.string().default("api"),
+    })
+    .prefault({}),
+
+  thornhill: z
+    .object({
+      enabled: z.boolean().default(false),
+      url: z.string().default("http://127.0.0.1:10000"),
+      account: z.string().default("default"),
+    })
+    .prefault({}),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

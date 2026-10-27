@@ -1,0 +1,13 @@
+{
+  "bills": [
+    {
+      "id": "bill-aws-2026-10",
+      "biller": "AWS Cloud Services",
+      "amount_usd": 148.5,
+      "amount_display": "$148.50",
+      "due_date": "2026-11-03",
+      "payment_url": "https://console.aws.amazon.com/billing/home",
+      "summary": "October 2026 AWS statement ($148.50) due November 3, 2026."
+    }
+  ]
+}

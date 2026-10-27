@@ -11,6 +11,7 @@ import { loadConfig } from "../config/index.js";
 import { log } from "../logger.js";
 import { getSecret } from "../secrets.js";
 import type { Db } from "../store/db.js";
+import { isSourceDeliverySilenced } from "../store/source-rules.js";
 import { nowIso, type ActionItem } from "../types/index.js";
 import { isWithinQuietHours, parseQuietHours, quietHoursEnd } from "./quiet-hours.js";
 
@@ -20,12 +21,16 @@ const logger = log("delivery");
 
 export interface Delivery {
   notify(item: ActionItem): Promise<void>;
+  flush(): Promise<number>;
 }
 
 /** Used when Telegram is disabled. Keeps the Action Center free of null checks. */
 export const noopDelivery: Delivery = {
   async notify() {
     // Nothing to do. The item is in the Inbox either way.
+  },
+  async flush() {
+    return 0;
   },
 };
 
@@ -100,13 +105,32 @@ export class TelegramDelivery implements Delivery {
       return;
     }
 
-    const body = formatItem(item);
     const now = this.#now();
+    if (isSourceDeliverySilenced(this.#db, item.capability_id, now)) {
+      logger.info(
+        { id: item.id, capability: item.capability_id },
+        "delivery silenced by source_rules (muted or snoozed)",
+      );
+      return;
+    }
+
+    const dedupeKey = `${item.id}:r${item.revision ?? 1}`;
+    const already = this.#db
+      .prepare<{ id: string; delivered_at: string | null }>(
+        "SELECT id, delivered_at FROM delivery_queue WHERE dedupe_key = ?",
+      )
+      .get(dedupeKey);
+    if (already) {
+      logger.info({ id: item.id, dedupeKey }, "notification already queued or delivered");
+      return;
+    }
+
+    const body = formatItem(item);
     const window = parseQuietHours(config.delivery.quiet_hours);
 
     if (isWithinQuietHours(now, window)) {
       const deliverAfter = quietHoursEnd(now, window);
-      this.#enqueue(item.id, body, deliverAfter.toISOString());
+      this.#enqueue(item.id, body, deliverAfter.toISOString(), null, null, dedupeKey);
       logger.info(
         { id: item.id, deliver_after: deliverAfter.toISOString() },
         "queued for after quiet hours",
@@ -116,11 +140,11 @@ export class TelegramDelivery implements Delivery {
 
     try {
       await this.#send(chatId, body);
-      this.#enqueue(item.id, body, null, this.#now().toISOString());
+      this.#enqueue(item.id, body, null, this.#now().toISOString(), null, dedupeKey);
     } catch (err) {
       // Queue it rather than lose it. The next flush retries.
       const message = err instanceof Error ? err.message : String(err);
-      this.#enqueue(item.id, body, null, null, message);
+      this.#enqueue(item.id, body, null, null, message, dedupeKey);
       logger.warn({ id: item.id, err: message }, "telegram send failed; queued for retry");
     }
   }
@@ -131,13 +155,14 @@ export class TelegramDelivery implements Delivery {
     deliverAfter: string | null,
     deliveredAt: string | null = null,
     error: string | null = null,
+    dedupeKey: string | null = null,
   ): void {
     this.#db
       .prepare(
-        `INSERT INTO delivery_queue
+        `INSERT OR IGNORE INTO delivery_queue
            (id, action_item_id, channel, body, queued_at, deliver_after, delivered_at,
-            last_error, attempts)
-         VALUES (?, ?, 'telegram', ?, ?, ?, ?, ?, ?)`,
+            last_error, attempts, dedupe_key)
+         VALUES (?, ?, 'telegram', ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         randomUUID(),
@@ -148,6 +173,7 @@ export class TelegramDelivery implements Delivery {
         deliveredAt,
         error,
         deliveredAt ? 1 : error ? 1 : 0,
+        dedupeKey,
       );
   }
 

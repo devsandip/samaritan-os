@@ -1,0 +1,63 @@
+id: bill-watch
+name: Bill & Statement Watch
+description: Extracts due dates and statement amounts from bank, credit card, and utility notices, enforcing the payment.make guided-only guardrail.
+version: 0.1.0
+owner: sandip
+enabled: true
+entrypoint: index.ts
+
+trigger:
+  mode: event
+  on:
+    - bill.statement_received
+
+context:
+  inputs:
+    - bills
+
+emits:
+  - type: bill-payment-guided
+    priority: high
+    ttl: 168h
+    render:
+      layout: card
+      primary: biller
+      secondary: summary
+      badges:
+        - amount_display
+        - due_date
+    custom_attributes:
+      biller: string
+      amount_display: string
+      due_date: string
+      summary: string
+      payment_url: string
+    responses:
+      - id: stage_payment
+        label: Open Biller to Pay
+        outcome: guided
+      - id: snooze
+        label: Snooze 2d
+        outcome: defer
+        defer_for: 2d
+      - id: mark_paid
+        label: Already Paid
+        outcome: discard
+    execution:
+      mode: guided
+      capability: guided.fallback
+      action_type: payment.make
+    policy:
+      escalate_when: "confidence >= 0"
+
+requires_capabilities:
+  - guided.fallback
+
+delivery:
+  channels:
+    - inbox
+    - telegram
+  quiet_hours: "22:00-07:00"
+
+audit: true
+timeout_ms: 30000

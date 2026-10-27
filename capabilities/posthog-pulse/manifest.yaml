@@ -1,0 +1,99 @@
+id: posthog-pulse
+name: PostHog Analytics Pulse
+description: Detects 7-day product funnel, retention, and traffic anomalies across PostHog projects and proposes investigation tasks.
+version: 0.1.0
+owner: sandip
+enabled: true
+entrypoint: index.ts
+
+trigger:
+  mode: scheduled
+  cron: "15 8 * * *"
+  catch_up: run_once
+  max_staleness_minutes: 480
+
+context:
+  inputs:
+    - date
+    - project_name
+    - metrics
+    - anomalies
+
+emits:
+  - type: analytics-pulse-digest
+    priority: normal
+    ttl: 24h
+    render:
+      layout: document
+      primary: headline
+      secondary: content
+      badges:
+        - project_name
+        - date
+    custom_attributes:
+      headline: string
+      project_name: string
+      date: string
+      path: string
+      content: string
+    responses:
+      - id: save_digest
+        label: Append to Analytics Log
+        outcome: execute
+      - id: dismiss
+        label: Dismiss
+        outcome: discard
+    execution:
+      mode: automated
+      capability: obsidian.note.append
+      action_type: journal.capture
+    policy:
+      auto_complete_when: "confidence >= 0.8"
+
+  - type: anomaly-investigation-task
+    priority: high
+    ttl: 48h
+    render:
+      layout: card
+      primary: title
+      secondary: content
+      badges:
+        - metric_name
+        - delta_pct
+    custom_attributes:
+      title: string
+      content: string
+      metric_name: string
+      delta_pct: string
+      due: string
+      list: string
+    responses:
+      - id: create_task
+        label: Create Investigation Task
+        outcome: execute
+      - id: snooze
+        label: Snooze 1d
+        outcome: defer
+        defer_for: 1d
+      - id: ignore
+        label: Ignore Anomaly
+        outcome: discard
+    execution:
+      mode: automated
+      capability: ticktick.task.create
+      action_type: task.create
+    policy:
+      escalate_when: "confidence >= 0"
+
+requires_capabilities:
+  - obsidian.note.append
+  - ticktick.task.create
+
+delivery:
+  channels:
+    - inbox
+    - telegram
+  quiet_hours: "22:00-07:00"
+
+audit: true
+timeout_ms: 30000

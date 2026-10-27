@@ -1,0 +1,28 @@
+{
+  "job_postings": [
+    {
+      "id": "job-anthropic-pm",
+      "company": "Anthropic",
+      "role_title": "Product Lead, Agentic Systems",
+      "fit_score": 94,
+      "summary": "Direct fit on agentic orchestration, MCP ecosystem, and enterprise trust boundaries.",
+      "url": "https://example.com/jobs/anthropic-agentic-pm"
+    }
+  ],
+  "recruiter_messages": [
+    {
+      "id": "msg-recruiter-1",
+      "from": "elena@talent-search.example",
+      "company": "Stripe",
+      "subject": "VP Product, Developer AI Platform at Stripe"
+    }
+  ],
+  "upcoming_interviews": [
+    {
+      "company": "Anthropic",
+      "role_title": "Product Lead, Agentic Systems",
+      "interviewer": "Head of Product",
+      "starts_at": "2026-10-29T16:00:00Z"
+    }
+  ]
+}

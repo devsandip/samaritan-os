@@ -1,0 +1,1 @@
+/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex exec --sandbox read-only --skip-git-repo-check --ephemeral -C .dryrun-check/2026-10-20-1247-dry-run-check -o .dryrun-check/2026-10-20-1247-dry-run-check/codex/raw/review-v1.last.md <prompt>

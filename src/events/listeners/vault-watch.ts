@@ -14,8 +14,8 @@
  * the Scheduler does — the daemon-only, long-lived half §2.2 keeps out of the bus
  * itself.
  */
-import { existsSync } from "node:fs";
-import { sep } from "node:path";
+import { existsSync, readdirSync } from "node:fs";
+import { join, sep } from "node:path";
 import { watch, type FSWatcher } from "chokidar";
 import { log } from "../../logger.js";
 import type { PublishResult } from "../index.js";
@@ -23,6 +23,36 @@ import type { SamaritanEvent } from "../types.js";
 import { fileChangeToEvent, type WatchRoot } from "./file-event.js";
 
 const logger = log("vault-watch");
+
+/**
+ * Discovers `~/Developer/<repo>/journal` directories under `journalsRoot` so
+ * `VaultWatcher` can watch multi-repo engineering journals with `kind: "journal"`.
+ */
+export function discoverJournalRoots(journalsRoot: string): WatchRoot[] {
+  if (!existsSync(journalsRoot)) return [];
+  const roots: WatchRoot[] = [];
+  const direct = join(journalsRoot, "journal");
+  if (existsSync(direct)) {
+    roots.push({ dir: direct, kind: "journal", source: "journal" });
+  }
+  try {
+    const entries = readdirSync(journalsRoot, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+      const journalDir = join(journalsRoot, entry.name, "journal");
+      if (existsSync(journalDir)) {
+        roots.push({
+          dir: journalDir,
+          kind: "journal",
+          source: `journal:${entry.name}`,
+        });
+      }
+    }
+  } catch {
+    // Ignore unreadable parent directory
+  }
+  return roots;
+}
 
 /** §2.2: wait for a chunked write to settle before reading, so no partial note fires. */
 const DEFAULT_SETTLE_MS = 300;

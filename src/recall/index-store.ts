@@ -29,7 +29,15 @@ const logger = log("recall.index");
 // native addon, and works the same under tsx, node dist/, and vitest.
 const require = createRequire(import.meta.url);
 
-export type SourceKind = "obsidian" | "journal" | "action_item" | "audit";
+export type SourceKind =
+  | "obsidian"
+  | "journal"
+  | "action_item"
+  | "audit"
+  | "notion_decision"
+  | "notion_insight"
+  | "ticktick_task"
+  | "calendar_event";
 
 export interface ChunkRow {
   rowid: number;
@@ -39,6 +47,7 @@ export interface ChunkRow {
   heading: string | null;
   chunk_text: string;
   chunk_index: number;
+  scope?: string;
 }
 
 export interface PendingChunk {
@@ -178,17 +187,24 @@ export function deleteSource(db: Db, sourcePath: string): void {
  */
 export function putSource(
   db: Db,
-  source: { path: string; kind: SourceKind; ref?: string; contentHash: string },
+  source: {
+    path: string;
+    kind: SourceKind;
+    ref?: string;
+    contentHash: string;
+    scope?: "work" | "personal";
+  },
   chunks: PendingChunk[],
 ): number[] {
   return db.transaction(() => {
     deleteSource(db, source.path);
 
     const now = new Date().toISOString();
+    const scope = source.scope ?? "work";
     const insert = db.prepare(
       `INSERT INTO recall_chunks
-         (source_kind, source_path, source_ref, heading, chunk_text, chunk_index, content_hash, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         (source_kind, source_path, source_ref, heading, chunk_text, chunk_index, content_hash, scope, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     const intoFts = db.prepare(
       `INSERT INTO recall_chunks_fts(rowid, chunk_text, source_path, source_kind)
@@ -205,6 +221,7 @@ export function putSource(
         chunk.text,
         chunk.index,
         source.contentHash,
+        scope,
         now,
       );
       const rowid = Number(result.lastInsertRowid);
@@ -330,7 +347,7 @@ export function chunksByRowid(db: Db, rowids: number[]): Map<number, ChunkRow> {
   const placeholders = rowids.map(() => "?").join(", ");
   const rows = db
     .prepare<ChunkRow>(
-      `SELECT rowid, source_kind, source_path, source_ref, heading, chunk_text, chunk_index
+      `SELECT rowid, source_kind, source_path, source_ref, heading, chunk_text, chunk_index, scope
          FROM recall_chunks WHERE rowid IN (${placeholders})`,
     )
     .all(...rowids.map((r) => BigInt(r)));

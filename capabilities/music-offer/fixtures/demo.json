@@ -1,0 +1,13 @@
+{
+  "offers": [
+    {
+      "id": "music-khruangbin-sf",
+      "artist_or_event": "Khruangbin - Late Night Acoustic Set",
+      "venue": "The Masonic, San Francisco",
+      "presale_date": "2026-10-30",
+      "presale_code": "ALA2026",
+      "offer_summary": "Artist presale opens Friday 10:00 AM PT for Khruangbin at The Masonic (code: AULA2026).",
+      "ticket_url": "https://example.com/tickets/khruangbin-sf"
+    }
+  ]
+}

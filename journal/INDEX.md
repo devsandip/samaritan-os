@@ -1,8 +1,8 @@
-# Samaritan — Journal Index
+# Samaritan - Journal Index
 
-Last refreshed: 2026-07-22 02:15
+Last refreshed: 2026-10-27 20:55
 
-Latest entry: [2026-07-22-0210-the-door-not-the-errand](entries/2026-07-22-0210-the-door-not-the-errand.md)
+Latest entry: [2026-10-27-2055-command-centre-shipped](entries/2026-10-27-2055-command-centre-shipped.md)
 
 Local-first personal agentic OS. The Action Center is a universal
 human-in-the-loop layer and a pluggable capability platform: one inbox for
@@ -127,6 +127,8 @@ same encapsulated-plugin shape the Fireflies webhook just proved.
 
 ## Recent entries
 
+- [2026-10-27-2055-command-centre-shipped](entries/2026-10-27-2055-command-centre-shipped.md)
+  - shipped the full Samaritan Command Centre across Phases 0 through 4 (21 capabilities, 9 SQLite migrations, 5-view UI with Connections grid and `Cmd+K` Command Bar, 8-tool MCP server, child-process worker isolation, hybrid structured-plus-semantic Recall with work/personal scope filtering, and Slack Events webhook), deepened all Phase 3 and 4 capabilities with pure extractors and injectable HTTP seams, and verified 614 passing tests across 44 files before merging to `main`
 - [2026-07-22-0210-the-door-not-the-errand](entries/2026-07-22-0210-the-door-not-the-errand.md)
   — the Fireflies webhook: the bus's first *inbound* listener, reached into rather
   than reaching out, so the whole path is a request I can sign and curl — verified
@@ -181,6 +183,9 @@ same encapsulated-plugin shape the Fireflies webhook just proved.
   — there was no Run Layer, so no agent could actually run; six agents, a seed,
   an importer, and a screen that was promising the opposite of what the money
   lock enforces
+- [2026-07-20-1330-the-topology-is-commodity-the-contract-is-not](entries/2026-07-20-1330-the-topology-is-commodity-the-contract-is-not.md)
+  — a competitive scan found my architecture already shipped twice at scale, my
+  manifest already shipped once, and the unattended case unsolved everywhere
 - [2026-07-20-1055-my-own-fix-was-broken](entries/2026-07-20-1055-my-own-fix-was-broken.md)
   — `awaiting_confirmation` had the same bug as `deferred`, my fix for it would
   have caused the thing it prevented, and my fix for that was broken too

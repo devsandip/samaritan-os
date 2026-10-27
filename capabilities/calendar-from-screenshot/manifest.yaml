@@ -1,0 +1,67 @@
+id: calendar-from-screenshot
+name: Calendar Event from Screenshot
+description: Extracts event title, start/end times, and location from a screenshot or flyer and stages a Google Calendar event in assisted mode.
+version: 0.1.0
+owner: sandip
+enabled: true
+entrypoint: index.ts
+
+trigger:
+  mode: event
+  on:
+    - screenshot.received
+
+context:
+  inputs:
+    - title
+    - starts_at
+    - ends_at
+    - location
+    - description
+
+emits:
+  - type: calendar-event-proposal
+    priority: normal
+    ttl: 48h
+    render:
+      layout: card
+      primary: title
+      secondary: description
+      badges:
+        - starts_at
+        - location
+    custom_attributes:
+      title: string
+      starts_at: string
+      ends_at: string
+      location: string
+      description: string
+    responses:
+      - id: create_event
+        label: Add to Calendar
+        outcome: execute
+      - id: snooze
+        label: Snooze 1d
+        outcome: defer
+        defer_for: 1d
+      - id: discard
+        label: Discard
+        outcome: discard
+    execution:
+      mode: assisted
+      capability: calendar.event.create
+      action_type: event.schedule
+    policy:
+      escalate_when: "confidence >= 0"
+
+requires_capabilities:
+  - calendar.event.create
+
+delivery:
+  channels:
+    - inbox
+    - telegram
+  quiet_hours: "22:00-07:00"
+
+audit: true
+timeout_ms: 30000

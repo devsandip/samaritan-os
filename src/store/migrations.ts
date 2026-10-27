@@ -289,4 +289,134 @@ CREATE TABLE poll_state (
 );
 `,
   },
+  {
+    version: 8,
+    name: "command_centre_schema",
+    sql: `
+-- Delegated tasks, runs, artifacts, activity_events, source_rules, and
+-- exact-revision action item linkage for the Command Centre (PROPOSAL D3).
+CREATE TABLE tasks (
+  id TEXT PRIMARY KEY,
+  goal TEXT NOT NULL,
+  lane TEXT NOT NULL DEFAULT 'general',       -- general|coding|research|operations
+  status TEXT NOT NULL,                       -- queued|running|needs_input|awaiting_review|succeeded|failed|cancelled|interrupted
+  revision INTEGER NOT NULL DEFAULT 1,
+  runner TEXT NOT NULL DEFAULT 'worker',
+  parent_task_id TEXT REFERENCES tasks(id),
+  result_summary TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX idx_tasks_status ON tasks(status, updated_at DESC);
+
+CREATE TABLE runs (
+  id TEXT PRIMARY KEY,
+  task_id TEXT REFERENCES tasks(id),          -- nullable; scheduled capability runs have no task
+  capability_id TEXT,
+  runner TEXT NOT NULL,                       -- in-process|child-process|worker
+  remote_run_id TEXT,
+  admission_key TEXT UNIQUE,                  -- unique per logical request: schedule occurrence, source event version, or client request id
+  lease_token TEXT,
+  lease_expires_at TEXT,
+  fencing_generation INTEGER NOT NULL DEFAULT 1,
+  status TEXT NOT NULL,                       -- running|succeeded|failed|timeout|cancelled|interrupted|skipped
+  cost_usd REAL NOT NULL DEFAULT 0,
+  started_at TEXT NOT NULL,
+  heartbeat_at TEXT NOT NULL,
+  ended_at TEXT,
+  error TEXT
+);
+CREATE INDEX idx_runs_task ON runs(task_id);
+CREATE INDEX idx_runs_capability ON runs(capability_id);
+CREATE INDEX idx_runs_status ON runs(status, started_at DESC);
+
+CREATE TABLE artifacts (
+  id TEXT PRIMARY KEY,
+  task_id TEXT REFERENCES tasks(id),
+  run_id TEXT REFERENCES runs(id),
+  kind TEXT NOT NULL,                         -- file|diff|url|transcript|brief
+  path_or_url TEXT NOT NULL,
+  content_hash TEXT NOT NULL,
+  media_type TEXT NOT NULL DEFAULT 'text/markdown',
+  created_at TEXT NOT NULL
+);
+CREATE INDEX idx_artifacts_task ON artifacts(task_id);
+CREATE INDEX idx_artifacts_run ON artifacts(run_id);
+
+CREATE TABLE activity_events (
+  cursor INTEGER PRIMARY KEY AUTOINCREMENT,
+  id TEXT UNIQUE NOT NULL,
+  task_id TEXT REFERENCES tasks(id),
+  run_id TEXT REFERENCES runs(id),
+  capability_id TEXT,
+  type TEXT NOT NULL,                         -- task.submitted|run.started|tool.called|artifact.created|question.asked|question.answered|action.proposed|run.completed|run.failed|run.cancelled|run.interrupted|hook.received
+  payload_json TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX idx_activity_task ON activity_events(task_id, cursor);
+CREATE INDEX idx_activity_run ON activity_events(run_id, cursor);
+CREATE INDEX idx_activity_capability ON activity_events(capability_id, cursor);
+
+CREATE TRIGGER activity_events_no_update
+BEFORE UPDATE ON activity_events
+BEGIN
+  SELECT RAISE(ABORT, 'activity_events is append-only');
+END;
+
+CREATE TRIGGER activity_events_no_delete
+BEFORE DELETE ON activity_events
+BEGIN
+  SELECT RAISE(ABORT, 'activity_events is append-only');
+END;
+
+ALTER TABLE action_items ADD COLUMN task_id TEXT;
+ALTER TABLE action_items ADD COLUMN run_id TEXT;
+ALTER TABLE action_items ADD COLUMN payload_hash TEXT;
+ALTER TABLE action_items ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;
+CREATE INDEX idx_action_items_task ON action_items(task_id) WHERE task_id IS NOT NULL;
+CREATE INDEX idx_action_items_run ON action_items(run_id) WHERE run_id IS NOT NULL;
+
+ALTER TABLE delivery_queue ADD COLUMN dedupe_key TEXT;
+CREATE UNIQUE INDEX idx_delivery_queue_dedupe
+  ON delivery_queue(dedupe_key) WHERE dedupe_key IS NOT NULL;
+
+CREATE TABLE source_rules (
+  source_id TEXT PRIMARY KEY,
+  muted INTEGER NOT NULL DEFAULT 0,
+  snoozed_until TEXT,
+  paused INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL
+);
+`,
+  },
+  {
+    version: 9,
+    name: "command_centre_phase_extensions",
+    sql: `
+-- PROPOSAL-v1 data model and Phase 0-4 extensions:
+-- 1. runs.scheduled_for and runs.input_hash (for C2 unchanged-input skipping)
+-- 2. work/personal account scope separation on tasks, action_items, and recall_chunks
+-- 3. calendar_events emitted flags for reschedule & nudge tracking
+-- 4. db_backups audit ledger for D6 online SQLite backups
+ALTER TABLE runs ADD COLUMN scheduled_for TEXT;
+ALTER TABLE runs ADD COLUMN input_hash TEXT;
+CREATE INDEX idx_runs_input_hash ON runs(capability_id, input_hash, status);
+
+ALTER TABLE tasks ADD COLUMN scope TEXT NOT NULL DEFAULT 'work';
+ALTER TABLE action_items ADD COLUMN scope TEXT NOT NULL DEFAULT 'work';
+ALTER TABLE recall_chunks ADD COLUMN scope TEXT NOT NULL DEFAULT 'work';
+CREATE INDEX idx_action_items_scope ON action_items(scope, status);
+
+ALTER TABLE calendar_events ADD COLUMN prep_emitted INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE calendar_events ADD COLUMN nudge_emitted INTEGER NOT NULL DEFAULT 0;
+
+CREATE TABLE db_backups (
+  id TEXT PRIMARY KEY,
+  backup_path TEXT NOT NULL,
+  size_bytes INTEGER NOT NULL,
+  integrity_ok INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL
+);
+`,
+  },
 ];

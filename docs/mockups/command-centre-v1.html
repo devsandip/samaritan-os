@@ -1,0 +1,1906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Samaritan Command Centre - Top 10 Interactive Mockups</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 14px;
+      -webkit-font-smoothing: antialiased;
+    }
+    code, .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+    }
+    dialog {
+      border: 1px solid var(--border, #e3e6ec);
+      border-radius: 14px;
+      padding: 0;
+      max-width: 640px;
+      width: calc(100% - 32px);
+      background: var(--card, #ffffff);
+      color: var(--foreground, #1a1d24);
+    }
+    dialog::backdrop {
+      background-color: rgba(15, 23, 42, 0.55);
+      backdrop-filter: blur(2px);
+    }
+    .pill-active {
+      background: #4f46e5 !important;
+      color: #ffffff !important;
+      border-color: #4f46e5 !important;
+    }
+    .nav-active {
+      background: #4f46e5 !important;
+      color: #ffffff !important;
+    }
+    .item-active {
+      border-left: 3px solid #4f46e5 !important;
+      background: rgba(79, 70, 229, 0.06) !important;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.35; }
+    }
+    .pulse {
+      animation: pulse-dot 1.4s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body class="bg-[var(--background)] text-[var(--foreground)] antialiased min-h-screen flex flex-col">
+
+  <!-- TOP 10 SCENARIO JUMP BAR -->
+  <header class="bg-[#111622] text-[#e2e8f0] border-b border-[#262f45] px-4 py-2.5 sticky top-0 z-30">
+    <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+      <div class="flex items-center gap-2">
+        <span class="inline-block w-2.5 h-2.5 rounded-sm bg-[#4f46e5]"></span>
+        <strong class="text-xs uppercase tracking-wider text-white">Interactive Mockup Tour: Top 10 Screens &amp; UI Actions</strong>
+        <span id="tour-caption" class="text-xs text-[#94a3b8] pl-2 border-l border-[#2e3852]">
+          1. Now View: Attention-first home, Pre-Meeting Brief, Post-Meeting Notes intake
+        </span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="openCommandModal('ask')" class="text-xs bg-[#1e2638] hover:bg-[#2a344d] text-[#cbd5e1] border border-[#334155] rounded-md px-2.5 py-1 font-medium cursor-pointer">
+          Ask / Delegate (Cmd+K)
+        </button>
+        <button onclick="resetDemoState()" class="text-xs bg-[#1e2638] hover:bg-[#2a344d] text-[#cbd5e1] border border-[#334155] rounded-md px-2.5 py-1 cursor-pointer">
+          Reset Demo Data
+        </button>
+      </div>
+    </div>
+
+    <div class="flex gap-1.5 overflow-x-auto pb-1" id="scenario-bar">
+      <button onclick="selectScenario(1)" data-scen="1" class="scen-btn pill-active text-xs px-2.5 py-1 rounded-md border border-[#2e3852] bg-[#1a2133] text-[#cbd5e1] whitespace-nowrap cursor-pointer">
+        1. Now + Meeting Loop
+      </button>
+      <button onclick="selectScenario(2)" data-scen="2" class="scen-btn text-xs px-2.5 py-1 rounded-md border border-[#2e3852] bg-[#1a2133] text-[#cbd5e1] whitespace-nowrap cursor-pointer">
+        2. Ask / Delegate Bar
+      </button>
+      <button onclick="selectScenario(3)" data-scen="3" class="scen-btn text-xs px-2.5 py-1 rounded-md border border-[#2e3852] bg-[#1a2133] text-[#cbd5e1] whitespace-nowrap cursor-pointer">
+        3. Inbox Batch Triage
+      </button>
+      <button onclick="selectScenario(4)" data-scen="4" class="scen-btn text-xs px-2.5 py-1 rounded-md border border-[#2e3852] bg-[#1a2133] text-[#cbd5e1] whitespace-nowrap cursor-pointer">
+        4. Exact-Revision &amp; 409 Guard
+      </button>
+      <button onclick="selectScenario(5)" data-scen="5" class="scen-btn text-xs px-2.5 py-1 rounded-md border border-[#2e3852] bg-[#1a2133] text-[#cbd5e1] whitespace-nowrap cursor-pointer">
+        5. Coding-Agent Waiting Hook
+      </button>
+      <button onclick="selectScenario(6)" data-scen="6" class="scen-btn text-xs px-2.5 py-1 rounded-md border border-[#2e3852] bg-[#1a2133] text-[#cbd5e1] whitespace-nowrap cursor-pointer">
+        6. Worker Question (needs_input)
+      </button>
+      <button onclick="selectScenario(7)" data-scen="7" class="scen-btn text-xs px-2.5 py-1 rounded-md border border-[#2e3852] bg-[#1a2133] text-[#cbd5e1] whitespace-nowrap cursor-pointer">
+        7. Tasks &amp; Artifacts
+      </button>
+      <button onclick="selectScenario(8)" data-scen="8" class="scen-btn text-xs px-2.5 py-1 rounded-md border border-[#2e3852] bg-[#1a2133] text-[#cbd5e1] whitespace-nowrap cursor-pointer">
+        8. Activity &amp; Real Stop
+      </button>
+      <button onclick="selectScenario(9)" data-scen="9" class="scen-btn text-xs px-2.5 py-1 rounded-md border border-[#2e3852] bg-[#1a2133] text-[#cbd5e1] whitespace-nowrap cursor-pointer">
+        9. Settings: Mute / Snooze / Pause
+      </button>
+      <button onclick="selectScenario(10)" data-scen="10" class="scen-btn text-xs px-2.5 py-1 rounded-md border border-[#2e3852] bg-[#1a2133] text-[#cbd5e1] whitespace-nowrap cursor-pointer">
+        10. Mobile PWA &amp; Telegram Bot
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN APPLICATION SHELL -->
+  <div class="flex-1 grid grid-cols-1 lg:grid-cols-[230px_1fr] min-h-0">
+
+    <!-- SIDEBAR -->
+    <aside class="bg-[#151a26] text-[#c7cdd9] p-4 flex flex-col gap-2 border-r border-[#262f45]">
+      <div class="flex items-center justify-between px-2 pb-3 border-b border-[#232b3e]">
+        <div class="flex items-center gap-2.5">
+          <div class="w-6 h-6 rounded-md bg-[#4f46e5] flex items-center justify-center text-white font-bold text-xs">S</div>
+          <b class="text-white text-sm tracking-tight">Samaritan</b>
+        </div>
+        <span class="text-xs px-2 py-0.5 rounded bg-[#1f293d] text-[#94a3b8] mono">v1.0</span>
+      </div>
+
+      <!-- Persistent Ask / Delegate launcher -->
+      <div class="my-2">
+        <div class="text-xs uppercase tracking-wider text-[#8b93a4] mb-1.5 px-1">Ask or Delegate</div>
+        <div class="flex gap-1">
+          <input
+            id="sidebar-cmd-input"
+            type="text"
+            placeholder="Ask Recall or delegate task..."
+            class="w-full bg-[#1f2637] border border-[#2a3145] rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-[#6b7385] focus:outline-none focus:border-[#4f46e5]"
+            onkeydown="if(event.key==='Enter'){openCommandModalWithText(this.value); this.value='';}"
+          />
+          <button onclick="openCommandModal('delegate')" class="bg-[#4f46e5] hover:bg-[#4338ca] text-white text-xs font-semibold px-2.5 rounded-lg cursor-pointer" title="Open Ask / Delegate">
+            Go
+          </button>
+        </div>
+      </div>
+
+      <nav class="flex flex-col gap-1" id="app-nav">
+        <a onclick="switchView('now')" data-view="now" class="nav-link nav-active flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium cursor-pointer hover:bg-[#1f2637]">
+          <span>Now</span>
+          <span class="text-xs px-2 py-0.5 rounded-full bg-white/20 text-white" id="nav-now-badge">Live</span>
+        </a>
+        <a onclick="switchView('inbox')" data-view="inbox" class="nav-link flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium cursor-pointer hover:bg-[#1f2637]">
+          <span>Inbox</span>
+          <span class="text-xs px-2 py-0.5 rounded-full bg-[#2a3145] text-[#c7cdd9]" id="nav-inbox-count">6</span>
+        </a>
+        <a onclick="switchView('tasks')" data-view="tasks" class="nav-link flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium cursor-pointer hover:bg-[#1f2637]">
+          <span>Tasks</span>
+          <span class="text-xs px-2 py-0.5 rounded-full bg-[#2a3145] text-[#c7cdd9]" id="nav-tasks-count">4</span>
+        </a>
+        <a onclick="switchView('activity')" data-view="activity" class="nav-link flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium cursor-pointer hover:bg-[#1f2637]">
+          <span>Activity</span>
+          <span class="text-xs px-2 py-0.5 rounded-full bg-[#065f46] text-[#a7f3d0]" id="nav-activity-count">2 running</span>
+        </a>
+        <a onclick="switchView('settings')" data-view="settings" class="nav-link flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium cursor-pointer hover:bg-[#1f2637]">
+          <span>Settings</span>
+          <span class="text-xs px-2 py-0.5 rounded-full bg-[#2a3145] text-[#c7cdd9]" id="nav-settings-badge">Rules</span>
+        </a>
+        <a onclick="switchView('mobile')" data-view="mobile" class="nav-link flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium cursor-pointer hover:bg-[#1f2637]">
+          <span>Phone &amp; Telegram</span>
+          <span class="text-xs px-2 py-0.5 rounded-full bg-[#2a3145] text-[#c7cdd9]">Tailscale</span>
+        </a>
+      </nav>
+
+      <div class="flex-1"></div>
+
+      <div class="border-t border-[#232b3e] pt-3 px-1 text-xs text-[#8b93a4] space-y-1">
+        <div class="flex items-center justify-between">
+          <span>Daemon</span>
+          <span class="text-[#10b981] font-medium">127.0.0.1:4173</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span>MCP Server</span>
+          <span class="text-[#cbd5e1] mono">8 tools active</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span>Daily Note</span>
+          <span class="text-[#cbd5e1] mono">2026-10-23.md (IST)</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- CONTENT AREA -->
+    <main class="p-6 overflow-y-auto space-y-6" id="main-pane">
+
+      <!-- =====================================================================
+           VIEW 1: NOW (Screen 1)
+           ===================================================================== -->
+      <section id="view-now" class="view-section space-y-5">
+        <div class="flex flex-wrap items-baseline justify-between gap-4">
+          <div>
+            <h1 class="text-xl font-bold tracking-tight">Good morning, Sandip</h1>
+            <p class="text-xs text-[var(--muted-foreground)] mt-0.5">
+              Friday, Oct 23 · 10:54 AM IST · <span id="now-summary-line">6 items need your decision, 2 jobs running, next meeting in 18m.</span>
+            </p>
+          </div>
+          <div class="flex gap-2">
+            <button onclick="openMeetingNotesDialog('Q3 Roadmap & Capacity Sync', '2026-10-23')" class="text-xs font-semibold px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--card)] hover: opacity-90 cursor-pointer">
+              + Paste Meeting Notes
+            </button>
+            <button onclick="openCommandModal('delegate')" class="text-xs font-semibold px-3 py-2 rounded-lg bg-[#4f46e5] text-white hover:bg-[#4338ca] cursor-pointer">
+              + Delegate Task
+            </button>
+          </div>
+        </div>
+
+        <!-- Stat Tiles -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+          <div onclick="switchView('inbox')" class="bg-[#fef6f6] border border-[#f3c9c9] rounded-xl p-4 cursor-pointer">
+            <div class="text-xs uppercase tracking-wider text-[#991b1b] font-semibold">Waiting on You</div>
+            <div class="text-2xl font-bold text-[#dc2626] mt-1" id="tile-inbox-count">6</div>
+            <div class="text-xs text-[#7f1d1d] mt-1">1 coding hook · 1 worker question</div>
+          </div>
+          <div onclick="switchView('tasks')" class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 cursor-pointer">
+            <div class="text-xs uppercase tracking-wider text-[var(--muted-foreground)] font-semibold">Delegated Tasks</div>
+            <div class="text-2xl font-bold mt-1" id="tile-tasks-count">4</div>
+            <div class="text-xs text-[var(--muted-foreground)] mt-1">1 running · 1 needs_input · 1 review</div>
+          </div>
+          <div onclick="switchView('activity')" class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 cursor-pointer">
+            <div class="text-xs uppercase tracking-wider text-[var(--muted-foreground)] font-semibold">Active Runs</div>
+            <div class="text-2xl font-bold mt-1" id="tile-runs-count">2</div>
+            <div class="text-xs text-[#047857] mt-1">Leases healthy · fencing gen #1</div>
+          </div>
+          <div onclick="switchView('settings')" class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 cursor-pointer">
+            <div class="text-xs uppercase tracking-wider text-[var(--muted-foreground)] font-semibold">Sources &amp; Delivery</div>
+            <div class="text-2xl font-bold mt-1">5 / 5</div>
+            <div class="text-xs text-[var(--muted-foreground)] mt-1">GCal synced 2m ago · 1 muted</div>
+          </div>
+        </div>
+
+        <!-- UP NEXT MEETING CARD (Phase 1 Meetings Loop) -->
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5">
+          <div class="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-[var(--border)]">
+            <div class="flex items-center gap-2.5">
+              <span class="text-xs font-bold uppercase px-2 py-0.5 rounded bg-[#eef0fe] text-[#4f46e5]">Up Next · In 18m</span>
+              <h2 class="text-base font-bold m-0">Q3 Roadmap &amp; Capacity Sync</h2>
+              <span class="text-xs text-[var(--muted-foreground)]">11:15 AM - 12:00 PM · Google Meet</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="togglePrepBrief()" class="text-xs font-semibold px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] cursor-pointer" id="prep-toggle-btn">
+                Hide Recall Brief
+              </button>
+              <button onclick="openMeetingNotesDialog('Q3 Roadmap & Capacity Sync', '2026-10-23')" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[#047857] text-white cursor-pointer">
+                Post-Meeting: Paste Notes / Transcript
+              </button>
+            </div>
+          </div>
+
+          <div id="prep-brief-panel" class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            <div class="bg-[var(--background)] border border-[var(--border)] rounded-lg p-3">
+              <div class="font-bold uppercase text-[var(--muted-foreground)] mb-1.5">Attendees &amp; Context</div>
+              <ul class="space-y-1.5 pl-4 list-disc">
+                <li><b>Priya Menon</b> (VP Ops) · awaiting FC peak labor sign-off</li>
+                <li><b>Arjun Rao</b> (Payments PM) · shared Payments v2 PRD yesterday</li>
+              </ul>
+            </div>
+            <div class="bg-[var(--background)] border border-[var(--border)] rounded-lg p-3">
+              <div class="font-bold uppercase text-[var(--muted-foreground)] mb-1.5">Prior Decisions (Recall Cited)</div>
+              <ul class="space-y-1.5 pl-4 list-disc">
+                <li><b>Flex peak labor +8% W36-W39</b> <span class="mono text-[#4f46e5]">[notion:decisions/d-91]</span></li>
+                <li><b>Keep money actions guided-only</b> <span class="mono text-[#4f46e5]">[vault:DECISIONS.md#L48]</span></li>
+              </ul>
+            </div>
+            <div class="bg-[var(--background)] border border-[var(--border)] rounded-lg p-3">
+              <div class="font-bold uppercase text-[var(--muted-foreground)] mb-1.5">Open Tasks for Attendees</div>
+              <ul class="space-y-1.5 pl-4 list-disc">
+                <li><b>Send per-FC breakdown sheet</b> (Due Wed · TickTick)</li>
+                <li><b>Review Vendor A SOC2 report</b> (Deferred to Mon)</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- TWO COLUMN: WAITING ON YOU + RUNNING NOW -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <!-- Needs You Now -->
+          <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4">
+            <div class="flex items-center justify-between mb-3">
+              <h2 class="text-sm font-bold m-0">Waiting on You Now</h2>
+              <button onclick="switchView('inbox')" class="text-xs font-semibold text-[#4f46e5] cursor-pointer">Open Inbox -></button>
+            </div>
+            <div id="now-waiting-list" class="divide-y divide-[var(--border)]"></div>
+          </div>
+
+          <!-- Running Now (with real Stop button) -->
+          <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4">
+            <div class="flex items-center justify-between mb-3">
+              <h2 class="text-sm font-bold m-0">Running Now &amp; Recent Activity</h2>
+              <button onclick="switchView('activity')" class="text-xs font-semibold text-[#4f46e5] cursor-pointer">Full Activity -></button>
+            </div>
+            <div id="now-running-list" class="divide-y divide-[var(--border)]"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =====================================================================
+           VIEW 2: INBOX (Screens 3, 4, 5, 6)
+           ===================================================================== -->
+      <section id="view-inbox" class="view-section hidden space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h1 class="text-xl font-bold tracking-tight">Inbox</h1>
+            <p class="text-xs text-[var(--muted-foreground)]">
+              Every approval, meeting extraction, coding-agent waiting alert, and worker question lands here.
+            </p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="toggleBatchMode()" id="batch-mode-btn" class="text-xs font-semibold px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+              Select for Batch Triage
+            </button>
+            <button onclick="simulateStaleConflict()" class="text-xs font-semibold px-3 py-1.5 rounded-lg border border-[#f59e0b] bg-[#fffbeb] text-[#b45309] cursor-pointer">
+              Simulate Concurrent Revision (409 Guard)
+            </button>
+          </div>
+        </div>
+
+        <!-- Batch Triage Bar (Screen 3) -->
+        <div id="batch-triage-bar" class="hidden bg-[#eef0fe] border border-[#c7d2fe] rounded-xl p-3 flex flex-wrap items-center justify-between gap-3">
+          <div class="text-xs text-[#1e1b4b]">
+            <b id="batch-selected-label">3 items selected</b> · Risk gate (<code class="mono">assessBatchRisk</code>) allows committing batch responses only on reversible, non-money items below value threshold ($100).
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="runBatchApprove()" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[#047857] text-white cursor-pointer">
+              Batch Approve Eligible
+            </button>
+            <button onclick="runBatchDefer()" class="text-xs font-semibold px-3 py-1.5 rounded-lg border border-[#4f46e5] bg-white text-[#4f46e5] cursor-pointer">
+              Snooze Selected 1d
+            </button>
+          </div>
+        </div>
+        <div id="batch-outcome-banner" class="hidden bg-[var(--card)] border border-[var(--border)] rounded-xl p-3 text-xs"></div>
+
+        <!-- Two-pane Inbox -->
+        <div class="grid grid-cols-1 lg:grid-cols-[340px_1fr] border border-[var(--border)] rounded-xl overflow-hidden bg-[var(--card)] min-h-[540px]">
+          <!-- Left List -->
+          <div class="border-r border-[var(--border)] bg-[var(--background)] flex flex-col">
+            <div class="p-3 border-b border-[var(--border)] flex gap-1.5 flex-wrap" id="inbox-lane-pills">
+              <button onclick="filterInboxLane('all')" data-lane="all" class="lane-pill pill-active text-xs px-2.5 py-1 rounded-full border border-[var(--border)] bg-[var(--card)] cursor-pointer">All</button>
+              <button onclick="filterInboxLane('meetings')" data-lane="meetings" class="lane-pill text-xs px-2.5 py-1 rounded-full border border-[var(--border)] bg-[var(--card)] cursor-pointer">Meetings</button>
+              <button onclick="filterInboxLane('coding')" data-lane="coding" class="lane-pill text-xs px-2.5 py-1 rounded-full border border-[var(--border)] bg-[var(--card)] cursor-pointer">Coding Hooks</button>
+              <button onclick="filterInboxLane('tasks')" data-lane="tasks" class="lane-pill text-xs px-2.5 py-1 rounded-full border border-[var(--border)] bg-[var(--card)] cursor-pointer">Worker Qs</button>
+              <button onclick="filterInboxLane('work')" data-lane="work" class="lane-pill text-xs px-2.5 py-1 rounded-full border border-[var(--border)] bg-[var(--card)] cursor-pointer">Work / Ops</button>
+            </div>
+            <div id="inbox-list-container" class="divide-y divide-[var(--border)] overflow-y-auto flex-1"></div>
+          </div>
+
+          <!-- Right Detail -->
+          <div class="p-6 overflow-y-auto" id="inbox-detail-container"></div>
+        </div>
+      </section>
+
+      <!-- =====================================================================
+           VIEW 3: TASKS (Screen 7)
+           ===================================================================== -->
+      <section id="view-tasks" class="view-section hidden space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 class="text-xl font-bold tracking-tight">Delegated Tasks</h1>
+            <p class="text-xs text-[var(--muted-foreground)]">
+              5-method WorkerAdapter (<code class="mono">start, events, answer, cancel, status</code>) running in isolated child processes with scoped artifact directories.
+            </p>
+          </div>
+          <button onclick="openCommandModal('delegate')" class="text-xs font-semibold px-3 py-2 rounded-lg bg-[#4f46e5] text-white cursor-pointer">
+            + Submit New Task
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-[330px_1fr] border border-[var(--border)] rounded-xl overflow-hidden bg-[var(--card)] min-h-[540px]">
+          <div class="border-r border-[var(--border)] bg-[var(--background)] divide-y divide-[var(--border)]" id="tasks-list-container"></div>
+          <div class="p-6 overflow-y-auto" id="tasks-detail-container"></div>
+        </div>
+      </section>
+
+      <!-- =====================================================================
+           VIEW 4: ACTIVITY (Screen 8)
+           ===================================================================== -->
+      <section id="view-activity" class="view-section hidden space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 class="text-xl font-bold tracking-tight">Activity &amp; Run Ledger</h1>
+            <p class="text-xs text-[var(--muted-foreground)]">
+              Every scheduled capability run, event-bus fire, worker run, and coding hook. Admission-key deduplicated and lease-fenced.
+            </p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="simulateDuplicateAdmission()" class="text-xs font-semibold px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+              Test Duplicate Admission Key (Skipped)
+            </button>
+            <button onclick="simulateBootRecovery()" class="text-xs font-semibold px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+              Simulate Boot Lease Reconciliation
+            </button>
+          </div>
+        </div>
+
+        <div id="activity-banner" class="hidden bg-[#eef0fe] border border-[#c7d2fe] text-[#1e1b4b] rounded-xl p-3 text-xs"></div>
+
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl overflow-hidden">
+          <div class="px-4 py-3 border-b border-[var(--border)] flex flex-wrap items-center justify-between gap-2">
+            <b class="text-xs uppercase tracking-wider text-[var(--muted-foreground)]">Runs (Admission &amp; Lease Table)</b>
+            <span class="text-xs text-[var(--muted-foreground)]">Timed-out or cancelled runs have their lease fenced so late <code class="mono">ctx.emit()</code> calls are rejected.</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr class="border-b border-[var(--border)] text-[var(--muted-foreground)] uppercase">
+                  <th class="py-2.5 px-4">Run / Target</th>
+                  <th class="py-2.5 px-3">Runner</th>
+                  <th class="py-2.5 px-3">Admission Key</th>
+                  <th class="py-2.5 px-3">Lease &amp; Fence</th>
+                  <th class="py-2.5 px-3">Status</th>
+                  <th class="py-2.5 px-4 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody id="runs-table-body" class="divide-y divide-[var(--border)]"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4">
+          <h2 class="text-xs uppercase tracking-wider text-[var(--muted-foreground)] font-bold mb-3">
+            Append-Only Activity Event Stream (<code class="mono">activity_events</code> cursor)
+          </h2>
+          <div id="activity-stream-list" class="space-y-2"></div>
+        </div>
+      </section>
+
+      <!-- =====================================================================
+           VIEW 5: SETTINGS (Screen 9)
+           ===================================================================== -->
+      <section id="view-settings" class="view-section hidden space-y-5">
+        <div>
+          <h1 class="text-xl font-bold tracking-tight">Settings: Notification Rules, Freshness &amp; Routing</h1>
+          <p class="text-xs text-[var(--muted-foreground)]">
+            Mute silences Telegram delivery without stopping the capability. Pause skips scheduled/event firing completely.
+          </p>
+        </div>
+
+        <!-- Per-Source Notification & Execution Rules -->
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div>
+              <h2 class="text-sm font-bold m-0">Per-Source Notification &amp; Execution Rules (<code class="mono">source_rules</code>)</h2>
+              <p class="text-xs text-[var(--muted-foreground)] mt-0.5">
+                Control noisy capabilities from one table instead of editing YAML manifests.
+              </p>
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr class="border-b border-[var(--border)] text-[var(--muted-foreground)] uppercase">
+                  <th class="py-2 px-3">Source / Capability</th>
+                  <th class="py-2 px-3">Trigger &amp; Cadence</th>
+                  <th class="py-2 px-3">Telegram Delivery</th>
+                  <th class="py-2 px-3">Execution State</th>
+                  <th class="py-2 px-3 text-right">Controls</th>
+                </tr>
+              </thead>
+              <tbody id="source-rules-body" class="divide-y divide-[var(--border)]"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Source Freshness & Listener Health -->
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5">
+          <h2 class="text-sm font-bold mb-3">Listener Freshness &amp; Sync Cursors</h2>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+            <div class="border border-[var(--border)] rounded-lg p-3 bg-[var(--background)]">
+              <div class="flex items-center justify-between">
+                <b>Google Calendar Sync</b>
+                <span class="px-2 py-0.5 rounded bg-[#e2f6ee] text-[#047857] font-semibold">Connected</span>
+              </div>
+              <div class="text-[var(--muted-foreground)] mt-1.5 mono">cursor: syncToken_gcal_8821a</div>
+              <div class="text-[var(--muted-foreground)] mt-0.5">Last incremental poll: 2m ago</div>
+            </div>
+            <div class="border border-[var(--border)] rounded-lg p-3 bg-[var(--background)]">
+              <div class="flex items-center justify-between">
+                <b>Gmail Poller</b>
+                <span class="px-2 py-0.5 rounded bg-[#e2f6ee] text-[#047857] font-semibold">Connected</span>
+              </div>
+              <div class="text-[var(--muted-foreground)] mt-1.5 mono">cursor: 1792731920000</div>
+              <div class="text-[var(--muted-foreground)] mt-0.5">Scope: read + compose (never send)</div>
+            </div>
+            <div class="border border-[var(--border)] rounded-lg p-3 bg-[var(--background)]">
+              <div class="flex items-center justify-between">
+                <b>TickTick Open API</b>
+                <span class="px-2 py-0.5 rounded bg-[#e2f6ee] text-[#047857] font-semibold">Automated Ready</span>
+              </div>
+              <div class="text-[var(--muted-foreground)] mt-1.5 mono">keychain: ticktick:default</div>
+              <div class="text-[var(--muted-foreground)] mt-0.5">Sanitizes #tags + verifies receipt id</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Routing & Money Lock -->
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5">
+          <h2 class="text-sm font-bold mb-3">Action Type Routing &amp; Guardrails</h2>
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="border-b border-[var(--border)] text-[var(--muted-foreground)] uppercase">
+                <th class="py-2 px-3">Action Type</th>
+                <th class="py-2 px-3">Provider Target</th>
+                <th class="py-2 px-3">Autonomy Mode</th>
+                <th class="py-2 px-3">Guardrail</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-[var(--border)]">
+              <tr>
+                <td class="py-2.5 px-3 font-semibold mono">task.create</td>
+                <td class="py-2.5 px-3">ticktick.task.create</td>
+                <td class="py-2.5 px-3">
+                  <select onchange="showToast('Updated task.create mode to ' + this.value)" class="border border-[var(--border)] rounded px-2 py-1 bg-[var(--background)]">
+                    <option value="automated" selected>automated (Open API + receipt)</option>
+                    <option value="guided">guided (copy-ready fallback)</option>
+                  </select>
+                </td>
+                <td class="py-2.5 px-3 text-[var(--muted-foreground)]">Strips #word tags automatically</td>
+              </tr>
+              <tr>
+                <td class="py-2.5 px-3 font-semibold mono">decision.log</td>
+                <td class="py-2.5 px-3">notion.decision.create</td>
+                <td class="py-2.5 px-3">
+                  <select onchange="showToast('Updated decision.log mode to ' + this.value)" class="border border-[var(--border)] rounded px-2 py-1 bg-[var(--background)]">
+                    <option value="automated" selected>automated</option>
+                    <option value="assisted">assisted</option>
+                    <option value="guided">guided</option>
+                  </select>
+                </td>
+                <td class="py-2.5 px-3 text-[var(--muted-foreground)]">Write-through to notion_decisions mirror</td>
+              </tr>
+              <tr class="bg-[#fef6f6]">
+                <td class="py-2.5 px-3 font-semibold mono text-[#dc2626]">payment.approve</td>
+                <td class="py-2.5 px-3">guided.fallback</td>
+                <td class="py-2.5 px-3">
+                  <span class="px-2 py-0.5 rounded bg-[#fde7e7] text-[#dc2626] font-bold">guided (LOCKED)</span>
+                </td>
+                <td class="py-2.5 px-3">
+                  <button onclick="showToast('409 Conflict: MoneyLockViolation - payment.* is permanently locked to guided mode', true)" class="text-xs underline text-[#dc2626] font-semibold cursor-pointer">
+                    Test Unlock Attempt (409 MoneyLockViolation)
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- =====================================================================
+           VIEW 6: MOBILE PWA & TELEGRAM COMPANION (Screen 10)
+           ===================================================================== -->
+      <section id="view-mobile" class="view-section hidden space-y-4">
+        <div>
+          <h1 class="text-xl font-bold tracking-tight">Phone Surfaces: Mobile Web (Tailscale PWA) &amp; Telegram Companion</h1>
+          <p class="text-xs text-[var(--muted-foreground)]">
+            Non-loopback requests require Bearer/session cookie auth (<code class="mono">samaritan:web-token</code>) and server-derived <code class="mono">actor: "sandip"</code>. Telegram callbacks act on the same store.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+          <!-- Phone 1: Mobile Web PWA over Tailscale -->
+          <div class="bg-[#151a26] text-white rounded-3xl p-4 border-4 border-[#2e3852] max-w-[400px] mx-auto w-full">
+            <div class="flex items-center justify-between text-xs text-[#94a3b8] pb-3 border-b border-[#262f45]">
+              <span class="mono">https://macbook.tailnet.ts.net:4173</span>
+              <span class="px-2 py-0.5 rounded bg-[#065f46] text-[#a7f3d0] font-semibold">actor: sandip</span>
+            </div>
+            <div class="py-3 space-y-3">
+              <div class="bg-[#1f2637] border border-[#2e3852] rounded-xl p-3">
+                <div class="text-xs uppercase text-[#818cf8] font-bold">Next Meeting · 18m</div>
+                <div class="font-bold text-sm mt-0.5">Q3 Roadmap &amp; Capacity Sync</div>
+                <div class="text-xs text-[#94a3b8] mt-1">2 cited decisions · 2 open tasks</div>
+                <div class="flex gap-2 mt-2.5">
+                  <button onclick="openMeetingNotesDialog('Q3 Roadmap & Capacity Sync', '2026-10-23')" class="flex-1 bg-[#4f46e5] text-white text-xs font-semibold py-1.5 rounded-lg cursor-pointer">
+                    Paste Quick Notes
+                  </button>
+                </div>
+              </div>
+
+              <div class="text-xs uppercase tracking-wider text-[#94a3b8] font-bold pt-1">Mobile Triage Queue</div>
+              <div id="mobile-pwa-cards" class="space-y-2.5"></div>
+            </div>
+            <div class="pt-3 border-t border-[#262f45] flex justify-around text-xs text-[#cbd5e1]">
+              <span class="font-bold text-white">Now</span>
+              <span onclick="switchView('inbox')" class="cursor-pointer">Inbox</span>
+              <span onclick="switchView('tasks')" class="cursor-pointer">Tasks</span>
+              <span onclick="openCommandModal('delegate')" class="cursor-pointer text-[#818cf8]">+ Delegate</span>
+            </div>
+          </div>
+
+          <!-- Phone 2: Telegram Bot Inbound/Outbound -->
+          <div class="bg-[#0f172a] text-white rounded-3xl p-4 border-4 border-[#334155] max-w-[440px] mx-auto w-full">
+            <div class="flex items-center justify-between pb-3 border-b border-[#1e293b]">
+              <div>
+                <b class="text-sm">Samaritan OS Bot</b>
+                <div class="text-xs text-[#94a3b8]">Verified chat_id · Quiet hours 22:00-07:00</div>
+              </div>
+              <span class="text-xs px-2 py-0.5 rounded bg-[#1e293b] text-[#cbd5e1] mono">dedupe_key active</span>
+            </div>
+
+            <div id="telegram-chat-feed" class="py-3 space-y-3 max-h-[420px] overflow-y-auto"></div>
+
+            <div class="pt-3 border-t border-[#1e293b] flex gap-2">
+              <input
+                id="telegram-input"
+                type="text"
+                placeholder="Reply to answer worker or /task <goal>..."
+                class="flex-1 bg-[#1e293b] border border-[#334155] rounded-lg px-3 py-2 text-xs text-white placeholder-[#64748b]"
+                onkeydown="if(event.key==='Enter'){sendTelegramMessage();}"
+              />
+              <button onclick="sendTelegramMessage()" class="bg-[#0284c7] hover:bg-[#0369a1] text-white text-xs font-semibold px-3 py-2 rounded-lg cursor-pointer">
+                Send
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- =========================================================================
+       MODAL 1: ASK / DELEGATE COMMAND BAR (Screen 2)
+       Uses modern-web-guidance `closedby="any"` + Safari backdrop click fallback
+       ========================================================================= -->
+  <dialog id="cmd-dialog" closedby="any" aria-labelledby="cmd-dialog-title">
+    <div class="p-5 space-y-4">
+      <div class="flex items-center justify-between border-b border-[var(--border)] pb-3">
+        <div class="flex items-center gap-2">
+          <h2 id="cmd-dialog-title" class="text-base font-bold m-0">Ask Recall or Delegate Task</h2>
+          <div class="flex rounded-lg border border-[var(--border)] overflow-hidden text-xs">
+            <button id="tab-ask-btn" onclick="setCommandTab('ask')" class="px-3 py-1 font-semibold pill-active cursor-pointer">Ask Recall</button>
+            <button id="tab-delegate-btn" onclick="setCommandTab('delegate')" class="px-3 py-1 font-semibold bg-[var(--background)] cursor-pointer">Delegate Worker Task</button>
+          </div>
+        </div>
+        <button onclick="document.getElementById('cmd-dialog').close()" class="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] px-2 py-1 cursor-pointer">
+          Esc
+        </button>
+      </div>
+
+      <!-- Mode A: Ask Recall -->
+      <div id="cmd-pane-ask" class="space-y-3">
+        <div class="flex gap-2">
+          <input
+            id="recall-query-input"
+            type="text"
+            value="What did we decide about Q3 fulfillment capacity and payment guardrails?"
+            class="flex-1 border border-[var(--border)] rounded-lg px-3 py-2 text-xs bg-[var(--background)]"
+          />
+          <button onclick="runRecallDemo()" class="bg-[#4f46e5] text-white text-xs font-semibold px-4 py-2 rounded-lg cursor-pointer">
+            Search &amp; Cite
+          </button>
+        </div>
+        <div id="recall-result-box" class="bg-[var(--background)] border border-[var(--border)] rounded-xl p-4 space-y-3 text-xs">
+          <div class="font-semibold text-sm">Synthesized Answer (Hybrid FTS5 + Vector + Structured Mirrors)</div>
+          <p class="leading-relaxed m-0">
+            For Q3 peak weeks (W36-W39), you decided to flex fulfillment center labor up by <b>8%</b> and hold flat outside peak. Additionally, all <code class="mono">payment.*</code> actions remain permanently locked to <b>guided</b> mode so Samaritan never executes a transfer autonomously.
+          </p>
+          <div class="space-y-1.5 pt-2 border-t border-[var(--border)]">
+            <div class="text-xs uppercase font-bold text-[var(--muted-foreground)]">Verified Citations</div>
+            <div class="p-2 rounded bg-[var(--card)] border-l-4 border-[#4f46e5]">
+              <span class="font-bold text-[#4f46e5] uppercase">notion_decisions</span> · <span class="mono">decisions/d-91 (2026-10-21)</span>
+              <div class="mt-0.5 text-[var(--muted-foreground)]">"Flex FC labor +8% for W36-W39 peak; Priya to receive per-FC sheet by Wed."</div>
+            </div>
+            <div class="p-2 rounded bg-[var(--card)] border-l-4 border-[#4f46e5]">
+              <span class="font-bold text-[#4f46e5] uppercase">obsidian</span> · <span class="mono">DECISIONS.md#L44-L52</span>
+              <div class="mt-0.5 text-[var(--muted-foreground)]">"Money-lock is enforced in code and routing_config: payment.* cannot be promoted above guided."</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mode B: Delegate Task -->
+      <div id="cmd-pane-delegate" class="hidden space-y-3">
+        <div>
+          <label class="block text-xs font-bold uppercase text-[var(--muted-foreground)] mb-1">Task Goal</label>
+          <textarea
+            id="delegate-goal-input"
+            rows="3"
+            class="w-full border border-[var(--border)] rounded-lg p-2.5 text-xs bg-[var(--background)]"
+          >Compare Vendor A vs Vendor B SOC2 posture from vault notes and draft a decision memo artifact.</textarea>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold uppercase text-[var(--muted-foreground)] mb-1">Lane</label>
+            <select id="delegate-lane-input" class="w-full border border-[var(--border)] rounded-lg px-2.5 py-2 text-xs bg-[var(--background)]">
+              <option value="research" selected>research</option>
+              <option value="coding">coding</option>
+              <option value="operations">operations</option>
+              <option value="general">general</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold uppercase text-[var(--muted-foreground)] mb-1">Worker Isolation</label>
+            <div class="text-xs text-[var(--muted-foreground)] py-1.5">
+              Child process · Rule of Two (no write/send secrets) · writes to <code class="mono">~/.samaritan/artifacts/</code>
+            </div>
+          </div>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button onclick="submitDelegatedTask()" class="bg-[#4f46e5] text-white text-xs font-semibold px-4 py-2 rounded-lg cursor-pointer">
+            Start Worker Task
+          </button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- =========================================================================
+       MODAL 2: PASTE MEETING NOTES INTAKE (Screen 1 / Phase 1 Meetings Loop)
+       ========================================================================= -->
+  <dialog id="meeting-notes-dialog" closedby="any" aria-labelledby="meeting-dialog-title">
+    <div class="p-5 space-y-4">
+      <div class="flex items-center justify-between border-b border-[var(--border)] pb-3">
+        <div>
+          <h2 id="meeting-dialog-title" class="text-base font-bold m-0">Post-Meeting Notes Intake (<code class="mono">POST /api/meetings/notes</code>)</h2>
+          <p class="text-xs text-[var(--muted-foreground)] mt-0.5">
+            Writes the reversible Obsidian meeting note immediately and queues extracted Decisions &amp; Tasks in the Inbox.
+          </p>
+        </div>
+        <button onclick="document.getElementById('meeting-notes-dialog').close()" class="text-xs text-[var(--muted-foreground)] px-2 py-1 cursor-pointer">Esc</button>
+      </div>
+      <div class="grid grid-cols-2 gap-3 text-xs">
+        <div>
+          <label class="block font-bold uppercase text-[var(--muted-foreground)] mb-1">Meeting Topic</label>
+          <input id="mtg-topic-input" type="text" value="Q3 Roadmap & Capacity Sync" class="w-full border border-[var(--border)] rounded-lg px-2.5 py-1.5 bg-[var(--background)]" />
+        </div>
+        <div>
+          <label class="block font-bold uppercase text-[var(--muted-foreground)] mb-1">Date (Local IST)</label>
+          <input id="mtg-date-input" type="text" value="2026-10-23" class="w-full border border-[var(--border)] rounded-lg px-2.5 py-1.5 bg-[var(--background)] mono" />
+        </div>
+      </div>
+      <div class="text-xs">
+        <label class="block font-bold uppercase text-[var(--muted-foreground)] mb-1">Raw Notes or Granola / Fireflies Paste</label>
+        <textarea id="mtg-notes-input" rows="5" class="w-full border border-[var(--border)] rounded-lg p-2.5 bg-[var(--background)]">- Decided: Adopt Vendor A for SOC2 compliance monitoring (two-way reversible).
+- Task for Sandip: Send PR #73 rollout checklist to Priya by Friday (note: #73 will be sanitized to PR 73 for TickTick).
+- Insight: Peak warehouse staffing needs 48h lead time in W36.</textarea>
+      </div>
+      <div class="flex justify-end gap-2">
+        <button onclick="ingestMeetingNotes()" class="bg-[#047857] text-white text-xs font-semibold px-4 py-2 rounded-lg cursor-pointer">
+          Save Note to Vault &amp; Extract to Inbox
+        </button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- TOAST -->
+  <div id="toast" class="hidden fixed right-5 bottom-5 bg-[#151a26] text-white rounded-xl px-4 py-3 text-xs font-medium z-50 max-w-md border border-[#2e3852]"></div>
+
+  <script>
+    // Safari / legacy fallback for <dialog closedby="any"> per modern-web-guidance `light-dismiss-a-dialog`
+    document.querySelectorAll("dialog").forEach((dialog) => {
+      if (!("closedBy" in HTMLDialogElement.prototype)) {
+        dialog.addEventListener("click", (event) => {
+          if (event.target !== dialog) return;
+          const rect = dialog.getBoundingClientRect();
+          const isDialogContent =
+            rect.top <= event.clientY &&
+            event.clientY <= rect.top + rect.height &&
+            rect.left <= event.clientX &&
+            event.clientX <= rect.left + rect.width;
+          if (isDialogContent) return;
+          dialog.close();
+        });
+      }
+    });
+
+    const SCENARIO_CAPTIONS = {
+      1: "1. Now View: Attention-first home, cited Pre-Meeting Recall Brief, and Post-Meeting Notes intake",
+      2: "2. Ask / Delegate Command Bar: Hybrid Recall with citations + one-line Delegated Worker Task submission",
+      3: "3. Inbox Batch Triage: Select Mode + assessBatchRisk gate (applies low-risk items, holds back high-risk/money items)",
+      4: "4. Exact-Revision Approval: SHA-256 payload_hash binding, 409 Stale Approval guard, and TickTick #tag sanitization",
+      5: "5. Coding-Agent Waiting Hook: Claude Code / Codex / Gemini CLI permission prompt in Inbox + auto-resolve on Stop",
+      6: "6. Worker Question (needs_input): Delegated task pauses to ask a clarifying question in Inbox and resumes on answer",
+      7: "7. Delegated Tasks View: Task thread, append-only activity_events cursor stream, and scoped artifact preview",
+      8: "8. Activity & Run Ledger: Unique admission_key deduplication, lease_token fencing, and real child-process Stop",
+      9: "9. Settings View: Per-source Mute / Snooze / Pause rules, listener sync cursors, and money-locked routing",
+      10: "10. Mobile PWA & Telegram Companion: Tailscale phone triage + Telegram inline Approve / Snooze / Mute buttons"
+    };
+
+    let state = {};
+
+    function initialState() {
+      return {
+        currentView: "now",
+        inboxLane: "all",
+        batchMode: false,
+        selectedBatchIds: ["item-mtg-1", "item-Wrap-1", "item-pay-1"],
+        selectedInboxId: "item-mtg-1",
+        selectedTaskId: "task-soc2",
+        staleConflictSimulated: false,
+        inboxItems: [
+          {
+            id: "item-mtg-1",
+            capability_id: "meeting",
+            type: "meeting-item-review",
+            lane: "meetings",
+            priority: "high",
+            title: "Task: Review PR 73 rollout checklist with Priya",
+            raw_unstripped_title: "Review #73 rollout checklist with Priya",
+            subtitle: "Extracted from Q3 Roadmap Sync · TickTick Open API target",
+            why: "Transcript extraction always escalates for review. Note: '#73' was sanitized to 'PR 73' per global TickTick rule.",
+            mode: "automated",
+            target: "ticktick.task.create",
+            reversibility: "reversible",
+            value: 0,
+            revision: 1,
+            payload_hash: "sha256:9c41b8e2f01a",
+            note_path: "Areas/Meetings/2026-10-23-roadmap-sync.md",
+            due: "2026-10-25",
+            project: "Samaritan",
+            status: "pending"
+          },
+          {
+            id: "item-hook-1",
+            capability_id: "coding-agent",
+            type: "coding-agent-waiting",
+            lane: "coding",
+            priority: "urgent",
+            title: "Claude Code waiting: bash permission_prompt in ~/Developer/samaritan",
+            subtitle: "Notification hook · session claude-sess-49a · waiting 3m",
+            why: "Claude Code requested permission to run 'pnpm test' in worktree ~/Developer/samaritan.",
+            mode: "guided",
+            target: "guided.fallback",
+            reversibility: "reversible",
+            value: 0,
+            revision: 1,
+            payload_hash: "sha256:3e19a0d44c12",
+            cwd: "/Users/sandipdev/Developer/samaritan",
+            remote_url: "https://claude.ai/code/session_49a",
+            command_requested: "pnpm test",
+            status: "pending"
+          },
+          {
+            id: "item-q-1",
+            capability_id: "worker-task",
+            type: "task-question",
+            lane: "tasks",
+            priority: "high",
+            title: "Worker Question: Include archived 2025 SOC2 questionnaire or only 2026?",
+            subtitle: "Task task-soc2 (needs_input) · Research Worker paused at revision 2",
+            why: "Worker found two SOC2 folders in ~/Documents/Obsidian/Samaritan/Resources/Vendors and needs clarification before drafting the comparison memo.",
+            mode: "assisted",
+            target: "worker.answer",
+            reversibility: "reversible",
+            value: 0,
+            revision: 2,
+            payload_hash: "sha256:7b22f901a33d",
+            task_id: "task-soc2",
+            run_id: "run-worker-102",
+            status: "pending"
+          },
+          {
+            id: "item-Wrap-1",
+            capability_id: "wrap",
+            type: "wrap-item-review",
+            lane: "work",
+            priority: "normal",
+            title: "Decision: Use Migration 8 for Command Centre tables",
+            subtitle: "Extracted from session wrap · Notion Decisions target",
+            why: "Migrations 1-7 are already applied on origin/main; Command Centre schema lands as Migration 8.",
+            mode: "automated",
+            target: "notion.decision.create",
+            reversibility: "reversible",
+            value: 0,
+            revision: 1,
+            payload_hash: "sha256:1d88e420b911",
+            project: "Samaritan",
+            status: "pending"
+          },
+          {
+            id: "item-email-1",
+            capability_id: "email-triage",
+            type: "email-reply-draft",
+            lane: "work",
+            priority: "high",
+            title: "Reply draft: Priya Menon on Q3 FC capacity assumptions",
+            subtitle: "Gmail compose draft · unanswered 2d",
+            why: "External email reply is irreversible once sent; Samaritan stages a Gmail draft and never sends autonomously.",
+            mode: "assisted",
+            target: "gmail.draft.create",
+            reversibility: "irreversible",
+            value: 0,
+            revision: 1,
+            payload_hash: "sha256:5a90c112e778",
+            draft_body: "Hi Priya, for Q3 we are flexing labor up 8% for peak weeks (W36-W39) and holding flat outside peak. Per-FC sheet by Wed.",
+            status: "pending"
+          },
+          {
+            id: "item-pay-1",
+            capability_id: "bills-watch",
+            type: "payment-review",
+            lane: "work",
+            priority: "urgent",
+            title: "Approve AWS invoice payment ($420.00)",
+            subtitle: "action_type: payment.approve · Money-lock enforced",
+            why: "Money-locked action type (payment.approve) and value $420 > $100 threshold. Permanently locked to guided mode.",
+            mode: "guided",
+            target: "guided.fallback",
+            reversibility: "irreversible",
+            value: 420,
+            revision: 1,
+            payload_hash: "sha256:f009d123a88b",
+            status: "pending"
+          }
+        ],
+        tasks: [
+          {
+            id: "task-soc2",
+            goal: "Compare Vendor A vs Vendor B SOC2 posture from vault notes and draft a decision memo",
+            lane: "research",
+            status: "needs_input",
+            revision: 2,
+            runner: "worker",
+            question: "Include archived 2025 SOC2 questionnaire or only 2026?",
+            result_summary: "Waiting on Sandip's clarification on 2025 vs 2026 scope.",
+            updated_at: "2m ago",
+            artifacts: [
+              {
+                id: "art-1",
+                kind: "file",
+                path_or_url: "~/.samaritan/artifacts/task-soc2/vendor-scan.md",
+                content_hash: "sha256:44a19b0c",
+                preview: "# Preliminary Vendor Scan\n\n- **Vendor A**: Type II certified (2026 report in vault, zero critical exceptions).\n- **Vendor B**: Bridge letter only for Q3 2026; subprocessor list changed in Aug."
+              }
+            ],
+            events: [
+              { cursor: 101, type: "task.submitted", time: "10:48:10", detail: "Goal submitted by sandip (lane: research)" },
+              { cursor: 102, type: "run.started", time: "10:48:11", detail: "Spawned child-process worker (run-worker-102, lease_token: lease_88a1, fence: #1)" },
+              { cursor: 103, type: "tool.called", time: "10:48:19", detail: "recall.search('Vendor A Vendor B SOC2') -> 6 chunks" },
+              { cursor: 104, type: "artifact.created", time: "10:49:02", detail: "Wrote ~/.samaritan/artifacts/task-soc2/vendor-scan.md (sha256:44a19b0c)" },
+              { cursor: 105, type: "question.asked", time: "10:49:15", detail: "Transitioned task to needs_input; created Inbox card item-q-1" }
+            ]
+          },
+          {
+            id: "task-bench",
+            goal: "Audit sqlite-vec hybrid recall latency across 2,400 vault chunks and emit benchmark table",
+            lane: "coding",
+            status: "running",
+            revision: 1,
+            runner: "worker",
+            result_summary: "Running kNN + FTS5 fusion pass (step 3/4)...",
+            updated_at: "Just now",
+            artifacts: [
+              {
+                id: "art-2",
+                kind: "file",
+                path_or_url: "~/.samaritan/artifacts/task-bench/latency-profile.md",
+                content_hash: "sha256:99c02d11",
+                preview: "| Query Type | p50 | p95 |\n|---|---|---|\n| FTS5 Lexical | 4.2ms | 9.1ms |\n| sqlite-vec kNN | 11.8ms | 19.4ms |\n| RRF Hybrid | 16.5ms | 27.0ms |"
+              }
+            ],
+            events: [
+              { cursor: 106, type: "task.submitted", time: "10:51:00", detail: "Goal submitted by sandip (lane: coding)" },
+              { cursor: 107, type: "run.started", time: "10:51:01", detail: "Spawned child-process worker (run-worker-103, lease_token: lease_99b2, fence: #1)" },
+              { cursor: 108, type: "artifact.created", time: "10:52:40", detail: "Wrote ~/.samaritan/artifacts/task-bench/latency-profile.md" }
+            ]
+          },
+          {
+            id: "task-nutgraf",
+            goal: "Fetch weekly Nutgraf summary from AWS API and propose 2 reading insights for Notion",
+            lane: "general",
+            status: "awaiting_review",
+            revision: 1,
+            runner: "worker",
+            result_summary: "Proposed 2 Notion insight cards in Inbox; awaiting approval.",
+            updated_at: "25m ago",
+            artifacts: [
+              {
+                id: "art-3",
+                kind: "brief",
+                path_or_url: "~/.samaritan/artifacts/task-nutgraf/nutgraf-digest.md",
+                content_hash: "sha256:71e44a09",
+                preview: "# Nutgraf Weekly Digest\n\nFetched 14 saved articles via machine credential `GET /nutgraf/api/summary`. Extracted 2 high-signal product insights."
+              }
+            ],
+            events: [
+              { cursor: 94, type: "task.submitted", time: "10:20:00", detail: "Submitted via Command Bar" },
+              { cursor: 95, type: "action.proposed", time: "10:22:14", detail: "Emitted 2 draft action items; task moved to awaiting_review" },
+              { cursor: 96, type: "run.completed", time: "10:22:15", detail: "Worker exited cleanly ($0.03)" }
+            ]
+          },
+          {
+            id: "task-cleanup",
+            goal: "Verify git worktree repositoryformatversion across ~/Developer repos",
+            lane: "operations",
+            status: "succeeded",
+            revision: 1,
+            runner: "worker",
+            result_summary: "All 6 repositories verified at repositoryformatversion = 1.",
+            updated_at: "1h ago",
+            artifacts: [],
+            events: [
+              { cursor: 88, type: "run.completed", time: "09:45:00", detail: "Completed with 0 errors" }
+            ]
+          }
+        ],
+        runs: [
+          {
+            id: "run-worker-103",
+            target: "task:task-bench (Recall Benchmark)",
+            runner: "worker",
+            admission_key: "task:task-bench:rev-1",
+            lease_token: "lease_99b2",
+            fencing_generation: 1,
+            status: "running",
+            started_at: "10:51:01",
+            cost_usd: 0.04
+          },
+          {
+            id: "run-cap-204",
+            target: "capability:email-triage",
+            runner: "child-process",
+            admission_key: "event:email-triage:gmail_1902a",
+            lease_token: "lease_77c4",
+            fencing_generation: 1,
+            status: "running",
+            started_at: "10:53:10",
+            cost_usd: 0.01
+          },
+          {
+            id: "run-cap-201",
+            target: "capability:meeting-prep",
+            runner: "in-process",
+            admission_key: "schedule:meeting-prep:2026-10-23T11:00",
+            lease_token: "lease_55d1",
+            fencing_generation: 1,
+            status: "succeeded",
+            started_at: "10:45:00",
+            cost_usd: 0.02
+          },
+          {
+            id: "run-worker-102",
+            target: "task:task-soc2 (Vendor SOC2 Compare)",
+            runner: "worker",
+            admission_key: "task:task-soc2:rev-2",
+            lease_token: "lease_88a1",
+            fencing_generation: 1,
+            status: "succeeded",
+            started_at: "10:48:11",
+            cost_usd: 0.05
+          }
+        ],
+        sourceRules: [
+          { source_id: "meeting", trigger: "manual + fireflies.webhook", muted: false, snoozed_until: null, paused: false },
+          { source_id: "email-triage", trigger: "event: email.received (60s poll)", muted: false, snoozed_until: null, paused: false },
+          { source_id: "newsletter-digest", trigger: "scheduled: daily 07:00", muted: true, snoozed_until: null, paused: false },
+          { source_id: "coding-agent", trigger: "http hook: /api/hooks/coding-agent", muted: false, snoozed_until: null, paused: false },
+          { source_id: "wbr-synth", trigger: "scheduled: Sun 20:00", muted: false, snoozed_until: "Tomorrow 09:00", paused: false }
+        ],
+        telegramMessages: [
+          {
+            id: "tg-1",
+            from: "bot",
+            time: "10:49 AM",
+            title: "meeting: Task: Review PR 73 rollout checklist with Priya",
+            body: "Files 'Review PR 73 rollout checklist with Priya' to TickTick (automated).\nWhy you: Transcript extraction always gets a review gate.\nRevision: v1 (sha256:9c41b8e2f01a)",
+            itemId: "item-mtg-1",
+            resolved: null
+          },
+          {
+            id: "tg-2",
+            from: "bot",
+            time: "10:50 AM",
+            title: "worker-task (needs_input): task-soc2",
+            body: "Question from Research Worker:\n'Include archived 2025 SOC2 questionnaire or only 2026?'\nReply to this message to answer and resume the worker.",
+            itemId: "item-q-1",
+            resolved: null
+          }
+        ]
+      };
+    }
+
+    function resetDemoState() {
+      state = initialState();
+      renderAll();
+      showToast("Demo state reset to initial 10-scenario snapshot");
+    }
+
+    function showToast(msg, isError = false) {
+      const el = document.getElementById("toast");
+      el.textContent = msg;
+      el.className = `fixed right-5 bottom-5 rounded-xl px-4 py-3 text-xs font-semibold z-50 max-w-md border ${
+        isError ? "bg-[#dc2626] text-white border-[#b91c1c]" : "bg-[#151a26] text-white border-[#2e3852]"
+      }`;
+      clearTimeout(window.__toastTimer);
+      window.__toastTimer = setTimeout(() => {
+        el.classList.add("hidden");
+      }, 3600);
+    }
+
+    function selectScenario(num) {
+      document.querySelectorAll(".scen-btn").forEach((btn) => {
+        btn.classList.toggle("pill-active", Number(btn.dataset.scen) === num);
+      });
+      document.getElementById("tour-caption").textContent = SCENARIO_CAPTIONS[num];
+
+      if (num === 1) {
+        switchView("now");
+      } else if (num === 2) {
+        openCommandModal("ask");
+      } else if (num === 3) {
+        state.batchMode = true;
+        state.inboxLane = "all";
+        switchView("inbox");
+      } else if (num === 4) {
+        state.batchMode = false;
+        state.inboxLane = "all";
+        state.selectedInboxId = "item-mtg-1";
+        switchView("inbox");
+      } else if (num === 5) {
+        state.batchMode = false;
+        state.inboxLane = "all";
+        state.selectedInboxId = "item-hook-1";
+        switchView("inbox");
+      } else if (num === 6) {
+        state.batchMode = false;
+        state.inboxLane = "all";
+        state.selectedInboxId = "item-q-1";
+        switchView("inbox");
+      } else if (num === 7) {
+        state.selectedTaskId = "task-soc2";
+        switchView("tasks");
+      } else if (num === 8) {
+        switchView("activity");
+      } else if (num === 9) {
+        switchView("settings");
+      } else if (num === 10) {
+        switchView("mobile");
+      }
+    }
+
+    function switchView(view) {
+      state.currentView = view;
+      document.querySelectorAll(".view-section").forEach((sec) => {
+        sec.classList.toggle("hidden", sec.id !== `view-${view}`);
+      });
+      document.querySelectorAll(".nav-link").forEach((a) => {
+        a.classList.toggle("nav-active", a.dataset.view === view);
+      });
+      renderAll();
+    }
+
+    function togglePrepBrief() {
+      const panel = document.getElementById("prep-brief-panel");
+      const btn = document.getElementById("prep-toggle-btn");
+      const hidden = panel.classList.toggle("hidden");
+      btn.textContent = hidden ? "Show Recall Brief" : "Hide Recall Brief";
+    }
+
+    function openCommandModal(tab) {
+      setCommandTab(tab || "ask");
+      document.getElementById("cmd-dialog").showModal();
+    }
+
+    function openCommandModalWithText(val) {
+      if (!val.trim()) {
+        openCommandModal("ask");
+        return;
+      }
+      if (val.toLowerCase().startsWith("delegate:") || val.toLowerCase().startsWith("task:")) {
+        setCommandTab("delegate");
+        document.getElementById("delegate-goal-input").value = val.replace(/^(delegate|task):\s*/i, "");
+      } else {
+        setCommandTab("ask");
+        document.getElementById("recall-query-input").value = val;
+      }
+      document.getElementById("cmd-dialog").showModal();
+    }
+
+    function setCommandTab(tab) {
+      const isAsk = tab === "ask";
+      document.getElementById("cmd-pane-ask").classList.toggle("hidden", !isAsk);
+      document.getElementById("cmd-pane-delegate").classList.toggle("hidden", isAsk);
+      document.getElementById("tab-ask-btn").classList.toggle("pill-active", isAsk);
+      document.getElementById("tab-delegate-btn").classList.toggle("pill-active", !isAsk);
+    }
+
+    function runRecallDemo() {
+      const q = document.getElementById("recall-query-input").value;
+      showToast(`Ran hybrid Recall query: "${q.slice(0, 42)}..." (2 cited passages)`);
+    }
+
+    function submitDelegatedTask() {
+      const goal = document.getElementById("delegate-goal-input").value.trim();
+      const lane = document.getElementById("delegate-lane-input").value;
+      if (!goal) return;
+      const newId = `task-${Math.floor(100 + Math.random() * 899)}`;
+      const runId = `run-worker-${Math.floor(200 + Math.random() * 799)}`;
+      state.tasks.unshift({
+        id: newId,
+        goal,
+        lane,
+        status: "running",
+        revision: 1,
+        runner: "worker",
+        result_summary: "Worker initialized; scanning Recall and vault...",
+        updated_at: "Just now",
+        artifacts: [],
+        events: [
+          { cursor: 201, type: "task.submitted", time: "10:55:02", detail: `Goal submitted by sandip (lane: ${lane})` },
+          { cursor: 202, type: "run.started", time: "10:55:03", detail: `Spawned child-process worker (${runId}, lease_token: lease_new1, fence: #1)` }
+        ]
+      });
+      state.runs.unshift({
+        id: runId,
+        target: `task:${newId} (${goal.slice(0, 28)}...)`,
+        runner: "worker",
+        admission_key: `task:${newId}:rev-1`,
+        lease_token: "lease_new1",
+        fencing_generation: 1,
+        status: "running",
+        started_at: "10:55:03",
+        cost_usd: 0.00
+      });
+      state.selectedTaskId = newId;
+      document.getElementById("cmd-dialog").close();
+      switchView("tasks");
+      showToast(`Delegated task ${newId} started in background child process`);
+    }
+
+    function openMeetingNotesDialog(topic, date) {
+      document.getElementById("mtg-topic-input").value = topic;
+      document.getElementById("mtg-date-input").value = date;
+      document.getElementById("meeting-notes-dialog").showModal();
+    }
+
+    function ingestMeetingNotes() {
+      const topic = document.getElementById("mtg-topic-input").value.trim() || "Untitled Meeting";
+      const date = document.getElementById("mtg-date-input").value.trim() || "2026-10-23";
+      const newId = `item-mtg-${Date.now().toString().slice(-3)}`;
+      state.inboxItems.unshift({
+        id: newId,
+        capability_id: "meeting",
+        type: "meeting-item-review",
+        lane: "meetings",
+        priority: "high",
+        title: `Decision: Adopt Vendor A for SOC2 monitoring (${topic})`,
+        subtitle: `Extracted via POST /api/meetings/notes · Notion Decisions target`,
+        why: "Extracted from pasted meeting notes. Obsidian note written to Areas/Meetings/" + date + ".md.",
+        mode: "automated",
+        target: "notion.decision.create",
+        reversibility: "reversible",
+        value: 0,
+        revision: 1,
+        payload_hash: "sha256:66d019fa23c1",
+        note_path: `Areas/Meetings/${date}-${topic.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.md`,
+        project: "Samaritan",
+        status: "pending"
+      });
+      state.selectedInboxId = newId;
+      document.getElementById("meeting-notes-dialog").close();
+      switchView("inbox");
+      showToast(`Saved note to Obsidian & queued extracted items in Inbox`);
+    }
+
+    function filterInboxLane(lane) {
+      state.inboxLane = lane;
+      document.querySelectorAll(".lane-pill").forEach((b) => {
+        b.classList.toggle("pill-active", b.dataset.lane === lane);
+      });
+      renderInbox();
+    }
+
+    function toggleBatchMode() {
+      state.batchMode = !state.batchMode;
+      document.getElementById("batch-outcome-banner").classList.add("hidden");
+      renderInbox();
+    }
+
+    function toggleBatchItem(id) {
+      const idx = state.selectedBatchIds.indexOf(id);
+      if (idx >= 0) state.selectedBatchIds.splice(idx, 1);
+      else state.selectedBatchIds.push(id);
+      renderInbox();
+    }
+
+    function runBatchApprove() {
+      const applied = [];
+      const skipped = [];
+      for (const id of [...state.selectedBatchIds]) {
+        const item = state.inboxItems.find((i) => i.id === id && i.status === "pending");
+        if (!item) continue;
+        if (item.value >= 100 || item.target === "guided.fallback" || item.reversibility === "irreversible") {
+          const rule = item.value >= 100 ? "above_value_threshold ($420 > $100)" : "irreversible_or_money_locked";
+          skipped.push(`${item.title.slice(0, 34)}... [held back: ${rule}]`);
+        } else {
+          item.status = "executed";
+          applied.push(item.title.slice(0, 34) + "...");
+        }
+      }
+      const banner = document.getElementById("batch-outcome-banner");
+      banner.classList.remove("hidden");
+      banner.innerHTML = `
+        <div class="font-bold text-[#047857]">Batch Respond Complete (POST /api/actions/batch)</div>
+        <div class="mt-1"><b>Applied (${applied.length}):</b> ${applied.join(" · ") || "none"}</div>
+        <div class="mt-0.5 text-[#b45309]"><b>Skipped by Batch Risk Gate (${skipped.length}):</b> ${skipped.join(" · ") || "none"}</div>
+      `;
+      renderAll();
+      showToast(`Batch approved ${applied.length} low-risk item(s); held back ${skipped.length} high-risk item(s)`);
+    }
+
+    function runBatchDefer() {
+      let count = 0;
+      for (const id of [...state.selectedBatchIds]) {
+        const item = state.inboxItems.find((i) => i.id === id && i.status === "pending");
+        if (item) {
+          item.status = "deferred";
+          count++;
+        }
+      }
+      renderAll();
+      showToast(`Snoozed ${count} selected item(s) for 1 day (non-committing response bypasses risk gate)`);
+    }
+
+    function simulateStaleConflict() {
+      const item = state.inboxItems.find((i) => i.id === state.selectedInboxId);
+      if (!item) return;
+      item.revision += 1;
+      item.payload_hash = "sha256:e88201ff9b04";
+      state.staleConflictSimulated = true;
+      renderInbox();
+      showToast("Simulated background re-ingest: item revision bumped to v" + item.revision, true);
+    }
+
+    function approveInboxItem(id) {
+      const item = state.inboxItems.find((i) => i.id === id);
+      if (!item) return;
+      if (state.staleConflictSimulated) {
+        showToast("409 Conflict (stale_approval): expected_payload_hash mismatch! Reload revision first.", true);
+        return;
+      }
+      item.status = item.mode === "guided" ? "awaiting_confirmation" : "executed";
+      const remaining = state.inboxItems.filter((i) => i.status === "pending");
+      if (remaining.length) state.selectedInboxId = remaining[0].id;
+      renderAll();
+      if (item.target === "ticktick.task.create") {
+        showToast("Filed via TickTick Open API (receipt id: tt_99281a, #73 sanitized to PR 73)");
+      } else {
+        showToast(`Approved "${item.title.slice(0, 36)}..." -> ${item.status}`);
+      }
+    }
+
+    function simulateHookStop(id) {
+      const item = state.inboxItems.find((i) => i.id === id);
+      if (!item) return;
+      item.status = "executed";
+      const remaining = state.inboxItems.filter((i) => i.status === "pending");
+      if (remaining.length) state.selectedInboxId = remaining[0].id;
+      renderAll();
+      showToast("POST /api/hooks/coding-agent (Stop) received: auto-resolved waiting card in Inbox");
+    }
+
+    function answerWorkerQuestion(itemId, taskId) {
+      const input = document.getElementById("worker-answer-input");
+      const answer = input ? input.value.trim() : "Use only the 2026 SOC2 report.";
+      const item = state.inboxItems.find((i) => i.id === itemId);
+      if (item) item.status = "executed";
+      const task = state.tasks.find((t) => t.id === taskId);
+      if (task) {
+        task.status = "running";
+        task.revision += 1;
+        task.result_summary = `Resumed at rev ${task.revision} with answer: "${answer}"`;
+        task.events.push({
+          cursor: 109,
+          type: "question.answered",
+          time: "10:55:20",
+          detail: `Sandip answered (rev ${task.revision}): "${answer}" -> worker resumed`
+        });
+      }
+      const remaining = state.inboxItems.filter((i) => i.status === "pending");
+      if (remaining.length) state.selectedInboxId = remaining[0].id;
+      renderAll();
+      showToast(`Sent answer to worker (${taskId}); task transitioned needs_input -> running`);
+    }
+
+    function cancelRun(runId) {
+      const run = state.runs.find((r) => r.id === runId);
+      if (!run || run.status !== "running") return;
+      run.status = "cancelled";
+      run.fencing_generation += 1;
+      run.lease_token = "REVOKED";
+      const task = state.tasks.find((t) => run.target.includes(t.id));
+      if (task && task.status === "running") {
+        task.status = "cancelled";
+        task.result_summary = "Cancelled by Sandip via Stop button (SIGTERM sent, lease fenced).";
+        task.events.push({
+          cursor: 112,
+          type: "run.cancelled",
+          time: "10:55:40",
+          detail: `Run ${runId} killed (SIGTERM); fencing_generation bumped to #${run.fencing_generation}`
+        });
+      }
+      renderAll();
+      showToast(`Cancelled ${runId}: sent SIGTERM to child process and fenced lease to #${run.fencing_generation}`);
+    }
+
+    function simulateDuplicateAdmission() {
+      const dupKey = "schedule:meeting-prep:2026-10-23T11:00";
+      const banner = document.getElementById("activity-banner");
+      banner.classList.remove("hidden");
+      banner.innerHTML = `
+        <b>Admission Deduplication Verified:</b> Attempted to admit duplicate <code class="mono">${dupKey}</code>.
+        Unique index on <code class="mono">runs.admission_key</code> rejected the duplicate and returned <span class="px-1.5 py-0.5 rounded bg-[#f0f1f4] font-bold">status: skipped</span> without firing the capability a second time.
+      `;
+      showToast("Duplicate admission_key caught; run marked 'skipped'");
+    }
+
+    function simulateBootRecovery() {
+      const banner = document.getElementById("activity-banner");
+      banner.classList.remove("hidden");
+      banner.innerHTML = `
+        <b>Boot Lease Reconciliation Verified:</b> <code class="mono">reconcile()</code> scanned <code class="mono">runs</code> and <code class="mono">tasks</code> left in <code class="mono">running</code> from a prior process, marked them <span class="px-1.5 py-0.5 rounded bg-[#fde7e7] text-[#dc2626] font-bold">interrupted</span>, revoked their lease tokens, and recorded <code class="mono">run.interrupted</code> in <code class="mono">activity_events</code>.
+      `;
+      showToast("Simulated boot reconciliation for orphan running leases");
+    }
+
+    function toggleSourceRule(sourceId, field) {
+      const rule = state.sourceRules.find((r) => r.source_id === sourceId);
+      if (!rule) return;
+      if (field === "muted") {
+        rule.muted = !rule.muted;
+        showToast(`${sourceId}: Telegram delivery ${rule.muted ? "MUTED (capability still runs)" : "UNMUTED"}`);
+      } else if (field === "paused") {
+        rule.paused = !rule.paused;
+        showToast(`${sourceId}: Capability ${rule.paused ? "PAUSED (triggers skipped)" : "RESUMED"}`);
+      } else if (field === "snooze") {
+        rule.snoozed_until = rule.snoozed_until ? null : "Today 14:00 IST";
+        showToast(`${sourceId}: ${rule.snoozed_until ? "Snoozed until 14:00 IST" : "Snooze cleared"}`);
+      }
+      renderSettings();
+    }
+
+    function handleTelegramCallback(msgId, action) {
+      const msg = state.telegramMessages.find((m) => m.id === msgId);
+      if (!msg) return;
+      const item = state.inboxItems.find((i) => i.id === msg.itemId);
+      if (action === "approve") {
+        if (item) item.status = "executed";
+        msg.resolved = "Approved via Telegram inline button (actor: sandip)";
+        showToast("Telegram callback: Approved item & executed target adapter");
+      } else if (action === "snooze") {
+        if (item) item.status = "deferred";
+        msg.resolved = "Snoozed 2h via Telegram inline button";
+        showToast("Telegram callback: Item deferred for 2h");
+      } else if (action === "mute") {
+        const rule = state.sourceRules.find((r) => r.source_id === "meeting");
+        if (rule) rule.muted = true;
+        msg.resolved = "Muted 'meeting' Telegram notifications (capability still runs)";
+        showToast("Telegram callback: Muted source 'meeting' in source_rules");
+      }
+      renderAll();
+    }
+
+    function sendTelegramMessage() {
+      const input = document.getElementById("telegram-input");
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = "";
+      state.telegramMessages.push({
+        id: "tg-user-" + Date.now(),
+        from: "user",
+        time: "10:56 AM",
+        title: "Sandip",
+        body: text
+      });
+      if (text.toLowerCase().startsWith("/task ")) {
+        const goal = text.slice(6).trim();
+        state.telegramMessages.push({
+          id: "tg-bot-" + Date.now(),
+          from: "bot",
+          time: "10:56 AM",
+          title: "Task Queued",
+          body: `Started delegated worker task for: "${goal}"`,
+          resolved: "Active in Tasks view"
+        });
+      } else {
+        const qItem = state.inboxItems.find((i) => i.id === "item-q-1" && i.status === "pending");
+        if (qItem) {
+          qItem.status = "executed";
+          const task = state.tasks.find((t) => t.id === "task-soc2");
+          if (task) {
+            task.status = "running";
+            task.revision += 1;
+            task.result_summary = `Resumed via Telegram reply: "${text}"`;
+          }
+          state.telegramMessages.push({
+            id: "tg-bot-" + Date.now(),
+            from: "bot",
+            time: "10:56 AM",
+            title: "Worker Resumed (task-soc2)",
+            body: `Delivered your answer to task-soc2 (revision ${task ? task.revision : 3}). Worker is back in 'running'.`,
+            resolved: "Question answered"
+          });
+        }
+      }
+      renderAll();
+    }
+
+    function renderNow() {
+      const pending = state.inboxItems.filter((i) => i.status === "pending");
+      const running = state.runs.filter((r) => r.status === "running");
+
+      document.getElementById("tile-inbox-count").textContent = pending.length;
+      document.getElementById("tile-tasks-count").textContent = state.tasks.length;
+      document.getElementById("tile-runs-count").textContent = running.length;
+      document.getElementById("nav-inbox-count").textContent = pending.length;
+      document.getElementById("nav-tasks-count").textContent = state.tasks.length;
+      document.getElementById("nav-activity-count").textContent = `${running.length} running`;
+
+      const waitingHtml = pending.slice(0, 4).map((item) => `
+        <div onclick="state.selectedInboxId='${item.id}'; switchView('inbox')" class="py-2.5 flex items-center justify-between gap-3 cursor-pointer hover:opacity-80">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <span class="w-2 h-2 rounded-full flex-shrink-0 ${item.priority === 'urgent' ? 'bg-[#dc2626]' : 'bg-[#4f46e5]'}"></span>
+            <div class="truncate">
+              <div class="text-xs font-semibold truncate">${item.title}</div>
+              <div class="text-xs text-[var(--muted-foreground)] truncate">${item.subtitle}</div>
+            </div>
+          </div>
+          <span class="text-xs uppercase font-bold px-2 py-0.5 rounded bg-[var(--background)] border border-[var(--border)] whitespace-nowrap">${item.capability_id}</span>
+        </div>
+      `).join("");
+      document.getElementById("now-waiting-list").innerHTML = waitingHtml || `<div class="py-6 text-center text-xs text-[var(--muted-foreground)]">Inbox zero. Nothing waiting on you.</div>`;
+
+      const runningHtml = state.runs.slice(0, 4).map((r) => `
+        <div class="py-2.5 flex items-center justify-between gap-3 text-xs">
+          <div class="min-w-0">
+            <div class="font-semibold truncate flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full ${r.status === 'running' ? 'bg-[#10b981] pulse' : r.status === 'cancelled' ? 'bg-[#dc2626]' : 'bg-[#64748b]'}"></span>
+              <span>${r.target}</span>
+            </div>
+            <div class="text-[var(--muted-foreground)] mono truncate mt-0.5">
+              ${r.runner} · key: ${r.admission_key} · fence #${r.fencing_generation}
+            </div>
+          </div>
+          ${r.status === "running"
+            ? `<button onclick="cancelRun('${r.id}')" class="px-2.5 py-1 rounded bg-[#fde7e7] text-[#dc2626] font-bold cursor-pointer whitespace-nowrap">Stop</button>`
+            : `<span class="px-2 py-0.5 rounded bg-[var(--background)] text-[var(--muted-foreground)] font-semibold uppercase">${r.status}</span>`
+          }
+        </div>
+      `).join("");
+      document.getElementById("now-running-list").innerHTML = runningHtml;
+    }
+
+    function renderInbox() {
+      const bar = document.getElementById("batch-triage-bar");
+      bar.classList.toggle("hidden", !state.batchMode);
+      document.getElementById("batch-selected-label").textContent = `${state.selectedBatchIds.length} item(s) selected`;
+
+      const pending = state.inboxItems.filter((i) => i.status === "pending" && (state.inboxLane === "all" || i.lane === state.inboxLane));
+      const listEl = document.getElementById("inbox-list-container");
+
+      listEl.innerHTML = pending.map((item) => {
+        const active = item.id === state.selectedInboxId;
+        const checked = state.selectedBatchIds.includes(item.id);
+        const highRisk = item.value >= 100 || item.reversibility === "irreversible" || item.mode === "guided";
+        return `
+          <div class="flex items-stretch ${active ? 'item-active' : ''}">
+            ${state.batchMode ? `
+              <label class="w-9 flex items-center justify-center border-r border-[var(--border)] cursor-pointer">
+                <input type="checkbox" ${checked ? "checked" : ""} onchange="toggleBatchItem('${item.id}')" />
+              </label>
+            ` : ""}
+            <button onclick="state.selectedInboxId='${item.id}'; state.staleConflictSimulated=false; renderInbox()" class="flex-1 text-left p-3.5 cursor-pointer hover:bg-[var(--card)]">
+              <div class="flex items-center justify-between gap-2 mb-1">
+                <span class="text-xs font-bold uppercase px-2 py-0.5 rounded bg-[#eef0fe] text-[#4f46e5]">${item.capability_id}</span>
+                <span class="text-xs mono text-[var(--muted-foreground)]">v${item.revision}</span>
+              </div>
+              <div class="text-xs font-bold leading-snug">${item.title}</div>
+              <div class="text-xs text-[var(--muted-foreground)] mt-1 line-clamp-1">${item.subtitle}</div>
+              <div class="flex flex-wrap gap-1.5 mt-2">
+                <span class="text-xs px-2 py-0.5 rounded font-semibold ${
+                  item.mode === 'automated' ? 'bg-[#e2f6ee] text-[#047857]' : item.mode === 'assisted' ? 'bg-[#fdf1e0] text-[#b45309]' : 'bg-[#eef0fe] text-[#4f46e5]'
+                }">${item.mode}</span>
+                ${highRisk ? `<span class="text-xs px-2 py-0.5 rounded bg-[#fde7e7] text-[#dc2626] font-semibold">individual review required</span>` : `<span class="text-xs px-2 py-0.5 rounded bg-[#e2f6ee] text-[#047857] font-semibold">batch-safe</span>`}
+              </div>
+            </button>
+          </div>
+        `;
+      }).join("") || `<div class="p-6 text-center text-xs text-[var(--muted-foreground)]">No pending items in this lane.</div>`;
+
+      const selected = state.inboxItems.find((i) => i.id === state.selectedInboxId && i.status === "pending") || pending[0];
+      const detailEl = document.getElementById("inbox-detail-container");
+      if (!selected) {
+        detailEl.innerHTML = `<div class="py-16 text-center text-xs text-[var(--muted-foreground)]">All items in this lane are handled.</div>`;
+        return;
+      }
+
+      const staleBanner = state.staleConflictSimulated ? `
+        <div class="mb-4 p-3.5 rounded-xl bg-[#fef2f2] border border-[#fecaca] text-xs text-[#991b1b] space-y-2">
+          <div class="font-bold">409 Conflict: Stale Approval Prevented (expected_payload_hash mismatch)</div>
+          <div>While you had revision <b>v${selected.revision - 1}</b> open, a background re-ingest updated this item to <b>v${selected.revision}</b> (<code class="mono">${selected.payload_hash}</code>). Samaritan blocked approval of the stale payload.</div>
+          <button onclick="state.staleConflictSimulated=false; renderInbox(); showToast('Reloaded latest revision v${selected.revision}')" class="px-3 py-1.5 rounded-lg bg-[#dc2626] text-white font-semibold cursor-pointer">
+            Reload &amp; Bind to Revision v${selected.revision}
+          </button>
+        </div>
+      ` : "";
+
+      let bodySpecific = "";
+      if (selected.type === "meeting-item-review") {
+        bodySpecific = `
+          <div class="p-4 rounded-xl border border-[var(--border)] bg-[var(--background)] space-y-2 text-xs">
+            <div class="flex items-center justify-between">
+              <span class="font-bold uppercase text-[var(--muted-foreground)]">Source Meeting Note (Obsidian)</span>
+              <span class="mono text-[#4f46e5]">${selected.note_path}</span>
+            </div>
+            <div class="grid grid-cols-2 gap-3 pt-2">
+              <div>
+                <div class="text-[var(--muted-foreground)] uppercase font-bold">Sanitized Title (TickTick Rule)</div>
+                <input type="text" value="${selected.title}" oninput="selected.title=this.value; selected.revision++; selected.payload_hash='sha256:ed19a'+Math.floor(Math.random()*999); renderInbox();" class="w-full mt-1 border border-[var(--border)] rounded px-2.5 py-1.5 bg-[var(--card)]" />
+              </div>
+              <div>
+                <div class="text-[var(--muted-foreground)] uppercase font-bold">Execution Target</div>
+                <div class="mt-2 mono">${selected.target} (requires provider receipt id)</div>
+              </div>
+            </div>
+          </div>
+        `;
+      } else if (selected.type === "coding-agent-waiting") {
+        bodySpecific = `
+          <div class="p-4 rounded-xl border border-[var(--border)] bg-[var(--background)] space-y-2.5 text-xs">
+            <div class="flex items-center justify-between">
+              <span class="font-bold uppercase text-[#0e7490]">Coding Agent Session Hook</span>
+              <span class="mono">${selected.cwd}</span>
+            </div>
+            <div class="p-2.5 rounded bg-[#151a26] text-[#e2e8f0] mono">
+              $ ${selected.command_requested}
+            </div>
+            <div class="text-[var(--muted-foreground)]">
+              When you answer in the terminal or Claude Remote Control and the session emits <code class="mono">Stop</code> or <code class="mono">SessionEnd</code>, this Inbox card auto-resolves.
+            </div>
+            <div class="flex gap-2 pt-1">
+              <a href="${selected.remote_url}" target="_blank" rel="noreferrer" class="px-3 py-1.5 rounded-lg bg-[#4f46e5] text-white font-semibold no-underline">Open Claude Remote Control</a>
+              <button onclick="simulateHookStop('${selected.id}')" class="px-3 py-1.5 rounded-lg border border-[#047857] text-[#047857] font-semibold cursor-pointer">
+                Simulate Hook 'Stop' (Auto-Resolve)
+              </button>
+            </div>
+          </div>
+        `;
+      } else if (selected.type === "task-question") {
+        bodySpecific = `
+          <div class="p-4 rounded-xl border border-[var(--border)] bg-[var(--background)] space-y-3 text-xs">
+            <div class="font-bold uppercase text-[#7c3aed]">Clarifying Question from Delegated Worker (${selected.task_id})</div>
+            <p class="m-0 font-semibold text-sm">${selected.title}</p>
+            <div class="flex gap-2 flex-wrap">
+              <button onclick="document.getElementById('worker-answer-input').value='Use only the 2026 SOC2 Type II report; ignore 2025.'" class="px-2.5 py-1 rounded border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+                Quick chip: Only 2026 report
+              </button>
+              <button onclick="document.getElementById('worker-answer-input').value='Include both 2025 and 2026 to show year-over-year delta.'" class="px-2.5 py-1 rounded border border-[var(--border)] bg-[var(--card)] cursor-pointer">
+                Quick chip: Compare 2025 + 2026
+              </button>
+            </div>
+            <textarea id="worker-answer-input" rows="2" class="w-full border border-[var(--border)] rounded-lg p-2 bg-[var(--card)]">Use only the 2026 SOC2 Type II report; ignore 2025.</textarea>
+            <button onclick="answerWorkerQuestion('${selected.id}', '${selected.task_id}')" class="px-4 py-2 rounded-lg bg-[#4f46e5] text-white font-semibold cursor-pointer">
+              Send Answer &amp; Resume Worker (revision ${selected.revision} -> ${selected.revision + 1})
+            </button>
+          </div>
+        `;
+      } else {
+        bodySpecific = `
+          <div class="p-4 rounded-xl border border-[var(--border)] bg-[var(--background)] space-y-2 text-xs">
+            <div class="font-bold uppercase text-[var(--muted-foreground)]">Execution Preview</div>
+            <div>Target: <code class="mono">${selected.target}</code> · Reversibility: <b>${selected.reversibility}</b> · Value: <b>$${selected.value}</b></div>
+            ${selected.draft_body ? `<textarea rows="3" class="w-full mt-2 border border-[var(--border)] rounded-lg p-2 bg-[var(--card)]">${selected.draft_body}</textarea>` : ""}
+          </div>
+        `;
+      }
+
+      detailEl.innerHTML = `
+        <div class="space-y-4 max-w-2xl">
+          ${staleBanner}
+          <div class="flex items-center justify-between text-xs text-[var(--muted-foreground)]">
+            <span>${selected.capability_id} · ${selected.type}</span>
+            <span class="mono">revision: v${selected.revision} · ${selected.payload_hash}</span>
+          </div>
+          <h2 class="text-lg font-bold m-0">${selected.title}</h2>
+          <div class="p-3 rounded-lg border-l-4 border-[#4f46e5] bg-[var(--background)] text-xs">
+            <b>Why flagged:</b> ${selected.why}
+          </div>
+          ${bodySpecific}
+          <div class="pt-4 border-t border-[var(--border)] flex flex-wrap gap-2">
+            <button onclick="approveInboxItem('${selected.id}')" class="px-4 py-2 rounded-lg bg-[#047857] text-white text-xs font-semibold cursor-pointer">
+              ${selected.mode === 'guided' ? 'Stage Guided Handoff' : 'Approve & Execute (Bind v' + selected.revision + ')'}
+            </button>
+            <button onclick="selected.status='deferred'; renderAll(); showToast('Snoozed item for 1 day');" class="px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--card)] text-xs font-semibold cursor-pointer">
+              Snooze 1d
+            </button>
+            <button onclick="selected.status='rejected'; renderAll(); showToast('Dismissed item');" class="px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--card)] text-xs font-semibold text-[#dc2626] cursor-pointer">
+              Dismiss
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderTasks() {
+      const listEl = document.getElementById("tasks-list-container");
+      listEl.innerHTML = state.tasks.map((t) => {
+        const active = t.id === state.selectedTaskId;
+        const badgeColor =
+          t.status === "running" ? "bg-[#e2f6ee] text-[#047857]" :
+          t.status === "needs_input" ? "bg-[#fdf1e0] text-[#b45309]" :
+          t.status === "awaiting_review" ? "bg-[#eef0fe] text-[#4f46e5]" :
+          t.status === "cancelled" ? "bg-[#fde7e7] text-[#dc2626]" : "bg-[#f0f1f4] text-[#616b7a]";
+        return `
+          <button onclick="state.selectedTaskId='${t.id}'; renderTasks()" class="w-full text-left p-3.5 cursor-pointer hover:bg-[var(--card)] ${active ? 'item-active' : ''}">
+            <div class="flex items-center justify-between gap-2 mb-1">
+              <span class="text-xs font-bold uppercase mono text-[#4f46e5]">${t.id} · ${t.lane}</span>
+              <span class="text-xs px-2 py-0.5 rounded font-semibold ${badgeColor}">${t.status}</span>
+            </div>
+            <div class="text-xs font-bold line-clamp-2">${t.goal}</div>
+            <div class="text-xs text-[var(--muted-foreground)] mt-1">rev v${t.revision} · ${t.updated_at}</div>
+          </button>
+        `;
+      }).join("");
+
+      const task = state.tasks.find((t) => t.id === state.selectedTaskId) || state.tasks[0];
+      const detailEl = document.getElementById("tasks-detail-container");
+      if (!task) return;
+
+      const artifactsHtml = task.artifacts.map((a) => `
+        <div class="p-3 rounded-lg border border-[var(--border)] bg-[var(--background)] space-y-2">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-bold mono text-[#4f46e5]">${a.path_or_url}</span>
+            <span class="mono text-[var(--muted-foreground)]">${a.kind} · ${a.content_hash}</span>
+          </div>
+          <pre class="p-2.5 rounded bg-[var(--card)] border border-[var(--border)] text-xs mono overflow-x-auto whitespace-pre-wrap m-0">${a.preview}</pre>
+        </div>
+      `).join("") || `<div class="text-xs text-[var(--muted-foreground)]">No artifacts emitted yet.</div>`;
+
+      const eventsHtml = task.events.map((ev) => `
+        <div class="flex items-start gap-3 text-xs py-1.5 border-b border-dashed border-[var(--border)]">
+          <span class="mono text-[var(--muted-foreground)]">#${ev.cursor} · ${ev.time}</span>
+          <span class="px-1.5 py-0.5 rounded bg-[#eef0fe] text-[#4f46e5] mono font-semibold">${ev.type}</span>
+          <span class="flex-1">${ev.detail}</span>
+        </div>
+      `).join("");
+
+      detailEl.innerHTML = `
+        <div class="space-y-5 max-w-2xl">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="text-xs mono text-[var(--muted-foreground)]">
+              ${task.id} · runner: ${task.runner} · revision v${task.revision}
+            </div>
+            ${task.status === "running" ? `
+              <button onclick="cancelRun('run-worker-103')" class="px-3 py-1.5 rounded-lg bg-[#dc2626] text-white text-xs font-semibold cursor-pointer">
+                Stop Task (SIGTERM + Fence Lease)
+              </button>
+            ` : ""}
+          </div>
+          <h2 class="text-lg font-bold m-0">${task.goal}</h2>
+          <div class="p-3 rounded-lg bg-[var(--background)] border border-[var(--border)] text-xs">
+            <b>Current state (${task.status}):</b> ${task.result_summary}
+          </div>
+
+          ${task.status === "needs_input" ? `
+            <div class="p-4 rounded-xl bg-[#fffbeb] border border-[#fde68a] space-y-2 text-xs">
+              <div class="font-bold text-[#b45309]">Worker Waiting for Clarification: "${task.question}"</div>
+              <div class="flex gap-2">
+                <input id="task-inline-answer" type="text" value="Only 2026 SOC2 report." class="flex-1 border border-[#fcd34d] rounded px-2.5 py-1.5 bg-white text-[#1a1d24]" />
+                <button onclick="answerWorkerQuestion('item-q-1', '${task.id}')" class="px-3 py-1.5 rounded bg-[#4f46e5] text-white font-semibold cursor-pointer">
+                  Answer &amp; Resume
+                </button>
+              </div>
+            </div>
+          ` : ""}
+
+          <div>
+            <h3 class="text-xs font-bold uppercase tracking-wider text-[var(--muted-foreground)] mb-2">
+              Scoped Artifacts (<code class="mono">~/.samaritan/artifacts/${task.id}/</code>)
+            </h3>
+            <div class="space-y-2">${artifactsHtml}</div>
+          </div>
+
+          <div>
+            <h3 class="text-xs font-bold uppercase tracking-wider text-[var(--muted-foreground)] mb-2">
+              Task Activity Cursor Stream (<code class="mono">activity_events</code>)
+            </h3>
+            <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl p-3">${eventsHtml}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderActivity() {
+      const tbody = document.getElementById("runs-table-body");
+      tbody.innerHTML = state.runs.map((r) => `
+        <tr>
+          <td class="py-3 px-4 font-semibold">${r.target}<div class="text-[var(--muted-foreground)] mono font-normal">${r.id} · started ${r.started_at}</div></td>
+          <td class="py-3 px-3 mono">${r.runner}</td>
+          <td class="py-3 px-3 mono text-[#4f46e5]">${r.admission_key}</td>
+          <td class="py-3 px-3 mono">${r.lease_token} · gen #${r.fencing_generation}</td>
+          <td class="py-3 px-3">
+            <span class="px-2 py-0.5 rounded font-semibold uppercase ${
+              r.status === 'running' ? 'bg-[#e2f6ee] text-[#047857]' :
+              r.status === 'cancelled' ? 'bg-[#fde7e7] text-[#dc2626]' : 'bg-[#f0f1f4] text-[#616b7a]'
+            }">${r.status}</span>
+          </td>
+          <td class="py-3 px-4 text-right">
+            ${r.status === "running"
+              ? `<button onclick="cancelRun('${r.id}')" class="px-3 py-1 rounded bg-[#dc2626] text-white font-semibold cursor-pointer">Stop Run</button>`
+              : `<span class="text-[var(--muted-foreground)]">$${r.cost_usd.toFixed(2)}</span>`
+            }
+          </td>
+        </tr>
+      `).join("");
+
+      const allEvents = state.tasks.flatMap((t) => t.events.map((e) => ({ ...e, task: t.id }))).sort((a, b) => b.cursor - a.cursor);
+      document.getElementById("activity-stream-list").innerHTML = allEvents.slice(0, 6).map((e) => `
+        <div class="flex items-center gap-3 text-xs p-2 rounded bg-[var(--background)] border border-[var(--border)]">
+          <span class="mono font-bold text-[#4f46e5]">cursor #${e.cursor}</span>
+          <span class="mono text-[var(--muted-foreground)]">${e.time}</span>
+          <span class="px-2 py-0.5 rounded bg-[var(--card)] border border-[var(--border)] mono font-semibold">${e.type}</span>
+          <span class="flex-1 truncate">${e.detail}</span>
+        </div>
+      `).join("");
+    }
+
+    function renderSettings() {
+      const tbody = document.getElementById("source-rules-body");
+      tbody.innerHTML = state.sourceRules.map((r) => `
+        <tr>
+          <td class="py-3 px-3 font-bold mono">${r.source_id}</td>
+          <td class="py-3 px-3 text-[var(--muted-foreground)]">${r.trigger}</td>
+          <td class="py-3 px-3">
+            ${r.muted
+              ? `<span class="px-2 py-0.5 rounded bg-[#fdf1e0] text-[#b45309] font-semibold">Muted (Inbox only)</span>`
+              : r.snoozed_until
+                ? `<span class="px-2 py-0.5 rounded bg-[#eef0fe] text-[#4f46e5] font-semibold">Snoozed -> ${r.snoozed_until}</span>`
+                : `<span class="px-2 py-0.5 rounded bg-[#e2f6ee] text-[#047857] font-semibold">Delivering</span>`
+            }
+          </td>
+          <td class="py-3 px-3">
+            ${r.paused
+              ? `<span class="px-2 py-0.5 rounded bg-[#fde7e7] text-[#dc2626] font-semibold">Paused (Triggers Skipped)</span>`
+              : `<span class="px-2 py-0.5 rounded bg-[#e2f6ee] text-[#047857] font-semibold">Active</span>`
+            }
+          </td>
+          <td class="py-3 px-3 text-right space-x-1">
+            <button onclick="toggleSourceRule('${r.source_id}', 'muted')" class="px-2.5 py-1 rounded border border-[var(--border)] bg-[var(--background)] font-semibold cursor-pointer">
+              ${r.muted ? "Unmute" : "Mute"}
+            </button>
+            <button onclick="toggleSourceRule('${r.source_id}', 'snooze')" class="px-2.5 py-1 rounded border border-[var(--border)] bg-[var(--background)] font-semibold cursor-pointer">
+              ${r.snoozed_until ? "Wake" : "Snooze 2h"}
+            </button>
+            <button onclick="toggleSourceRule('${r.source_id}', 'paused')" class="px-2.5 py-1 rounded border border-[var(--border)] bg-[var(--background)] font-semibold text-[#dc2626] cursor-pointer">
+              ${r.paused ? "Resume" : "Pause"}
+            </button>
+          </td>
+        </tr>
+      `).join("");
+    }
+
+    function renderMobile() {
+      const pending = state.inboxItems.filter((i) => i.status === "pending").slice(0, 3);
+      document.getElementById("mobile-pwa-cards").innerHTML = pending.map((item) => `
+        <div class="bg-[#1f2637] border border-[#2e3852] rounded-xl p-3 space-y-2">
+          <div class="flex items-center justify-between text-xs">
+            <span class="uppercase font-bold text-[#818cf8]">${item.capability_id}</span>
+            <span class="mono text-[#94a3b8]">v${item.revision}</span>
+          </div>
+          <div class="text-xs font-bold">${item.title}</div>
+          <div class="flex gap-1.5 pt-1">
+            <button onclick="approveInboxItem('${item.id}')" class="flex-1 bg-[#047857] text-white text-xs font-semibold py-1 rounded cursor-pointer">Approve</button>
+            <button onclick="selected.status='deferred'; renderAll();" class="px-2.5 bg-[#2e3852] text-xs rounded cursor-pointer">Snooze</button>
+          </div>
+        </div>
+      `).join("") || `<div class="text-xs text-[#94a3b8] text-center py-4">All mobile cards triaged!</div>`;
+
+      document.getElementById("telegram-chat-feed").innerHTML = state.telegramMessages.map((m) => `
+        <div class="rounded-xl p-3 text-xs ${m.from === 'user' ? 'bg-[#0284c7] ml-8' : 'bg-[#1e293b] mr-4 border border-[#334155]'}">
+          <div class="flex justify-between text-[#94a3b8] mb-1">
+            <b class="text-white">${m.title}</b>
+            <span>${m.time}</span>
+          </div>
+          <div class="whitespace-pre-wrap leading-relaxed text-[#e2e8f0]">${m.body}</div>
+          ${m.from === "bot" && !m.resolved ? `
+            <div class="grid grid-cols-3 gap-1.5 mt-2.5 pt-2 border-t border-[#334155]">
+              <button onclick="handleTelegramCallback('${m.id}', 'approve')" class="bg-[#065f46] hover:bg-[#047857] text-white font-semibold py-1.5 rounded cursor-pointer">Approve</button>
+              <button onclick="handleTelegramCallback('${m.id}', 'snooze')" class="bg-[#334155] hover:bg-[#475569] text-white font-semibold py-1.5 rounded cursor-pointer">Snooze 2h</button>
+              <button onclick="handleTelegramCallback('${m.id}', 'mute')" class="bg-[#334155] hover:bg-[#475569] text-[#fca5a5] font-semibold py-1.5 rounded cursor-pointer">Mute Source</button>
+            </div>
+          ` : m.resolved ? `
+            <div class="mt-2 pt-1.5 border-t border-[#334155] text-[#6ee7b7] font-semibold">
+              [x] ${m.resolved}
+            </div>
+          ` : ""}
+        </div>
+      `).join("");
+    }
+
+    function renderAll() {
+      renderNow();
+      renderInbox();
+      renderTasks();
+      renderActivity();
+      renderSettings();
+      renderMobile();
+    }
+
+    state = initialState();
+    renderAll();
+  </script>
+</body>
+</html>

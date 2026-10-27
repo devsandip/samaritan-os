@@ -1,0 +1,205 @@
+<div id="samaritan-deliberation-explorer">
+  <style>
+    #samaritan-deliberation-explorer { color: var(--foreground); overflow-wrap: anywhere; }
+    #samaritan-deliberation-explorer .de-heading { margin-right: 90px; }
+    #samaritan-deliberation-explorer .de-section { margin-top: 20px; }
+    #samaritan-deliberation-explorer .de-stage { margin-top: 16px; }
+    #samaritan-deliberation-explorer .de-caption { margin: 8px 0 12px; }
+    #samaritan-deliberation-explorer .de-model { min-width: 0; }
+    #samaritan-deliberation-explorer .de-model h3 { margin-top: 0; }
+    #samaritan-deliberation-explorer .de-model p { margin: 8px 0; }
+    #samaritan-deliberation-explorer .de-model ul { padding-left: 18px; }
+    #samaritan-deliberation-explorer .de-line { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+    #samaritan-deliberation-explorer .de-stage-label { font-weight: 500; margin-bottom: 12px; }
+    #samaritan-deliberation-explorer .de-list { padding-left: 20px; margin-top: 8px; }
+    #samaritan-deliberation-explorer .de-list li { margin-bottom: 7px; }
+    #samaritan-deliberation-explorer .de-evidence { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+    #samaritan-deliberation-explorer .de-meta { margin-top: 8px; }
+    #samaritan-deliberation-explorer .de-pre { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; margin-top: 12px; }
+    #samaritan-deliberation-explorer .de-meter { display: flex; gap: 3px; height: 22px; margin: 14px 0; }
+    #samaritan-deliberation-explorer .de-segment { min-width: 1px; }
+    #samaritan-deliberation-explorer .de-legend { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-bottom: 16px; }
+    #samaritan-deliberation-explorer .de-legend-item { display: inline-flex; align-items: center; gap: 7px; }
+    #samaritan-deliberation-explorer .de-swatch { width: 11px; height: 11px; display: inline-block; flex-shrink: 0; }
+    #samaritan-deliberation-explorer .de-fields { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+    #samaritan-deliberation-explorer .de-field { min-width: 0; display: grid; gap: 6px; }
+    #samaritan-deliberation-explorer .de-source-field { max-width: 100%; display: grid; gap: 6px; }
+    #samaritan-deliberation-explorer .de-phase-strip { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 14px 0; }
+    #samaritan-deliberation-explorer .de-connector { color: var(--muted-foreground); }
+    #samaritan-deliberation-explorer .de-disclosure { margin-top: 14px; }
+    #samaritan-deliberation-explorer .de-value { font-weight: 500; }
+    #samaritan-deliberation-explorer .de-result { margin-top: 14px; }
+    @media (max-width: 550px) {
+      #samaritan-deliberation-explorer .de-fields { grid-template-columns: minmax(0, 1fr); }
+      #samaritan-deliberation-explorer .de-heading { margin-right: 0; }
+    }
+  </style>
+
+  <h2 class="de-heading">Three models. Three rounds. One plan.</h2>
+  <div class="text-small text-muted de-caption">20 October 2026 · Claude, ChatGPT / Codex, Gemini · Source-linked record</div>
+  <div class="nav nav-pills" role="tablist" aria-label="Explore the deliberation">
+    <button type="button" class="nav-link active" id="de-tab-rounds" role="tab" aria-controls="de-panel-rounds" aria-selected="true" data-tab="rounds">Rounds</button>
+    <button type="button" class="nav-link" id="de-tab-trails" role="tab" aria-controls="de-panel-trails" aria-selected="false" data-tab="trails" aria-label="Decision trails">Issues</button>
+    <button type="button" class="nav-link" id="de-tab-coverage" role="tab" aria-controls="de-panel-coverage" aria-selected="false" data-tab="coverage" aria-label="Coverage audit">Audit</button>
+    <button type="button" class="nav-link" id="de-tab-evidence" role="tab" aria-controls="de-panel-evidence" aria-selected="false" data-tab="evidence" aria-label="Source evidence">Sources</button>
+  </div>
+
+  <section id="de-panel-rounds" class="de-section" role="tabpanel" aria-labelledby="de-tab-rounds">
+    <div class="viz-controls" aria-label="Research round">
+      <button class="btn" type="button" data-round="1" aria-pressed="true">1 · Recommend</button>
+      <button class="btn" type="button" data-round="2" aria-pressed="false">2 · Challenge</button>
+      <button class="btn" type="button" data-round="3" aria-pressed="false">3 · Converge</button>
+    </div>
+    <div id="de-round-content"></div>
+  </section>
+
+  <section id="de-panel-trails" class="de-section" role="tabpanel" aria-labelledby="de-tab-trails" hidden>
+    <label class="form-label" for="de-trail-select">Follow an issue from first positions to final decision</label>
+    <select class="form-select" id="de-trail-select"></select>
+    <div id="de-trail-content"></div>
+  </section>
+
+  <section id="de-panel-coverage" class="de-section" role="tabpanel" aria-labelledby="de-tab-coverage" hidden>
+    <h3>Did agreement cover the whole brief?</h3>
+    <div class="text-small text-muted" id="de-audit-intro"></div>
+    <div id="de-coverage-meter"></div>
+    <div class="de-fields">
+      <div class="de-field"><label class="form-label" for="de-status-select">Coverage status</label><select class="form-select" id="de-status-select"></select></div>
+      <div class="de-field"><label class="form-label" for="de-audit-select">Concern</label><select class="form-select" id="de-audit-select"></select></div>
+    </div>
+    <div id="de-audit-content"></div>
+    <details class="de-disclosure"><summary id="de-audit-table-label">All concerns</summary><div class="table-responsive" id="de-audit-table"></div></details>
+  </section>
+
+  <section id="de-panel-evidence" class="de-section" role="tabpanel" aria-labelledby="de-tab-evidence" hidden>
+    <div class="de-source-field"><label class="form-label" for="de-source-select">Saved source</label><select class="form-select" id="de-source-select"></select></div>
+    <div id="de-source-meta" class="text-small text-muted de-meta"></div>
+    <pre id="de-source-excerpt" class="de-pre text-small"></pre>
+    <details class="de-disclosure" id="de-full-source"><summary>Read the complete saved source</summary><pre class="de-pre text-small" id="de-source-full"></pre></details>
+    <details class="de-disclosure"><summary>How this account was assembled</summary><ul class="de-list text-small" id="de-method"></ul></details>
+  </section>
+  <div class="sr-only" id="de-announcement" aria-live="polite"></div>
+  <script type="application/json" id="samaritan-deliberation-data">__DELIBERATION_DATA__</script>
+  <script>
+    (() => {
+      const root = document.getElementById('samaritan-deliberation-explorer');
+      const data = JSON.parse(document.getElementById('samaritan-deliberation-data').textContent);
+      const $ = id => document.getElementById(id);
+      const esc = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      const items = values => '<ul class="de-list">' + values.map(v => '<li>' + esc(v) + '</li>').join('') + '</ul>';
+      const statuses = Object.keys(data.statusDefinitions);
+      const color = status => 'var(--viz-series-' + (statuses.indexOf(status) + 1) + ')';
+      const defaults = {tab:'rounds', round:1, trail:'runtime', audit:'arrival', status:'Missing', source:'plan', line:1};
+      let state = {...defaults};
+      const citation = (ref, label) => '<button type="button" class="btn btn-ghost" data-doc="' + esc(ref.doc) + '" data-line="' + ref.line + '" aria-label="' + esc('View ' + data.sources[ref.doc].path + ', line ' + ref.line) + '">' + esc(label || (data.sources[ref.doc].path + ' · L' + ref.line)) + '</button>';
+      const citations = refs => '<div class="de-evidence">' + refs.map(r => citation(r)).join('') + '</div>';
+      const byTrail = id => data.trails.find(t => t.id === id);
+      const byAudit = id => data.audit.find(a => a.id === id);
+
+      function valid(raw) {
+        const next = {...defaults, ...(raw && typeof raw === 'object' ? raw : {})};
+        if (!['rounds','trails','coverage','evidence'].includes(next.tab)) next.tab = defaults.tab;
+        if (![1,2,3].includes(next.round)) next.round = defaults.round;
+        if (!byTrail(next.trail)) next.trail = defaults.trail;
+        if (!byAudit(next.audit)) next.audit = defaults.audit;
+        if (!statuses.includes(next.status)) next.status = byAudit(next.audit).disposition;
+        if (byAudit(next.audit).disposition !== next.status) next.audit = data.audit.find(a => a.disposition === next.status).id;
+        if (!data.sources[next.source]) next.source = defaults.source;
+        next.line = Math.max(1, Math.min(data.sources[next.source].text.split('\n').length, Number(next.line) || 1));
+        return next;
+      }
+
+      function tabs() {
+        root.querySelectorAll('[data-tab]').forEach(button => {
+          const active = button.dataset.tab === state.tab;
+          button.classList.toggle('active', active);
+          button.setAttribute('aria-selected', String(active));
+          $(button.getAttribute('aria-controls')).hidden = !active;
+        });
+      }
+
+      function round() {
+        const current = data.rounds.find(r => r.id === state.round);
+        root.querySelectorAll('[data-round]').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.round) === state.round)));
+        const models = current.models.map(m => '<div class="de-model"><h3>' + esc(m.name) + '</h3><div class="text-small text-muted">' + esc(m.emphasis) + '</div><p>' + esc(m.position) + '</p><details><summary>Distinctive positions</summary>' + items(m.distinct) + '</details><div class="de-evidence">' + citation(m.evidence, 'Round report') + '</div></div>').join('');
+        let close = '';
+        if (state.round === 3) {
+          close = '<hr><div class="de-phase-strip"><span>Proposal v1</span><span class="de-connector" aria-hidden="true">→</span><span>6 amendments</span><span class="de-connector" aria-hidden="true">→</span><span class="de-value">Signed v2</span></div><details><summary>The six final amendments</summary>' + items(data.amendments) + '</details><div class="viz-row de-meta">' + data.signoffs.map(s => citation(s.evidence, s.name + ' · ' + s.time)).join('') + '</div><div class="de-evidence"><button type="button" class="btn" data-show-trail="stop">Example: isolation correction</button><button type="button" class="btn btn-primary" data-open-coverage="true">Check what remains</button></div>';
+        }
+        $('de-round-content').innerHTML = '<h3 class="de-stage">' + esc(current.outcome) + '</h3><div class="viz-grid de-stage">' + models + '</div><hr><div class="viz-grid"><div><div class="de-value">Agreed at this round</div>' + items(current.agreement) + '</div><div><div class="de-value">Still open at this round</div>' + items(current.open) + '</div></div><details class="de-disclosure"><summary>What they did to advance the discussion</summary>' + items(current.actions) + '</details><div class="text-small text-muted de-meta">' + esc(current.caution) + '</div>' + close;
+      }
+
+      function trail() {
+        const current = byTrail(state.trail);
+        $('de-trail-select').value = state.trail;
+        const starts = current.start.map((c, i) => '<div class="de-model"><div class="text-small text-muted">' + esc(data.modelOrder[i]) + '</div><h3>' + esc(c.label) + '</h3><details><summary>Stated rationale</summary><p>' + esc(c.why) + '</p>' + citation(c.evidence, 'Source position') + '</details></div>').join('');
+        $('de-trail-content').innerHTML = '<div class="text-small text-muted de-meta">' + esc(current.kind) + ' · ' + esc(current.decision) + '</div><div class="de-stage"><div class="de-stage-label">1 · Initial positions / early factual messages</div><div class="viz-grid">' + starts + '</div></div><hr><div class="de-stage-label">2 · Challenge → check → revision</div><div class="viz-grid"><div><div class="text-small text-muted">Challenge</div><p>' + esc(current.challenge) + '</p></div><div><div class="text-small text-muted">What they did</div><p>' + esc(current.action) + '</p></div><div><div class="text-small text-muted">What changed</div><p>' + esc(current.revision) + '</p></div></div><hr><div class="de-stage-label">3 · Final decision</div><div>' + esc(current.outcome) + '</div><div class="text-small text-muted de-meta">' + esc(current.coverage) + '</div>' + citations(current.evidence);
+      }
+
+      function coverage() {
+        const counts = statuses.map(status => ({status, count:data.audit.filter(a => a.disposition === status).length}));
+        $('de-coverage-meter').innerHTML = '<div class="de-meter" role="img" aria-label="Planning coverage: ' + esc(counts.map(c => c.count + ' ' + c.status.toLowerCase()).join(', ')) + '">' + counts.map(c => '<span class="de-segment" style="flex:' + c.count + ';background:' + color(c.status) + '"></span>').join('') + '</div><div class="de-legend">' + counts.map(c => '<span class="de-legend-item"><span class="de-swatch" style="background:' + color(c.status) + '" aria-hidden="true"></span><span>' + esc(c.status) + ' <span class="tabular-nums">' + c.count + '</span></span></span>').join('') + '</div>';
+        $('de-status-select').value = state.status;
+        $('de-audit-select').innerHTML = data.audit.filter(a => a.disposition === state.status).map(a => '<option value="' + esc(a.id) + '">' + esc(a.concern) + '</option>').join('');
+        $('de-audit-select').value = state.audit;
+        const current = byAudit(state.audit);
+        $('de-audit-content').innerHTML = '<div class="text-small text-muted de-meta">' + esc(data.statusDefinitions[current.disposition]) + '</div><h3>' + esc(current.concern) + '</h3><div class="text-small text-muted">' + esc(current.plan_part) + '</div><div class="de-result"><div class="de-value">What the plan says</div><p>' + esc(current.answer) + '</p><div class="de-value">What remains</div><p>' + esc(current.remaining) + '</p></div>' + (current.trail ? '<button type="button" class="btn" data-show-trail="' + esc(current.trail) + '">Trace the discussion</button>' : '') + citations(current.evidence);
+      }
+
+      function evidence() {
+        const source = data.sources[state.source];
+        const lines = source.text.split('\n');
+        const begin = Math.max(0, state.line - 5);
+        const end = Math.min(lines.length, state.line + 9);
+        $('de-source-select').value = state.source;
+        $('de-source-meta').textContent = source.path + ' · selected line ' + state.line + ' · snapshot SHA-256 ' + source.sha256;
+        $('de-source-excerpt').textContent = lines.slice(begin, end).map((line, i) => (i + begin + 1 === state.line ? '› ' : '  ') + String(i + begin + 1).padStart(3) + '  ' + line).join('\n');
+        $('de-source-full').textContent = lines.map((line, i) => String(i + 1).padStart(3) + '  ' + line).join('\n');
+      }
+
+      function render() { tabs(); round(); trail(); coverage(); evidence(); }
+      function save(announcement) {
+        if (announcement) $('de-announcement').textContent = announcement;
+        if (window.openai && window.openai.setWidgetState) {
+          const concern = byAudit(state.audit);
+          const snapshot = {modelContent:{view:state.tab, round:state.round, decision:byTrail(state.trail).title, concern:concern.concern, coverage:concern.disposition, source:data.sources[state.source].path, line:state.line}, privateContent:{deliberationState:state}};
+          try { Promise.resolve(window.openai.setWidgetState(snapshot)).catch(() => {}); } catch (_) {}
+        }
+      }
+      function restore(snapshot) {
+        state = valid(snapshot && snapshot.privateContent && snapshot.privateContent.deliberationState);
+        render();
+      }
+
+      $('de-trail-select').innerHTML = data.trails.map(t => '<option value="' + esc(t.id) + '">' + esc(t.title) + '</option>').join('');
+      $('de-status-select').innerHTML = statuses.map(s => '<option value="' + esc(s) + '">' + esc(s) + '</option>').join('');
+      $('de-source-select').innerHTML = Object.entries(data.sources).map(([key, s]) => '<option value="' + esc(key) + '">' + esc(s.path) + '</option>').join('');
+      $('de-audit-intro').textContent = "Codex's post-consensus audit · Planning coverage, not shipped functionality · " + data.audit.length + ' concerns';
+      $('de-audit-table-label').textContent = 'All ' + data.audit.length + ' concerns';
+      $('de-audit-table').innerHTML = '<table class="table table-sm"><thead><tr><th scope="col">Concern</th><th scope="col">Planning coverage</th></tr></thead><tbody>' + data.audit.map(a => '<tr><td><button type="button" class="btn btn-ghost" data-show-audit="' + esc(a.id) + '">' + esc(a.concern) + '</button></td><td>' + esc(a.disposition) + '</td></tr>').join('') + '</tbody></table>';
+      $('de-method').innerHTML = data.method.map(m => '<li>' + esc(m) + '</li>').join('');
+
+      root.addEventListener('click', event => {
+        const button = event.target.closest('button');
+        if (!button || !root.contains(button)) return;
+        if (button.dataset.tab) { state.tab = button.dataset.tab; tabs(); save('Showing ' + button.textContent); }
+        else if (button.dataset.round) { state.round = Number(button.dataset.round); round(); save('Round ' + state.round + ': ' + data.rounds[state.round - 1].outcome); }
+        else if (button.dataset.doc) {
+          state.tab = 'evidence'; state.source = button.dataset.doc; state.line = Number(button.dataset.line);
+          $('de-full-source').open = false; tabs(); evidence(); save('Evidence: ' + data.sources[state.source].path + ', line ' + state.line);
+        }
+        else if (button.dataset.showTrail) { state.tab = 'trails'; state.trail = button.dataset.showTrail; tabs(); trail(); save(byTrail(state.trail).title); }
+        else if (button.dataset.showAudit) { state.tab = 'coverage'; state.audit = button.dataset.showAudit; state.status = byAudit(state.audit).disposition; tabs(); coverage(); save(byAudit(state.audit).concern); }
+        else if (button.dataset.openCoverage) { state.tab = 'coverage'; tabs(); coverage(); save('Coverage audit: ' + data.audit.filter(a => a.disposition === 'Missing').length + ' missing workflows'); }
+      });
+      $('de-trail-select').addEventListener('change', event => { state.trail = event.target.value; trail(); save(byTrail(state.trail).title); });
+      $('de-status-select').addEventListener('change', event => { state.status = event.target.value; state.audit = data.audit.find(a => a.disposition === state.status).id; coverage(); save(state.status + ' concerns'); });
+      $('de-audit-select').addEventListener('change', event => { state.audit = event.target.value; coverage(); save(byAudit(state.audit).concern); });
+      $('de-source-select').addEventListener('change', event => { state.source = event.target.value; state.line = 1; $('de-full-source').open = false; evidence(); save('Source: ' + data.sources[state.source].path); });
+      window.addEventListener('openai:set_globals', event => {
+        if (event.detail && event.detail.globals && event.detail.globals.widgetState !== undefined) restore(event.detail.globals.widgetState);
+      });
+      restore(window.openai && window.openai.widgetState);
+    })();
+  </script>
+</div>

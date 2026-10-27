@@ -26,7 +26,9 @@
     "index": "tsx src/cli/index-recall.ts",
     "emit": "tsx src/cli/emit.ts",
     "emit-event": "tsx src/cli/emit-event.ts",
-    "poll-gmail": "tsx src/cli/poll-gmail.ts"
+    "poll-gmail": "tsx src/cli/poll-gmail.ts",
+    "mcp": "tsx src/cli/mcp.ts",
+    "backup": "tsx src/cli/backup-db.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.3",

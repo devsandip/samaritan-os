@@ -1,29 +1,27 @@
 /**
- * App shell and the data root.
+ * App shell and the data root (Command Centre D2).
  *
- * The three datasets every view shares (capabilities, inbox items, deferred
- * items) are fetched once here, so the sidebar count, the Dashboard tile and the
- * Inbox list can never disagree. Views that own a dataset nobody else needs
- * (Completed, routing) fetch it themselves.
- *
- * There is no polling. The daemon has no change stream, and a poll would fight
- * the "calm, non-intrusive" rule in UI-SPEC §1 by re-sorting the list under the
- * cursor mid-review. Every mutation already refetches what it invalidated.
+ * The datasets shared across views (capabilities, inbox items, tasks, deferred
+ * items, completed items) are fetched here so the sidebar counts, the Now tiles,
+ * the Inbox list, and the Tasks view never disagree.
  */
 import { useEffect, useMemo, useState } from "react";
 import { api } from "./api/client";
+import { CommandBar } from "./components/CommandBar";
 import { Sidebar } from "./components/Sidebar";
 import { Toast } from "./components/states";
 import { Catalogue } from "./lib/manifest";
 import { useRoute } from "./lib/router";
 import { COMPLETED_STATUSES, INBOX_STATUSES } from "./lib/transitions";
 import { useAsync } from "./lib/useAsync";
+import { ActivityView } from "./views/Activity";
 import { AskView } from "./views/Ask";
 import { CompletedView } from "./views/Completed";
 import { DashboardView } from "./views/Dashboard";
 import { DeferredView } from "./views/Deferred";
 import { InboxView } from "./views/Inbox";
 import { SettingsView } from "./views/Settings";
+import { TasksView } from "./views/Tasks";
 
 /** The question lives in the route hash; decode defensively so a bad %-escape
  * shows the raw text rather than throwing the whole shell. */
@@ -47,6 +45,7 @@ export function App() {
 
   const capabilities = useAsync(() => api.capabilities(), []);
   const inbox = useAsync(() => api.listActions({ status: INBOX_STATUSES, limit: 200 }), []);
+  const tasks = useAsync(() => api.listTasks({ limit: 100 }), []);
   const deferred = useAsync(() => api.listActions({ status: "deferred", limit: 200 }), []);
   const completed = useAsync(() => api.listActions({ status: COMPLETED_STATUSES, limit: 200 }), []);
 
@@ -74,13 +73,20 @@ export function App() {
   const capabilityList = capabilities.data?.capabilities ?? [];
   const problems = capabilities.data?.problems ?? [];
 
-  // Anything that came back through the Inbox has to be re-read everywhere it
-  // is counted, which is why acting on an item reloads all four lists.
   const reloadAll = () => {
     inbox.reload();
+    tasks.reload();
     deferred.reload();
     completed.reload();
   };
+
+  const activeTasksCount = useMemo(
+    () =>
+      (tasks.data ?? []).filter(
+        (t) => t.status === "running" || t.status === "needs_input" || t.status === "queued",
+      ).length,
+    [tasks.data],
+  );
 
   const statusLine = capabilities.error
     ? "daemon unreachable"
@@ -93,15 +99,19 @@ export function App() {
       <Sidebar
         active={route.view}
         inboxCount={inbox.data?.length}
+        tasksCount={activeTasksCount}
         deferredCount={deferred.data?.length}
         statusLine={statusLine}
         askQuery={askQuery}
+        onTaskCreated={reloadAll}
+        onToast={showToast}
       />
 
       <main className="main">
         {route.view === "dashboard" ? (
           <DashboardView
             inbox={inbox.data}
+            tasks={tasks.data}
             deferred={deferred.data}
             autoHandled={completed.data?.filter((item) => item.status === "executed")}
             capabilities={capabilityList}
@@ -125,6 +135,28 @@ export function App() {
             reload={reloadAll}
             catalogue={catalogue}
             selectedId={route.itemId}
+            onToast={showToast}
+          />
+        ) : null}
+
+        {route.view === "tasks" ? (
+          <TasksView
+            tasks={tasks.data}
+            loading={tasks.loading}
+            error={tasks.error}
+            reload={reloadAll}
+            selectedId={route.itemId}
+            onToast={showToast}
+          />
+        ) : null}
+
+        {route.view === "activity" ? (
+          <ActivityView
+            completedItems={completed.data}
+            completedLoading={completed.loading}
+            completedError={completed.error}
+            reloadCompleted={completed.reload}
+            catalogue={catalogue}
             onToast={showToast}
           />
         ) : null}
@@ -165,6 +197,7 @@ export function App() {
       </main>
 
       {toast ? <Toast key={toast.key} message={toast.message} variant={toast.variant} /> : null}
+      <CommandBar onTaskCreated={reloadAll} onToast={showToast} />
     </div>
   );
 }
