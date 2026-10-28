@@ -8,6 +8,7 @@
  * `awaiting_confirmation` until the user sends or confirms the draft.
  */
 import { loadConfig } from "../../config/index.js";
+import { resolveGoogleAccessToken } from "../../events/listeners/google-oauth.js";
 import { getSecret } from "../../secrets.js";
 import type {
   ExecutionAdapter,
@@ -91,8 +92,8 @@ export function createGmailDraftAdapter(
         return { status: "failed", error: 'payload requires "draft_body" or "body"' };
       }
 
-      const auth = resolveToken();
-      if (request.mode === "guided" || !auth || !to) {
+      const rawToken = resolveToken();
+      if (request.mode === "guided" || !rawToken || !to) {
         return {
           status: "staged",
           guided_instructions: renderPayload({
@@ -106,6 +107,10 @@ export function createGmailDraftAdapter(
       }
 
       try {
+        const auth = await resolveGoogleAccessToken(rawToken, { fetchImpl: fetchFn });
+        if (!auth) {
+          return { status: "failed", error: "gmail token unavailable" };
+        }
         const raw = buildRfc2822Base64Url({
           to,
           subject: subject.startsWith("Re:") ? subject : `Re: ${subject}`,

@@ -27,6 +27,7 @@
  * Keychain that was locked at boot starts working once it unlocks.
  */
 import { getSecret } from "../../secrets.js";
+import { resolveGoogleAccessToken } from "./google-oauth.js";
 import type { Db } from "../../store/db.js";
 import { nowIso } from "../../types/index.js";
 import { log } from "../../logger.js";
@@ -63,36 +64,12 @@ export type CalendarSource = (query: { syncToken?: string; pageToken?: string })
 /** Thrown for 410 Gone: the sync token expired and a full sync is needed. */
 export class SyncTokenExpired extends Error {}
 
-interface TokenBundle {
-  client_id: string;
-  client_secret: string;
-  refresh_token: string;
-}
-
 function accessTokenFrom(account: string, fetchFn: typeof fetch): () => Promise<string | undefined> {
-  let cached: { token: string; expiresAt: number } | undefined;
-  return async () => {
-    const secret = getSecret(`gcal:${account}`);
-    if (!secret) return undefined;
-    if (!secret.trim().startsWith("{")) return secret.trim();
-    if (cached && cached.expiresAt > Date.now() + 60_000) return cached.token;
-    const bundle = JSON.parse(secret) as TokenBundle;
-    const res = await fetchFn("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: bundle.client_id,
-        client_secret: bundle.client_secret,
-        refresh_token: bundle.refresh_token,
-        grant_type: "refresh_token",
-      }),
-      signal: AbortSignal.timeout(15_000),
+  return async () =>
+    resolveGoogleAccessToken(`gcal:${account}`, {
+      fromKeychain: true,
+      fetchImpl: fetchFn,
     });
-    if (!res.ok) throw new Error(`google token refresh ${res.status}`);
-    const json = (await res.json()) as { access_token: string; expires_in: number };
-    cached = { token: json.access_token, expiresAt: Date.now() + json.expires_in * 1000 };
-    return cached.token;
-  };
 }
 
 /** The real source. Undefined access token means "not configured yet", which is not an error. */

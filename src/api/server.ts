@@ -47,6 +47,7 @@ import {
 } from "../store/backup.js";
 import { currentVersion } from "../store/migrate.js";
 import { Scheduler } from "../scheduler/index.js";
+import { syncRecallMirrors } from "../recall/mirror-sync.js";
 import { MoneyLockViolation } from "../guardrails.js";
 import { authGate, callerOf, checkLogin, configuredToken, sessionCookieHeader } from "./auth.js";
 import {
@@ -1133,6 +1134,11 @@ export function buildServer(app: App): FastifyInstance {
 
   server.get("/api/recall/stats", async () => app.recall.stats());
 
+  server.post("/api/recall/sync-mirrors", async () => {
+    const synced = await syncRecallMirrors(app.db, { config: app.config });
+    return { synced };
+  });
+
   // ---- Routing -------------------------------------------------------------
 
   server.get("/api/routing", async () => ({ routing: app.routing.list() }));
@@ -1201,6 +1207,16 @@ const RECALL_REINDEX_INTERVAL_MS = 15 * 60_000;
  */
 async function backgroundReindex(app: App): Promise<void> {
   try {
+    const latestBackup = listBackups(app.db, 1)[0];
+    const latestMs = latestBackup ? Date.parse(latestBackup.created_at) : 0;
+    if (!latestBackup || Number.isNaN(latestMs) || Date.now() - latestMs >= 24 * 3600_000) {
+      const snap = backupDatabase(app.db);
+      logger.info({ id: snap.id, path: snap.backup_path }, "automatic daily db backup completed");
+    }
+    const mirrors = await syncRecallMirrors(app.db, { config: app.config });
+    if (mirrors.notion_decisions || mirrors.notion_insights || mirrors.ticktick_tasks) {
+      logger.info(mirrors, "recall mirrors synced");
+    }
     const tally = await app.recall.reindex();
     if (tally.indexed || tally.removed) logger.info(tally, "recall reindexed");
   } catch (err) {

@@ -21,6 +21,7 @@
  */
 import { log } from "../../logger.js";
 import { getSecret } from "../../secrets.js";
+import { resolveGoogleAccessToken } from "./google-oauth.js";
 import type { GmailMessage } from "./gmail-message.js";
 
 const logger = log("gmail-source");
@@ -126,11 +127,11 @@ export interface GmailSourceOptions {
 
 /** A GmailSource, or undefined when no token is configured (poller then idle). */
 export function createGmailSource(options: GmailSourceOptions): { fetchSince(since: number): Promise<GmailMessage[]> } | undefined {
-  const token =
+  const readRawSecret = () =>
     typeof options.token === "function"
       ? options.token()
       : (options.token ?? getSecret(`gmail:${options.account}`));
-  if (!token) {
+  if (!readRawSecret()) {
     logger.info({ account: options.account }, "no gmail token; source idle");
     return undefined;
   }
@@ -141,6 +142,10 @@ export function createGmailSource(options: GmailSourceOptions): { fetchSince(sin
   const maxPerPoll = options.maxPerPoll ?? 25;
 
   async function getJson(url: string): Promise<unknown> {
+    const token = await resolveGoogleAccessToken(readRawSecret(), { fetchImpl });
+    if (!token) {
+      throw new Error("gmail token missing for gmail:" + options.account);
+    }
     const response = await fetchImpl(url, { headers: { Authorization: `Bearer ${token}` } });
     if (response.status === 401) {
       throw new Error("gmail rejected the token (401) — reauthorise gmail:" + options.account);

@@ -53,7 +53,7 @@ function rowToBackup(row: BackupRow): BackupRecord {
  */
 export function backupDatabase(db: Db, options: BackupOptions = {}): BackupRecord {
   const dir = resolve(options.backupDir ?? expandPath("~/.samaritan/backups"));
-  const retainCount = options.retainCount ?? 14;
+  const retainCount = options.retainCount ?? 10;
   mkdirSync(dir, { recursive: true });
 
   const now = new Date();
@@ -94,18 +94,7 @@ export function backupDatabase(db: Db, options: BackupOptions = {}): BackupRecor
      VALUES (?, ?, ?, ?, ?)`,
   ).run(id, targetPath, sizeBytes, integrityOk ? 1 : 0, createdAt);
 
-  // Prune older snapshots in the directory beyond retainCount.
-  try {
-    const files = readdirSync(dir)
-      .filter((f) => f.startsWith("samaritan-") && f.endsWith(".db"))
-      .sort()
-      .reverse();
-    for (const stale of files.slice(retainCount)) {
-      rmSync(join(dir, stale), { force: true });
-    }
-  } catch {
-    // Non-fatal if cleanup encounters a concurrent file removal.
-  }
+  pruneBackups(db, retainCount, dir);
 
   return {
     id,
@@ -114,6 +103,51 @@ export function backupDatabase(db: Db, options: BackupOptions = {}): BackupRecor
     integrity_ok: integrityOk,
     created_at: createdAt,
   };
+}
+
+/**
+ * Removes backup records in `db_backups` (and their `.db` files on disk) beyond
+ * `retainCount`, plus any extra `samaritan-*.db` files in `backupDir`.
+ */
+export function pruneBackups(
+  db: Db,
+  retainCount = 10,
+  backupDir?: string,
+): number {
+  const keep = Math.max(1, retainCount);
+  const allRows = db
+    .prepare<BackupRow>("SELECT * FROM db_backups ORDER BY created_at DESC, rowid DESC")
+    .all();
+
+  const staleRows = allRows.slice(keep);
+  const deleteStmt = db.prepare("DELETE FROM db_backups WHERE id = ?");
+  let pruned = 0;
+
+  for (const row of staleRows) {
+    try {
+      rmSync(row.backup_path, { force: true });
+    } catch {
+      // Ignore missing file on disk
+    }
+    deleteStmt.run(row.id);
+    pruned += 1;
+  }
+
+  if (backupDir) {
+    try {
+      const files = readdirSync(backupDir)
+        .filter((f) => f.startsWith("samaritan-") && f.endsWith(".db"))
+        .sort()
+        .reverse();
+      for (const stale of files.slice(keep)) {
+        rmSync(join(backupDir, stale), { force: true });
+      }
+    } catch {
+      // Non-fatal if cleanup encounters a concurrent file removal.
+    }
+  }
+
+  return pruned;
 }
 
 export function listBackups(db: Db, limit = 20): BackupRecord[] {
