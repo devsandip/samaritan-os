@@ -911,3 +911,25 @@ no outbound call to a service the sandbox can't reach.
 - Kept `RecallService.query()` returning `retrieval_path: "semantic"` when structured SQL mirror tables yield zero matches, `"hybrid"` when both structured and semantic retrievers match, and `"structured"` when only mirror tables match.
 - Reported missing PostHog metric values (`null` or `undefined`) explicitly as `data_missing` rather than `0` or `-100%` so telemetry gaps are never misclassified as traffic drops.
 - Added `schema_version` to `GET /api/system/health` while keeping `GET /healthz` at its three-field contract (`status`, `capabilities`, `problems`).
+
+
+
+## 2026-10-28: Completed Milestones 6 and 7 (Phase 5 Live Mirror Sync & OAuth Refresh + Phase 6 Claude Capabilities, Live Worker Verification & Tailscale Auth)
+
+**Did:**
+- Ran online `VACUUM INTO` database backup (`5.96 MB`, `integrity_ok: true`), pruned stale git worktrees/branches/stashes, closed stale PR `8`, fixed Keychain account lookup mismatches in `src/execution/adapters/hevy.ts` and `src/execution/adapters/thornhill.ts`, rejected unverified non-loopback requests on `POST /api/webhooks/slack` (`src/api/webhooks.ts`), and codified the mandatory Milestone Completion Report protocol in `CLAUDE.md` and `AGENTS.md`.
+- Completed Milestone 6 (`Phase 5`, Issues `36` to `39`): imported `hevy:default`, `thornhill:default`, `anthropic:worker`, and `anthropic:default` into macOS Keychain under service `samaritan`, built inbound Notion/TickTick mirror backfill (`src/recall/mirror-sync.ts`, `POST /api/recall/sync-mirrors`, and 15-minute daemon sync) populating `11` Notion decisions and `11` Notion insights and verifying `retrieval_path: "hybrid"` on live queries, extracted shared Google OAuth2 `refresh_token` resolution (`src/events/listeners/google-oauth.ts`), and added `pruneBackups()` + 24-hour automatic backups (`src/store/backup.ts`).
+- Completed Milestone 7 (`Phase 6`, Issues `40` to `42`): built `src/run-layer/llm.ts` (`callClaudeStructured<T>`) for Claude structured-JSON and base64 vision extraction across `prd-review`, `calendar-from-screenshot`, `email-triage`, and `newsletter-digest`; validated the live Anthropic key from `~/Developer/LudLLM/.env` and executed live delegated worker task `74fd1b19-14a5-45dd-b032-f270cb8b413a` (`run_id` `1686fa5f-2d70-40a3-ab58-a7e15c6a7c1b`, `status: "succeeded"`, `cost_usd: 0.01943`, artifact `recall-summary.md`); started Tailscale and `tailscale serve --bg 4173` (`https://sandip-mac.tail9b2f5e.ts.net` -> `http://127.0.0.1:4173`), provisioned `web:token` and `mcp:token` in Keychain, updated `src/api/auth.ts` so remote `/api/mcp` accepts `mcp:token`, isolated unit tests from real Keychain entries via `SAMARITAN_TEST_HOME` in `src/secrets.ts`, and fixed a `chokidar` `addDir` race in `src/events/listeners/vault-watch.ts`.
+- Filed canonical status and milestone completion reports in `docs/STATUS.md`, `docs/reports/2026-10-28-baseline-status.md`, `docs/reports/MILESTONE-6-REPORT.md`, and `docs/reports/MILESTONE-7-REPORT.md`.
+
+**State now:**
+- Samaritan is roughly 76% built against the full intended daily-driver Command Centre (reasonable range 73 to 78%).
+- `main` passes `pnpm typecheck`, `pnpm test` (51 test files, 668 passing tests), and `pnpm build`.
+- 7 connections are live on `GET /api/connections` (`obsidian`, `notion`, `hevy`, `thornhill`, `anthropic.worker`, `web.token`, `mcp.token`), Tailscale Serve HTTPS proxy is active on `https://sandip-mac.tail9b2f5e.ts.net`, hybrid Recall returns `"hybrid"` with live Notion citations, and the child-process worker has a verified end-to-end production run in SQLite.
+
+**Next:**
+- Provision the 9 external provider credentials not stored on this Mac (`ticktick:default`, `gcal:default`, `gmail:default`, `telegram:bot`, `fireflies:webhook`, `slack:signing`, `oura:default`, `posthog:api`, `nutgraf:machine`) in macOS Keychain (`security add-generic-password -s samaritan -a <account> -w`) and enable their flags in `~/.samaritan/config.yaml`.
+
+**Decisions:**
+- Isolated `getSecret()` and `setSecret()` in `src/secrets.ts` from `/usr/bin/security` whenever `SAMARITAN_TEST_HOME` is set so unit tests remain hermetic even after `web:token` and `mcp:token` are provisioned in the host's real macOS Keychain.
+- Accepted `mcp:token` on `POST /api/mcp` in `src/api/auth.ts` (`identify()`) alongside `web:token` so remote MCP clients can use a dedicated bearer token distinct from the browser sign-in token.

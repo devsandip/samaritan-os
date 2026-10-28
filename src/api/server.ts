@@ -464,6 +464,22 @@ export function buildServer(app: App): FastifyInstance {
           `anthropic:${cfg.worker.account}`,
         ),
       },
+      {
+        id: "web.token",
+        name: "Tailscale Web Session Token",
+        provider: "samaritan",
+        enabled: Boolean(cfg.server.public_url),
+        keychain_account: "web:token",
+        ...checkSecretStatus(Boolean(cfg.server.public_url), "web:token"),
+      },
+      {
+        id: "mcp.token",
+        name: "Remote MCP OAuth Token",
+        provider: "samaritan",
+        enabled: Boolean(cfg.server.public_url),
+        keychain_account: "mcp:token",
+        ...checkSecretStatus(Boolean(cfg.server.public_url), "mcp:token"),
+      },
     ];
 
     return { connections };

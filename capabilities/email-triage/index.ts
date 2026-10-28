@@ -3,6 +3,7 @@ import type {
   RunContext,
   RunResult,
 } from "../../src/run-layer/context.js";
+import { callClaudeStructured } from "../../src/run-layer/llm.js";
 
 /**
  * Email Triage (TECH-SPEC §11(b), §5.2).
@@ -131,7 +132,42 @@ export async function run(context: RunContext): Promise<RunResult> {
   const action_items: DraftActionItem[] = [];
 
   for (const email of emails) {
-    const classification = classify(email);
+    let classification = classify(email);
+    let draftBody: string | undefined;
+
+    const llmTriage = await callClaudeStructured<{
+      needsReply?: boolean;
+      urgency?: Urgency;
+      asks?: string[];
+      reason?: string;
+      draft_body?: string;
+    }>({
+      system:
+        "You triage inbound emails for Sandip (Senior PM). Decide if the email requires a direct reply from Sandip. Return JSON with: needsReply (boolean), urgency ('routine' | 'timely' | 'urgent'), asks (string[] of direct questions/requests), reason (short string), and draft_body (concise reply draft signed 'Sandip' if needsReply is true).",
+      prompt: `From: ${email.from}\nSubject: ${email.subject}\n\n${email.body.slice(0, 6000)}`,
+      ...(typeof context.inputs["anthropic_api_key"] === "string"
+        ? { apiKey: context.inputs["anthropic_api_key"] }
+        : {}),
+      ...(typeof context.inputs["use_llm"] === "boolean"
+        ? { useLlm: context.inputs["use_llm"] }
+        : {}),
+      ...(typeof context.inputs["fetchImpl"] === "function"
+        ? { fetchImpl: context.inputs["fetchImpl"] as typeof fetch }
+        : {}),
+    });
+
+    if (llmTriage?.data && typeof llmTriage.data.needsReply === "boolean") {
+      classification = {
+        needsReply: llmTriage.data.needsReply,
+        urgency: llmTriage.data.urgency ?? classification.urgency,
+        asks: Array.isArray(llmTriage.data.asks) ? llmTriage.data.asks : classification.asks,
+        reason: llmTriage.data.reason ?? classification.reason,
+      };
+      if (typeof llmTriage.data.draft_body === "string" && llmTriage.data.draft_body.trim()) {
+        draftBody = llmTriage.data.draft_body.trim();
+      }
+    }
+
     logs.push(`${email.subject}: ${classification.reason}, urgency=${classification.urgency}`);
     // Silence is the common case and it is a feature, not a gap in coverage.
     if (!classification.needsReply) continue;
@@ -146,7 +182,11 @@ export async function run(context: RunContext): Promise<RunResult> {
           id: email.id,
           ...(email.permalink ? { link: email.permalink } : {}),
         },
-        provenance: ["email.received", "email-triage.run"],
+        provenance: [
+          "email.received",
+          "email-triage.run",
+          ...(llmTriage ? ["claude.triage"] : []),
+        ],
         why_flagged: classification.reason,
         // §11(b): sending email escalates on what it is, not on how sure the
         // capability is. Saying "confidence" here would be a lie about why
@@ -163,7 +203,7 @@ export async function run(context: RunContext): Promise<RunResult> {
         from: email.from,
         subject: email.subject,
         thread_summary: classification.asks.join(" ") || email.subject,
-        draft_body: draft(email, classification),
+        draft_body: draftBody ?? draft(email, classification),
         urgency: classification.urgency,
         asks: classification.asks,
       },

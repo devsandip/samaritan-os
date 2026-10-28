@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { RunContext, RunResult } from "../../src/run-layer/context.js";
+import { callClaudeStructured } from "../../src/run-layer/llm.js";
 
 export interface PrdLensEvaluation {
   findings: string[];
@@ -160,7 +161,33 @@ export async function run(ctx: RunContext): Promise<RunResult> {
   const project =
     (typeof payload.project === "string" && payload.project) || "Samaritan";
 
-  const evaluation = prdMarkdown ? evaluatePrdMultiLens(prdMarkdown) : undefined;
+  let evaluation = prdMarkdown ? evaluatePrdMultiLens(prdMarkdown) : undefined;
+  let llmUsed = false;
+
+  if (prdMarkdown && !Array.isArray(payload.findings)) {
+    const llmEval = await callClaudeStructured<Partial<PrdLensEvaluation>>({
+      system:
+        "You are a 3-lens Product Council (PM, UX, SDE) reviewing a Product Requirements Document. Return JSON with fields: pm_findings (string[]), ux_findings (string[]), sde_findings (string[]), findings (string[]), rubric_score (number 0-100).",
+      prompt: `Review this PRD for "${prdTitle}" (${project}):\n\n${prdMarkdown.slice(0, 12_000)}`,
+      ...(typeof payload.anthropic_api_key === "string" ? { apiKey: payload.anthropic_api_key } : {}),
+      ...(typeof payload.use_llm === "boolean" ? { useLlm: payload.use_llm } : {}),
+      ...(typeof payload.fetchImpl === "function" ? { fetchImpl: payload.fetchImpl as typeof fetch } : {}),
+    });
+    if (llmEval?.data && Array.isArray(llmEval.data.findings) && llmEval.data.findings.length > 0) {
+      llmUsed = true;
+      evaluation = {
+        findings: llmEval.data.findings,
+        pm_findings: llmEval.data.pm_findings ?? [],
+        ux_findings: llmEval.data.ux_findings ?? [],
+        sde_findings: llmEval.data.sde_findings ?? [],
+        rubric_score:
+          typeof llmEval.data.rubric_score === "number"
+            ? llmEval.data.rubric_score
+            : (evaluation?.rubric_score ?? 85),
+      };
+    }
+  }
+
   const findings = Array.isArray(payload.findings)
     ? (payload.findings as string[])
     : evaluation
@@ -231,6 +258,7 @@ export async function run(ctx: RunContext): Promise<RunResult> {
           source: { kind: "prd-review", id: `prd:${slug}` },
           provenance: [
             "prd-review.council",
+            ...(llmUsed ? ["claude.multi-lens"] : []),
             ...(recallCitations.length > 0 ? ["recall.citations"] : []),
           ],
           why_flagged: "PRD review report ready for sign-off",

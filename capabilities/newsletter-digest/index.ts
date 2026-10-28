@@ -3,6 +3,7 @@ import type {
   RunContext,
   RunResult,
 } from "../../src/run-layer/context.js";
+import { callClaudeStructured } from "../../src/run-layer/llm.js";
 
 /**
  * Newsletter Digest (TECH-SPEC §4.6, §5.2).
@@ -115,8 +116,40 @@ export async function run(context: RunContext): Promise<RunResult> {
     : DEFAULT_INTERESTS;
 
   const logs: string[] = [];
-  const action_items: DraftActionItem[] = emails.map((email) => {
-    const { worthActing, confidence, matched, summary, links } = score(email, interests);
+  const action_items: DraftActionItem[] = [];
+
+  for (const email of emails) {
+    let { worthActing, confidence, matched, summary, links } = score(email, interests);
+
+    const llmScore = await callClaudeStructured<{
+      worthActing?: boolean;
+      confidence?: number;
+      matched?: string[];
+      summary?: string;
+    }>({
+      system:
+        "You evaluate newsletter issues against Sandip's topic interests. Return JSON with: worthActing (boolean), confidence (number 0-1), matched (string[] of matched interests), and summary (concise 1-2 sentence synthesis under 240 chars).",
+      prompt: `Interests: ${interests.join(", ")}\nSubject: ${email.subject}\n\n${email.body.slice(0, 6000)}`,
+      ...(typeof context.inputs["anthropic_api_key"] === "string"
+        ? { apiKey: context.inputs["anthropic_api_key"] }
+        : {}),
+      ...(typeof context.inputs["use_llm"] === "boolean"
+        ? { useLlm: context.inputs["use_llm"] }
+        : {}),
+      ...(typeof context.inputs["fetchImpl"] === "function"
+        ? { fetchImpl: context.inputs["fetchImpl"] as typeof fetch }
+        : {}),
+    });
+
+    if (llmScore?.data && typeof llmScore.data.worthActing === "boolean") {
+      worthActing = llmScore.data.worthActing;
+      if (typeof llmScore.data.confidence === "number") confidence = llmScore.data.confidence;
+      if (Array.isArray(llmScore.data.matched)) matched = llmScore.data.matched;
+      if (typeof llmScore.data.summary === "string" && llmScore.data.summary.trim()) {
+        summary = llmScore.data.summary.trim();
+      }
+    }
+
     logs.push(
       `${email.subject}: ${matched.length} interest match(es), ` +
         `worth_acting=${worthActing}, confidence=${confidence}`,
@@ -126,7 +159,7 @@ export async function run(context: RunContext): Promise<RunResult> {
       ? `matches ${matched.join(", ")}`
       : "no overlap with your interests";
 
-    return {
+    action_items.push({
       capability_id: "newsletter-digest",
       type: "newsletter-digest-review",
       context: {
@@ -136,7 +169,11 @@ export async function run(context: RunContext): Promise<RunResult> {
           id: email.id,
           ...(email.permalink ? { link: email.permalink } : {}),
         },
-        provenance: ["email.received", "newsletter-digest.run"],
+        provenance: [
+          "email.received",
+          "newsletter-digest.run",
+          ...(llmScore ? ["claude.digest"] : []),
+        ],
         why_flagged: notes,
         // §4.2's vocabulary: something worth acting on is flagged for its value,
         // something ambiguous is flagged because the capability is unsure.
@@ -166,8 +203,8 @@ export async function run(context: RunContext): Promise<RunResult> {
         relevance_notes: notes,
       },
       dedupe_key: `newsletter:${email.id}`,
-    };
-  });
+    });
+  }
 
   return { action_items, status: "ok", logs };
 }

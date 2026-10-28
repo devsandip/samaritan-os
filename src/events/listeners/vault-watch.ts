@@ -14,7 +14,7 @@
  * the Scheduler does — the daemon-only, long-lived half §2.2 keeps out of the bus
  * itself.
  */
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { join, sep } from "node:path";
 import { watch, type FSWatcher } from "chokidar";
 import { log } from "../../logger.js";
@@ -74,6 +74,7 @@ export class VaultWatcher {
   readonly #roots: WatchRoot[];
   readonly #publish: VaultWatcherDeps["publish"];
   readonly #settleMs: number;
+  readonly #seen = new Set<string>();
   #watcher: FSWatcher | undefined;
 
   constructor(deps: VaultWatcherDeps) {
@@ -118,11 +119,33 @@ export class VaultWatcher {
       },
     );
 
+    let ready = false;
     watcher.on("add", (path, stats) => this.#onChange("add", path, stats?.mtimeMs));
     watcher.on("change", (path, stats) => this.#onChange("change", path, stats?.mtimeMs));
+    watcher.on("addDir", (dirPath) => {
+      if (!ready || this.#isHidden(dirPath)) return;
+      setTimeout(() => {
+        if (!this.#watcher || this.#isHidden(dirPath)) return;
+        try {
+          for (const entry of readdirSync(dirPath, { withFileTypes: true })) {
+            if (!entry.isFile() || entry.name.startsWith(".")) continue;
+            const fullPath = join(dirPath, entry.name);
+            const st = statSync(fullPath);
+            this.#onChange("add", fullPath, st.mtimeMs);
+          }
+        } catch {
+          // Directory may have been removed before settle window elapsed.
+        }
+      }, this.#settleMs);
+    });
     watcher.on("error", (err) => logger.error({ err: String(err) }, "watch error"));
 
-    await new Promise<void>((resolve) => watcher.once("ready", () => resolve()));
+    await new Promise<void>((resolve) =>
+      watcher.once("ready", () => {
+        ready = true;
+        resolve();
+      }),
+    );
     this.#watcher = watcher;
     logger.info({ roots: present.map((r) => r.dir) }, "watching vault");
   }
@@ -157,6 +180,8 @@ export class VaultWatcher {
 
     const samEvent = fileChangeToEvent({ event, path, mtimeMs }, root);
     if (!samEvent) return;
+    if (this.#seen.has(samEvent.id)) return;
+    this.#seen.add(samEvent.id);
 
     void this.#publish(samEvent).catch((err) =>
       logger.error({ path, err: String(err) }, "publish from watch failed"),

@@ -56,7 +56,9 @@ export function getSecret(account: string): string | undefined {
   const fromEnv = process.env[envVarFor(account)];
   if (fromEnv) return remember(fromEnv);
 
-  if (process.platform !== "darwin") return remember(undefined);
+  if (process.platform !== "darwin" || process.env["SAMARITAN_TEST_HOME"]) {
+    return remember(undefined);
+  }
 
   try {
     const value = execFileSync(
@@ -92,7 +94,7 @@ export function setSecret(account: string, value: string): void {
   if (!trimmed) {
     throw new Error(`secret value for "${account}" must not be empty`);
   }
-  if (process.platform === "darwin") {
+  if (process.platform === "darwin" && !process.env["SAMARITAN_TEST_HOME"]) {
     execFileSync(
       "/usr/bin/security",
       ["add-generic-password", "-U", "-s", SERVICE, "-a", account, "-w", trimmed],

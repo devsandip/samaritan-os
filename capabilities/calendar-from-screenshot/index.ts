@@ -1,4 +1,5 @@
 import type { RunContext, RunResult } from "../../src/run-layer/context.js";
+import { callClaudeStructured } from "../../src/run-layer/llm.js";
 
 export interface ExtractedScreenshotEvent {
   title: string;
@@ -143,8 +144,40 @@ export async function run(ctx: RunContext): Promise<RunResult> {
     (typeof payload.caption === "string" && payload.caption) ||
     (typeof payload.text === "string" && payload.text) ||
     "";
+  const imageBase64 =
+    typeof payload.image_base64 === "string" && payload.image_base64
+      ? payload.image_base64
+      : undefined;
 
-  const parsed = rawOcr ? extractEventFromScreenshotText(rawOcr) : undefined;
+  let parsed = rawOcr ? extractEventFromScreenshotText(rawOcr) : undefined;
+  let llmVisionUsed = false;
+
+  if (rawOcr || imageBase64) {
+    const llmExtracted = await callClaudeStructured<Partial<ExtractedScreenshotEvent>>({
+      system:
+        "Extract a calendar event from the provided screenshot image and/or OCR text. Return JSON with fields: title (string), starts_at (ISO 8601 string), ends_at (ISO 8601 string), location (string), timezone_ambiguous (boolean), date_ambiguous (boolean).",
+      prompt: rawOcr
+        ? `Extract the calendar event details from this text:\n${rawOcr}`
+        : "Extract the calendar event details from this screenshot.",
+      ...(imageBase64 ? { imageBase64 } : {}),
+      ...(typeof payload.anthropic_api_key === "string" ? { apiKey: payload.anthropic_api_key } : {}),
+      ...(typeof payload.use_llm === "boolean" ? { useLlm: payload.use_llm } : {}),
+      ...(typeof payload.fetchImpl === "function" ? { fetchImpl: payload.fetchImpl as typeof fetch } : {}),
+    });
+    if (llmExtracted?.data?.title && llmExtracted.data.starts_at) {
+      llmVisionUsed = true;
+      parsed = {
+        title: llmExtracted.data.title,
+        starts_at: llmExtracted.data.starts_at,
+        ends_at:
+          llmExtracted.data.ends_at ??
+          new Date(Date.parse(llmExtracted.data.starts_at) + 5400_000).toISOString(),
+        location: llmExtracted.data.location ?? parsed?.location ?? "San Francisco, CA",
+        timezone_ambiguous: Boolean(llmExtracted.data.timezone_ambiguous),
+        date_ambiguous: Boolean(llmExtracted.data.date_ambiguous),
+      };
+    }
+  }
 
   const title =
     (typeof payload.title === "string" && payload.title) ||
@@ -197,7 +230,11 @@ export async function run(ctx: RunContext): Promise<RunResult> {
         context: {
           what_happened: `Extracted calendar event "${title}" (${startsAt}) from screenshot`,
           source: { kind: "screenshot", id: `screenshot:${title}:${startsAt}` },
-          provenance: ["telegram.photo", "screencap.ocr"],
+          provenance: [
+            "telegram.photo",
+            "screencap.ocr",
+            ...(llmVisionUsed ? ["claude.vision"] : []),
+          ],
           why_flagged:
             conflicts.length > 0
               ? `calendar conflict detected (${conflicts[0]}); requires confirmation`

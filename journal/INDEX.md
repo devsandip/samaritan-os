@@ -1,6 +1,6 @@
 # Samaritan - Journal Index
 
-Last refreshed: 2026-10-28 07:58
+Last refreshed: 2026-10-28 08:54
 
 Latest entry: [2026-10-27-2055-command-centre-shipped](entries/2026-10-27-2055-command-centre-shipped.md)
 
@@ -10,10 +10,11 @@ everything that needs me.
 
 ## Where we are now
 
-The Command Centre is live on `main` and running under `launchd` on
-`127.0.0.1:4173`. All five phases of `PROPOSAL-v1.md` and the consensus
-security and worker branch are merged: 24 capabilities loaded, 9 SQLite
-migrations, 49 test files, and 663 passing tests.
+The Command Centre is live on `main`, running under `launchd` on
+`127.0.0.1:4173`, and proxied over Tailscale Serve at
+`https://sandip-mac.tail9b2f5e.ts.net`. Milestones 1 through 7 (`Phases 0`
+through `6`) are complete: 24 capabilities loaded, 9 SQLite migrations, 51 test
+files, and 668 passing tests.
 
 The Action Center remains the single approval gate across every surface.
 Approvals are bound to `expected_payload_hash` and `expected_revision` so

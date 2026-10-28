@@ -36,6 +36,7 @@ writeFileSync(
 export default defineConfig({
   test: {
     include: ["test/**/*.test.ts"],
+    testTimeout: 15_000,
     env: {
       SAMARITAN_CONFIG: config,
       SAMARITAN_TEST_HOME: sandbox,

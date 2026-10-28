@@ -83,15 +83,20 @@ export function configuredToken(): string | undefined {
 
 export function identify(request: FastifyRequest): Caller {
   const token = configuredToken();
+  const auth = request.headers.authorization;
+  const bearer = auth?.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : undefined;
   if (token) {
-    const auth = request.headers.authorization;
-    if (auth?.toLowerCase().startsWith("bearer ") && safeEqual(auth.slice(7).trim(), token)) {
+    if (bearer && safeEqual(bearer, token)) {
       return { kind: "human", via: "bearer" };
     }
     const session = cookie(request, SESSION_COOKIE);
     if (session && (safeEqual(session, sessionValue(token)) || safeEqual(session, token))) {
       return { kind: "human", via: "session" };
     }
+  }
+  const mcpToken = getSecret("mcp:token");
+  if (mcpToken && bearer && request.routeOptions.url === "/api/mcp" && safeEqual(bearer, mcpToken)) {
+    return { kind: "human", via: "bearer" };
   }
   if (isRemote(request)) return { kind: "remote" };
   // No token yet: the local UI keeps working without a sign-in, as before.
@@ -168,7 +173,7 @@ function isPublic(request: FastifyRequest): boolean {
   ) {
     return true;
   }
-  if (pattern.startsWith("/api/webhooks/")) return true; // each verifies its own signature
+  if (pattern.startsWith("/api/webhooks/") || pattern === "/api/telegram/webhook") return true; // each verifies its own signature
   return (request.method === "GET" || request.method === "HEAD") && !pattern.startsWith("/api/");
 }
 
