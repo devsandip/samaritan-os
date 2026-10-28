@@ -113,6 +113,10 @@ export function registerWebhooks(server: FastifyInstance, app: App): void {
           logger.warn("rejected slack webhook: bad signature");
           return reply.code(401).send({ error: { code: "unauthorized", message: "bad signature" } });
         }
+      } else if (isRemote(request)) {
+        return reply.code(401).send({
+          error: { code: "unauthorized", message: "a signing secret is required for requests from outside this Mac" },
+        });
       } else {
         logger.warn({ account: cfg.account }, "slack webhook secret not set; accepting unverified");
       }

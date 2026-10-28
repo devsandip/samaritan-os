@@ -1,6 +1,6 @@
 # Samaritan - Journal Index
 
-Last refreshed: 2026-10-27 20:55
+Last refreshed: 2026-10-28 07:58
 
 Latest entry: [2026-10-27-2055-command-centre-shipped](entries/2026-10-27-2055-command-centre-shipped.md)
 
@@ -10,120 +10,48 @@ everything that needs me.
 
 ## Where we are now
 
-Demo-ready. Six agents that actually run, a seeded Inbox, and a runbook whose
-every step was executed before it was written down.
+The Command Centre is live on `main` and running under `launchd` on
+`127.0.0.1:4173`. All five phases of `PROPOSAL-v1.md` and the consensus
+security and worker branch are merged: 24 capabilities loaded, 9 SQLite
+migrations, 49 test files, and 663 passing tests.
 
-The Run Layer is the piece that changed things. Until 2026-07-21 a capability
-could describe itself and could not be run: `src/run-layer/` did not exist,
-neither did the CLI `package.json` had pointed at since the scaffold, and both
-`wrap` and `meeting` declared entrypoints that were not there. Everything
-reaching the Inbox came from a Claude skill shelling out to `samaritan emit`.
-Now a capability folder is executable, with no build step, and adding one is
-still just dropping a folder in.
+The Action Center remains the single approval gate across every surface.
+Approvals are bound to `expected_payload_hash` and `expected_revision` so
+neither the web UI nor Telegram callbacks can approve a mutated payload (`409
+stale_approval`). The cross-assistant MCP server (`src/mcp/index.ts`) exposes
+eight read, search, task-delegation, and action-proposal tools (`get_context`,
+`search`, `read_artifact`, `list_inbox`, `propose_action`, `submit_task`,
+`task_status`, `answer_question`) with `work` and `personal` scope filtering
+and zero approval tools. Delegated background tasks run on the Claude Agent SDK
+in a child process with provider write credentials stripped from the worker
+environment (`sanitizeWorkerEnv`) and artifacts confined to
+`~/.samaritan/artifacts/<task-id>/`.
 
-The roster covers the platform rather than repeating one shape: policy deciding
-between two outcomes, the assisted loop that does not end at approve,
-auto-completion nobody sees, and one agent whose job is to be refused by the
-money lock. `samaritan seed` fills the Inbox through the real ingest path, so
-every audit trail in the demo is true. `samaritan import-task` converts a
-Claude scheduled task into an agent, keeping its prompt verbatim.
+Both clocks and all inbound/polling listeners are built. The scheduler fires
+cron capabilities with `max_staleness_minutes` wake-gap catch-up and
+`input_hash` deduplication, while the Event Bus routes events from the Obsidian
+vault and multi-repo `~/Developer/*/journal` watcher, the Gmail poller, the
+incremental Google Calendar `syncToken` poller (`meeting_upcoming`,
+`meeting_ended`, `meeting_rescheduled`), the Fireflies HMAC webhook and GraphQL
+transcript consumer, the Slack Events API HMAC webhook, coding-agent hooks
+(`Notification`, `Stop`, `SessionEnd`), and the read-only macOS `chat.db`
+iMessage reader.
 
-v0 is complete and verified against the real Notion workspace. Ten commits,
-public at github.com/devsandip/samaritan-os. The whole thing was built in one
-sitting on 2026-07-19, from a design suite that was already written.
+Execution spans automated, assisted, and guided adapters: Notion (`decision`,
+`insight`, `person`, `project`), Obsidian (local `Asia/Kolkata` calendar date),
+TickTick Open API v1 (with `#word` tag sanitization and project lookup), Gmail
+draft creation (`gmail.draft.create`), Google Calendar event creation
+(`calendar.event.create`), Hevy routine copy (`hevy.routine.copy`), Thornhill
+phone dispatch (`phone.task.run`), and question-bound task answers
+(`samaritan.task.answer`).
 
-The anchor works. `wrap` and `meeting` no longer write to Notion or TickTick
-directly. They extract as before and emit to the Action Center, where each item
-waits until I approve, edit-then-approve, reject or defer it. The success
-criterion from the PRD holds: no wrap or meeting row reaches Notion without an
-explicit approval, and `test/anchor.test.ts` is the executable form of that
-sentence.
-
-The stack is Node with `node:sqlite` (not better-sqlite3, which has no Node 26
-prebuild), Fastify, zod contracts with types inferred from the schemas, and a
-React SPA served from the same origin. The Inbox renders items by dispatching on
-`render.layout`, so no UI code knows the name of any capability.
-
-The lifecycle gaps v0 left open are closed: defer and resurface, a universal
-dismiss, multi-status filtering, and the re-ingest fixes for `deferred` and then
-`awaiting_confirmation`, both of which had been sitting on the wrong side of the
-settled partition. The idempotency key now carries a dispatch generation, so a
-reopened item dispatches a genuinely different version rather than replaying a
-voided attempt.
-
-Notion is live end to end. Telegram is written, tested and parked, disabled by
-default.
-
-480 tests, typecheck clean, everything merged and pushed. `docs/DEMO.md` is the
-runbook and `test/agents.test.ts` is that runbook made executable, so a stale
-demo step fails the suite before it fails in a room.
-
-Both clocks are built, and they are the same machine wearing two faces. The
-scheduler fires scheduled-mode agents on a cron — `weekly-digest` Sunday at
-20:00, `subscription-watch` daily at 08:00 — with `next_fire_at` persisted, shown
-on the Dashboard, and caught up on the next boot if the machine slept through it.
-The Event Bus fires event-mode agents on a published event: `POST /api/events`
-takes a `SamaritanEvent`, dedups it by source id, and dispatches to every
-subscriber whose `trigger.on` matches and whose `trigger.filter` passes, so one
-`email.received` reaches `email-triage` and `newsletter-digest` or just the first
-depending on who sent it. Both run through the same Run Layer, and both claim the
-trigger before firing so a double-delivery fires once. Verified against a live
-daemon, not only in tests.
-
-The bus has its first real listener now: a chokidar watch on the vault publishes
-`note.created` when a note lands, and `note-capture` answers one — write a file
-into `Inbox/` and a review item appears, with no curl. It shipped with a
-subscriber on purpose, because a publisher no one listens to is the same dead
-text as a subscription no one publishes. Verified live against a daemon: an Inbox
-write captured, an Areas write dispatched to nobody.
-
-The daemon now survives its own restarts. On boot, before the socket opens, a
-reconciliation pass re-drives any item a crash left in `approved` — the one frame
-where the OS is mid-handoff, invisible to the Inbox and unread by anything
-downstream — and the re-drive is safe because the derived dispatch key replays a
-settled attempt instead of repeating it. It runs before `listen()` on purpose:
-after the socket opens an `approved` item might be live work a request owns, not a
-remnant. And `pnpm install-daemon` writes a launchd agent (`RunAtLoad` +
-`KeepAlive`) so the process starts at login and comes back after a reboot, which
-is the restart the reconciliation is there to clean up after. Verified by staging
-the disaster: an item frozen in `approved` was recovered to awaiting_confirmation
-before `/healthz` answered.
-
-Ask-Samaritan answers now, and the last placeholder in the UI is gone. A question
-is embedded locally, retrieved by a vector kNN and a BM25 keyword search over the
-same chunks, fused with Reciprocal Rank Fusion, and returned as cited passages —
-every claim tied to the note it came from. Synthesis into prose is opt-in and off
-by default, a privacy choice (§9), so the answer never leaves the machine unless
-Sandip turns it on. `samaritan index` fills the index and the daemon keeps it
-current on a 15-minute reconcile. Verified live over a real socket — and the live
-run caught what the suite could not: sqlite-vec was loaded with a bare `require`
-that only exists under vitest, so the native vector index had never once loaded in
-the real daemon, silently scanning instead. Correct answers the whole time, dead
-index behind them. `createRequire` fixed it; distrusting a correct answer found it.
-
-The Policy Engine is v1 now. It weighs all three risk dimensions §5.6 names, not
-just confidence: an action marked irreversible, or one whose stated value crosses
-a threshold, escalates to review before any `auto_complete_when` can wave it
-through. Both are first-class context signals (a capability can't shadow them),
-and both are overridable per-type — the one distinction from the money-lock, which
-is absolute. The load-bearing choice was that absent means silence, not a safety
-claim: a missing signal never escalates, so every existing item behaves exactly as
-it did in v0. Verified live against the real config loader, not only the injected
-unit tests.
-
-What is not built, stated plainly because the demo depends on knowing the edge:
-the last networked listener, a Slack Events route — so chat events still reach the
-bus by `emit-event` or the HTTP route. Three listeners are built now: the vault
-watch, the Gmail poller (the first networked front end, off by default until a
-token is in the Keychain), and the Fireflies webhook (the first inbound one,
-signature-gated). Still open: a consumer for `meeting.transcribed` that pulls the
-transcript and extracts it, so the Fireflies notice becomes an Inbox item;
-Recall's structured SQL path over the mirror tables (so `retrieval_path` is always
-`semantic`) and its near-real-time chokidar indexing, both left for later; no
-assisted execution adapters, which is why `email-triage` degrades to guided;
-Settings has a real routing table and no connections grid; and the Gmail
-refresh-token flow, so a token outlives its hour. Next is the Slack route, the
-same encapsulated-plugin shape the Fireflies webhook just proved.
+Recall is hybrid now. A query runs structured SQL over mirror tables
+(`notion_decisions`, `notion_insights`, `ticktick_tasks`, `calendar_events`)
+alongside local `sqlite-vec` kNN and FTS5 BM25 keyword search, fuses the results
+with Reciprocal Rank Fusion, and reports `"hybrid"`, `"structured"`, or
+`"semantic"` honestly depending on which paths matched. The five-view UI (`Now`,
+`Inbox`, `Tasks`, `Activity`, `Settings`) includes the live Connections status
+grid, System Health/Backups/Billing cards, and the `Cmd+K` Command Bar.
 
 ## Recent entries
 

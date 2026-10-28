@@ -32,7 +32,7 @@ export function createThornhillPhoneAdapter(
     (() => {
       const cfg = loadConfig();
       if (!cfg.thornhill.enabled) return undefined;
-      return getSecret("thornhill:api");
+      return getSecret(`thornhill:${cfg.thornhill.account}`) ?? getSecret("thornhill:api");
     });
   const resolveUrl =
     options.apiUrl ?? (() => loadConfig().thornhill.url);

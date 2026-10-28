@@ -30,7 +30,8 @@ export interface HevyAdapterOptions {
 export function createHevyRoutineCopyAdapter(
   options: HevyAdapterOptions = {},
 ): ExecutionAdapter {
-  const resolveKey = options.apiKey ?? (() => getSecret("hevy:api"));
+  const resolveKey =
+    options.apiKey ?? (() => getSecret("hevy:default") ?? getSecret("hevy:api"));
   const fetchFn = options.fetchImpl ?? fetch;
 
   return {
