@@ -452,6 +452,17 @@ export function buildServer(app: App): FastifyInstance {
         keychain_account: `thornhill:${cfg.thornhill.account}`,
         ...checkSecretStatus(cfg.thornhill.enabled, `thornhill:${cfg.thornhill.account}`),
       },
+      {
+        id: "anthropic.worker",
+        name: "Anthropic Worker API",
+        provider: "anthropic",
+        enabled: cfg.worker.monthly_budget_usd > 0,
+        keychain_account: `anthropic:${cfg.worker.account}`,
+        ...checkSecretStatus(
+          cfg.worker.monthly_budget_usd > 0,
+          `anthropic:${cfg.worker.account}`,
+        ),
+      },
     ];
 
     return { connections };

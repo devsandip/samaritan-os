@@ -83,6 +83,30 @@ export function hasSecret(account: string): boolean {
   return getSecret(account) !== undefined;
 }
 
+/**
+ * Writes or updates a secret in the macOS Keychain (`-U`) under service
+ * "samaritan" and refreshes the in-memory cache immediately.
+ */
+export function setSecret(account: string, value: string): void {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new Error(`secret value for "${account}" must not be empty`);
+  }
+  if (process.platform === "darwin") {
+    execFileSync(
+      "/usr/bin/security",
+      ["add-generic-password", "-U", "-s", SERVICE, "-a", account, "-w", trimmed],
+      { stdio: ["ignore", "ignore", "pipe"] },
+    );
+  }
+  cache.set(account, { value: trimmed, expiresAt: Date.now() + FOUND_TTL_MS });
+}
+
+export function clearSecretCache(account?: string): void {
+  if (account) cache.delete(account);
+  else cache.clear();
+}
+
 /** Test seam. Never call from production code. */
 export function __setSecretForTesting(account: string, value: string | undefined): void {
   if (value === undefined) cache.delete(account);
